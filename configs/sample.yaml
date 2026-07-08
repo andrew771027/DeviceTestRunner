@@ -1,0 +1,8 @@
+test_name: sample_device_test
+
+scenario:
+  command: "bash scripts/sample_device_test.sh"
+  timeout_second: 30
+
+artifact:
+  output_dir: "runs/sample_device_test"

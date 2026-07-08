@@ -1,0 +1,10 @@
+{
+  "test_name": "sample_device_test",
+  "command": "bash scripts/sample_device_test.sh",
+  "success": false,
+  "exit_code": 127,
+  "duration": 0.008348941802978516,
+  "stdout": "",
+  "stderr": "bash: scripts/sample_device_test.sh: No such file or directory\n",
+  "error": null
+}

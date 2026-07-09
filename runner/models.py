@@ -15,6 +15,9 @@ class ArtifactConfig:
 
 @dataclass
 class TestConfig:
+
+    __test__ = False
+
     test_name: str
     scenario: ScenarioConfig
     artifact: ArtifactConfig
@@ -22,6 +25,9 @@ class TestConfig:
 
 @dataclass
 class TestResult:
+
+    __test__ = False
+
     test_name: str
     command: str
     success: bool

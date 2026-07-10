@@ -1,7 +1,7 @@
 import argparse
 
 from runner.config import ConfigLoader
-from runner.executor import SubprocessScenarioExecutor
+from runner.executor import CommandStepExecutor
 from runner.reporter import JsonReporter
 from runner.runner import DeviceTestRunner
 
@@ -13,19 +13,26 @@ def main():
 
     config = ConfigLoader().load(args.config)
 
-    runner = DeviceTestRunner(executor=SubprocessScenarioExecutor(), reporter=JsonReporter())
+    runner = DeviceTestRunner(executor=CommandStepExecutor(), reporter=JsonReporter())
 
     result = runner.run(config=config)
 
-    print("==== Device Test Result ====")
-    print(f"Test Name: {result.test_name}")
-    print(f"Command: {result.command}")
+    print("==== Device Test Runner v1.1 ====")
+    print(f"Test Case ID: {result.test_case_id}")
+    print(f"Test Case Name: {result.test_case_name}")
     print(f"Success: {result.success}")
-    print(f"Exit Code: {result.exit_code}")
-    print(f"Duration: {result.duration}")
+    print()
 
-    if result.error:
-        print(f"Error: {result.error}")
+    for step_result in result.step_results:
+        print(f"[Step] {step_result.name}")
+        print(f"  Success: {step_result.success}")
+        print(f"  Exit Code: {step_result.exit_code}")
+        print(f"  Duration: {step_result.duration_seconds:.2f}s")
+
+        if step_result.error:
+            print(f"  Error: {step_result.error}")
+
+        print()
 
 
 if __name__ == "__main__":

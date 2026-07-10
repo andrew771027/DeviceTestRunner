@@ -2,11 +2,11 @@ import json
 import os
 from dataclasses import asdict
 
-from runner.models import TestResult
+from runner.models import RunResult
 
 
 class JsonReporter:
-    def save(self, result: TestResult, output_dir: str) -> str:
+    def save(self, result: RunResult, output_dir: str) -> str:
         os.makedirs(output_dir, exist_ok=True)
 
         output_path = os.path.join(output_dir, "result.json")

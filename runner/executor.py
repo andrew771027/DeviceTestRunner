@@ -1,44 +1,56 @@
 import subprocess
 import time
 
-from runner.models import ScenarioConfig, TestResult
+from runner.models import StepResult, WorkflowStep
 
 
-class SubprocessScenarioExecutor:
-    def run(self, test_name: str, scenario: ScenarioConfig) -> TestResult:
+class CommandStepExecutor:
+
+    def execute(self, step: WorkflowStep) -> StepResult:
+
         start_time = time.time()
 
         try:
 
-            complete = subprocess.run(
-                scenario.command,
+            completed = subprocess.run(
+                step.command,
                 shell=True,
                 capture_output=True,
                 text=True,
-                timeout=scenario.timeout_second,
+                timeout=step.timeout_second,
             )
 
-            duration = time.time() - start_time
+            duration_seconds = time.time() - start_time
 
-            return TestResult(
-                test_name=test_name,
-                command=scenario.command,
-                success=complete.returncode == 0,
-                exit_code=complete.returncode,
-                duration=duration,
-                stdout=complete.stdout,
-                stderr=complete.stderr,
+            return StepResult(
+                name=step.name,
+                command=step.command,
+                success=completed.returncode == 0,
+                exit_code=completed.returncode,
+                duration_seconds=duration_seconds,
+                stdout=completed.stdout,
+                stderr=completed.stderr,
             )
+
         except subprocess.TimeoutExpired as e:
-            duration = time.time() - start_time
 
-            return TestResult(
-                test_name=test_name,
-                command=scenario.command,
+            duration_seconds = time.time() - start_time
+
+            stdout = e.stdout or ""
+            stderr = e.stderr or ""
+
+            if isinstance(stdout, bytes):
+                stdout = stdout.decode(encoding="utf-8", error="replace")
+            if isinstance(stderr, bytes):
+                stderr = stderr.decode(encoding="utf-8", error="repalce")
+
+            return StepResult(
+                name=step.name,
+                command=step.command,
                 success=False,
-                exit_code=None,
-                duration=duration,
-                stdout=e.stdout or "",
-                stderr=e.stderr or "",
-                error=f"Timeout after {scenario.timeout_seconds} seconds",
+                exit_code=completed.returncode,
+                duration_seconds=duration_seconds,
+                stdout=stdout,
+                strerr=stderr,
+                error=f"Timeout after {step.timeout_seconds} seconds",
             )

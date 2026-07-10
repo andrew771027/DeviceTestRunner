@@ -1,8 +1,24 @@
-test_name: sample_device_test
+test_case:
+  id: power_001
+  name: Youtube Playback Power Test
+  description: Measure power behavior durning Youtube playback
 
-scenario:
-  command: "echo Hello"
-  timeout_second: 30
+device:
+  serial: emulator-5566
+  product: pixel
+  build: test_build
+
+workflow:
+  steps:
+    - name: setup_device
+      type: command
+      command: "bash scripts/setup_script.sh"
+      timeout_second: 10
+
+    - name: run_scenario
+      type: command
+      command: "bash scripts/run_scenario.sh"
+      timeout_second: 30
 
 artifact:
-  output_dir: "runs/sample_device_test"
+  output_dir: artifact/sample_device_test

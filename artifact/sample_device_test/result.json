@@ -1,0 +1,27 @@
+{
+  "test_case_id": "power_001",
+  "test_case_name": "Youtube Playback Power Test",
+  "success": true,
+  "step_results": [
+    {
+      "name": "setup_device",
+      "command": "bash scripts/setup_script.sh",
+      "success": true,
+      "exit_code": 0,
+      "duration_seconds": 0.008459091186523438,
+      "stdout": "Setting up devices...\nDevice setup complete.\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "run_scenario",
+      "command": "bash scripts/run_scenario.sh",
+      "success": true,
+      "exit_code": 0,
+      "duration_seconds": 10.022305965423584,
+      "stdout": "Starting scenario...\nRunning YouTube playback simulation...\nScenario complete successfully.\n",
+      "stderr": "",
+      "error": null
+    }
+  ]
+}

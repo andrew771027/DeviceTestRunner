@@ -1,19 +1,35 @@
-from runner.executor import SubprocessScenarioExecutor
-from runner.models import TestConfig, TestResult
+from runner.executor import CommandStepExecutor
+from runner.models import RunnerConfig, RunResult
 from runner.reporter import JsonReporter
 
 
 class DeviceTestRunner:
     def __init__(
         self,
-        executor: SubprocessScenarioExecutor,
+        executor: CommandStepExecutor,
         reporter: JsonReporter,
     ):
         self.executor = executor
         self.reporter = reporter
 
-    def run(self, config: TestConfig) -> TestResult:
-        result = self.executor.run(test_name=config.test_name, scenario=config.scenario)
+    def run(self, config: RunnerConfig) -> RunResult:
+        step_results = []
 
-        self.reporter.save(result=result, output_dir=config.artifact.output_dir)
-        return result
+        for step in config.workflow.steps:
+            result = self.executor.execute(step=step)
+            step_results.append(result)
+
+            if not result.success:
+                break
+
+        run_success = all(result.success for result in step_results)
+
+        run_result = RunResult(
+            test_case_id=config.test_case.id,
+            test_case_name=config.test_case.name,
+            success=run_success,
+            step_results=step_results,
+        )
+
+        self.reporter.save(result=run_result, output_dir=config.artifact.output_dir)
+        return run_result

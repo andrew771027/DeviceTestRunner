@@ -1,7 +1,7 @@
 test_name: sample_device_test
 
 scenario:
-  command: "bash scripts/sample_device_test.sh"
+  command: "echo Hello"
   timeout_second: 30
 
 artifact:

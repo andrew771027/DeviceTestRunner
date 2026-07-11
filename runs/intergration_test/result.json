@@ -1,0 +1,37 @@
+{
+  "test_case_id": "power_003",
+  "test_case_name": "intergration_test",
+  "success": true,
+  "step_results": [
+    {
+      "name": "step_1",
+      "command": "echo 'Hello World1'",
+      "success": true,
+      "exit_code": 0,
+      "duration_seconds": 0.010598897933959961,
+      "stdout": "Hello World1\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "step_2",
+      "command": "echo 'Hello World2'",
+      "success": true,
+      "exit_code": 0,
+      "duration_seconds": 0.009716033935546875,
+      "stdout": "Hello World2\n",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "step_3",
+      "command": "echo 'Hello World3'",
+      "success": true,
+      "exit_code": 0,
+      "duration_seconds": 0.008634090423583984,
+      "stdout": "Hello World3\n",
+      "stderr": "",
+      "error": null
+    }
+  ]
+}

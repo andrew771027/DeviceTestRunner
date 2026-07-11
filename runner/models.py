@@ -63,3 +63,7 @@ class RunResult:
     test_case_name: str
     success: bool
     step_results: List[StepResult]
+
+    @property
+    def passed(self) -> bool:
+        return all(result.exit_code == 0 for result in self.step_results)

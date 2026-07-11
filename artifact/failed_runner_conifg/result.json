@@ -1,0 +1,27 @@
+{
+  "test_case_id": "002",
+  "test_case_name": "failed_runner",
+  "success": false,
+  "step_results": [
+    {
+      "name": "1st step",
+      "command": "echo Hello World",
+      "success": true,
+      "exit_code": 0,
+      "duration_seconds": 2,
+      "stdout": "ok",
+      "stderr": "",
+      "error": null
+    },
+    {
+      "name": "2nd step",
+      "command": "exit 1",
+      "success": false,
+      "exit_code": 1,
+      "duration_seconds": 2,
+      "stdout": "",
+      "stderr": "failed",
+      "error": null
+    }
+  ]
+}

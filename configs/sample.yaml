@@ -21,4 +21,4 @@ workflow:
       timeout_second: 30
 
 artifact:
-  output_dir: artifact/sample_device_test
+  output_dir: artifact/sample_device_config

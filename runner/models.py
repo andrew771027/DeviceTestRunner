@@ -46,7 +46,7 @@ class RunnerConfig:
 @dataclass
 class StepResult:
 
-    name: str
+    step_name: str
     command: str
     success: bool
     exit_code: Optional[int]

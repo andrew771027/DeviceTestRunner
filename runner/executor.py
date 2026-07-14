@@ -23,7 +23,7 @@ class CommandStepExecutor:
             duration_seconds = time.time() - start_time
 
             return StepResult(
-                name=step.name,
+                step_name=step.name,
                 command=step.command,
                 success=completed.returncode == 0,
                 exit_code=completed.returncode,
@@ -45,12 +45,12 @@ class CommandStepExecutor:
                 stderr = stderr.decode(encoding="utf-8", error="repalce")
 
             return StepResult(
-                name=step.name,
+                step_name=step.name,
                 command=step.command,
                 success=False,
                 exit_code=completed.returncode,
                 duration_seconds=duration_seconds,
                 stdout=stdout,
                 strerr=stderr,
-                error=f"Timeout after {step.timeout_seconds} seconds",
+                error=f"Timeout after {step.timeout_second} seconds",
             )

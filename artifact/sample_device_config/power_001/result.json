@@ -1,0 +1,40 @@
+{
+    "metadata": {
+        "test_case_id": "power_001",
+        "test_case_name": "Youtube Playback Power Test",
+        "device_serial": "emulator-5566",
+        "device_product": "emulator-5566",
+        "device_build": "test_build",
+        "runner_version": "1.2"
+    },
+    "summary": {
+        "status": "PASSED",
+        "total_steps": 2,
+        "passed_steps": 2,
+        "failed_steps": 0,
+        "duration_seconds": 10.032474994659424
+    },
+    "step_results": [
+        {
+            "name": "setup_device",
+            "command": "bash scripts/setup_script.sh",
+            "success": true,
+            "exit_code": 0,
+            "duration_seconds": 0.008478164672851562,
+            "stdout": "Setting up devices...\nDevice setup complete.\n",
+            "stderr": "",
+            "error": null
+        },
+        {
+            "name": "run_scenario",
+            "command": "bash scripts/run_scenario.sh",
+            "success": true,
+            "exit_code": 0,
+            "duration_seconds": 10.022562265396118,
+            "stdout": "Starting scenario...\nRunning YouTube playback simulation...\nScenario complete successfully.\n",
+            "stderr": "",
+            "error": null
+        }
+    ],
+    "artifact_dir": "artifact/sample_device_config/power_001"
+}

@@ -55,14 +55,37 @@ class StepResult:
     stderr: str
     error: Optional[str] = None
 
+    @property
+    def passed(self) -> bool:
+        return self.exit_code == 0
+
+
+@dataclass
+class RunMetadata:
+    test_case_id: str
+    test_case_name: str
+    device_serial: str
+    device_product: str
+    device_build: str
+    runner_version: str
+
+
+@dataclass
+class ExecutionSummary:
+    status: str
+    total_steps: int
+    passed_steps: int
+    failed_steps: int
+    duration_seconds: float
+
 
 @dataclass
 class RunResult:
 
-    test_case_id: str
-    test_case_name: str
-    success: bool
+    metadata: RunMetadata
+    summary: ExecutionSummary
     step_results: List[StepResult]
+    artifact_dir: str | None = None
 
     @property
     def passed(self) -> bool:

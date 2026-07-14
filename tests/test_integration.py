@@ -34,7 +34,7 @@ workflow:
       timeout_second: 1
 
 artifact:
-  output_dir: "runs/intergration_test"
+  output_dir: "artifact/intergration_test"
 """,
         encoding="utf-8",
     )

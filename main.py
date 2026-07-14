@@ -18,9 +18,9 @@ def main():
     result = runner.run(config=config)
 
     print("==== Device Test Runner v1.1 ====")
-    print(f"Test Case ID: {result.test_case_id}")
-    print(f"Test Case Name: {result.test_case_name}")
-    print(f"Success: {result.success}")
+    print(f"Test Case ID: {result.metadata.test_case_id}")
+    print(f"Test Case Name: {result.metadata.test_case_name}")
+    print(f"Status: {result.summary.status}")
     print()
 
     for step_result in result.step_results:

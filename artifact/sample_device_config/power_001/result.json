@@ -12,7 +12,7 @@
         "total_steps": 2,
         "passed_steps": 2,
         "failed_steps": 0,
-        "duration_seconds": 10.035598039627075
+        "duration_seconds": 10.031031131744385
     },
     "step_results": [
         {
@@ -20,7 +20,7 @@
             "command": "bash scripts/setup_script.sh",
             "success": true,
             "exit_code": 0,
-            "duration_seconds": 0.008501052856445312,
+            "duration_seconds": 0.009366750717163086,
             "stdout": "Setting up devices...\nDevice setup complete.\n",
             "stderr": "",
             "error": null
@@ -30,7 +30,7 @@
             "command": "bash scripts/run_scenario.sh",
             "success": true,
             "exit_code": 0,
-            "duration_seconds": 10.02593183517456,
+            "duration_seconds": 10.020349025726318,
             "stdout": "Starting scenario...\nRunning YouTube playback simulation...\nScenario complete successfully.\n",
             "stderr": "",
             "error": null

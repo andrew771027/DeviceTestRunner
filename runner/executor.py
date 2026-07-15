@@ -4,7 +4,7 @@ import time
 from runner.models import StepResult, WorkflowStep
 
 
-class CommandStepExecutor:
+class SubprocessExecutor:
 
     def execute(self, step: WorkflowStep) -> StepResult:
 

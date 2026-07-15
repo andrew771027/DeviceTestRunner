@@ -1,6 +1,6 @@
 import pytest
 
-from runner.executor import CommandStepExecutor
+from runner.executor import SubprocessExecutor
 from runner.models import WorkflowStep
 
 
@@ -18,7 +18,7 @@ from runner.models import WorkflowStep
     ],
 )
 def test_command_step_executor_success(step):
-    executor = CommandStepExecutor()
+    executor = SubprocessExecutor()
 
     result = executor.execute(step)
 
@@ -44,7 +44,7 @@ def test_command_step_executor_success(step):
     ],
 )
 def test_command_step_executor_failure(step):
-    executor = CommandStepExecutor()
+    executor = SubprocessExecutor()
 
     result = executor.execute(step)
 

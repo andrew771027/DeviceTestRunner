@@ -1,7 +1,7 @@
 import argparse
 
 from runner.config import ConfigLoader
-from runner.executor import CommandStepExecutor
+from runner.executor import SubprocessExecutor
 from runner.reporter import JsonReporter
 from runner.runner import DeviceTestRunner
 
@@ -13,7 +13,7 @@ def main():
 
     config = ConfigLoader().load(args.config)
 
-    runner = DeviceTestRunner(executor=CommandStepExecutor(), reporter=JsonReporter())
+    runner = DeviceTestRunner(executor=SubprocessExecutor(), reporter=JsonReporter())
 
     result = runner.run(config=config)
 

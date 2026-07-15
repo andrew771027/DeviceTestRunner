@@ -1,7 +1,7 @@
 import time
 
 from runner.artifact import ArtifactManager
-from runner.executor import CommandStepExecutor
+from runner.executor import SubprocessExecutor
 from runner.models import ExecutionSummary, RunMetadata, RunnerConfig, RunResult
 from runner.reporter import JsonReporter
 
@@ -9,7 +9,7 @@ from runner.reporter import JsonReporter
 class DeviceTestRunner:
     def __init__(
         self,
-        executor: CommandStepExecutor,
+        executor: SubprocessExecutor,
         reporter: JsonReporter,
     ):
         self.executor = executor

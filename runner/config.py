@@ -24,7 +24,7 @@ class ConfigLoader:
 
         device = DeviceInfo(
             serial=raw["device"]["serial"],
-            product=raw["device"]["serial"],
+            product=raw["device"]["product"],
             build=raw["device"]["build"],
         )
 

@@ -9,6 +9,7 @@ class SubprocessExecutor:
     def execute(self, step: WorkflowStep) -> StepResult:
 
         start_time = time.time()
+        # completed = None
 
         try:
 
@@ -33,24 +34,24 @@ class SubprocessExecutor:
             )
 
         except subprocess.TimeoutExpired as e:
+            raise e
+            # duration_seconds = time.time() - start_time
 
-            duration_seconds = time.time() - start_time
+            # stdout = e.stdout or ""
+            # stderr = e.stderr or ""
 
-            stdout = e.stdout or ""
-            stderr = e.stderr or ""
+            # if isinstance(stdout, bytes):
+            #     stdout = stdout.decode(encoding="utf-8", error="replace")
+            # if isinstance(stderr, bytes):
+            #     stderr = stderr.decode(encoding="utf-8", error="repalce")
 
-            if isinstance(stdout, bytes):
-                stdout = stdout.decode(encoding="utf-8", error="replace")
-            if isinstance(stderr, bytes):
-                stderr = stderr.decode(encoding="utf-8", error="repalce")
-
-            return StepResult(
-                step_name=step.name,
-                command=step.command,
-                success=False,
-                exit_code=completed.returncode,
-                duration_seconds=duration_seconds,
-                stdout=stdout,
-                strerr=stderr,
-                error=f"Timeout after {step.timeout_second} seconds",
-            )
+            # return StepResult(
+            #     step_name=step.name,
+            #     command=step.command,
+            #     success=False,
+            #     exit_code=None,
+            #     duration_seconds=duration_seconds,
+            #     stdout=stdout,
+            #     stderr=stderr,
+            #     error=f"Timeout after {step.timeout_second} seconds",
+            # )

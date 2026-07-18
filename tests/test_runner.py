@@ -13,6 +13,80 @@ from runner.reporter import JsonReporter
 from runner.runner import DeviceTestRunner
 
 
+def build_success_runner_config() -> RunnerConfig:
+    return RunnerConfig(
+        test_case=DeviceTestCase(
+            id="power_001",
+            name="Youtube Playback Power Test (Success)",
+            description=("Measure power behavior during " "Youtube playback"),
+        ),
+        device=DeviceInfo(
+            serial="emulator-5566",
+            product="pixel",
+            build="test_build",
+        ),
+        workflow=Workflow(
+            steps=[
+                WorkflowStep(
+                    name="setup_device",
+                    type="command",
+                    command="echo setup",
+                    timeout_second=10,
+                ),
+                WorkflowStep(
+                    name="run_scenario",
+                    type="command",
+                    command="echo scenario",
+                    timeout_second=30,
+                ),
+            ]
+        ),
+        artifact=ArtifactConfig(
+            output_dir="artifact/sample_device_config",
+        ),
+    )
+
+
+def build_failure_runner_config() -> RunnerConfig:
+    return RunnerConfig(
+        test_case=DeviceTestCase(
+            id="power_001",
+            name="Youtube Playback Power Test (Failed)",
+            description=("Measure power behavior during " "Youtube playback"),
+        ),
+        device=DeviceInfo(
+            serial="emulator-5566",
+            product="pixel",
+            build="test_build",
+        ),
+        workflow=Workflow(
+            steps=[
+                WorkflowStep(
+                    name="setup_device",
+                    type="command",
+                    command="echo setup",
+                    timeout_second=10,
+                ),
+                WorkflowStep(
+                    name="run_failed_scenario",
+                    type="command",
+                    command="exit 1",
+                    timeout_second=30,
+                ),
+                WorkflowStep(
+                    name="run_scenario",
+                    type="command",
+                    command="echo Hello World",
+                    timeout_second=5,
+                ),
+            ]
+        ),
+        artifact=ArtifactConfig(
+            output_dir="artifact/sample_device_config",
+        ),
+    )
+
+
 class MockSuccessExecutor:
     def __init__(self):
         self.executed_steps = []
@@ -21,7 +95,7 @@ class MockSuccessExecutor:
         self.executed_steps.append(step.name)
 
         return StepResult(
-            name=step.name,
+            step_name=step.name,
             command=step.command,
             success=True,
             exit_code=0,
@@ -33,39 +107,17 @@ class MockSuccessExecutor:
 
 @pytest.mark.parametrize(
     argnames="config",
-    argvalues=[
-        RunnerConfig(
-            test_case=DeviceTestCase(id="001", name="success_runner", description="success"),
-            device=DeviceInfo(serial="0000000000", product="faker_product", build="123456"),
-            workflow=Workflow(
-                steps=[
-                    WorkflowStep(
-                        name="1st step",
-                        type="command",
-                        command="echo Hello World",
-                        timeout_second=1,
-                    ),
-                    WorkflowStep(
-                        name="2nd step",
-                        type="command",
-                        command="echo Hello World",
-                        timeout_second=1,
-                    ),
-                ]
-            ),
-            artifact=ArtifactConfig(output_dir="./artifact/success_runner_conifg"),
-        ),
-    ],
+    argvalues=[build_success_runner_config()],
 )
 def test_runner_executes_all_steps_when_success(config):
     executor = MockSuccessExecutor()
     runner = DeviceTestRunner(executor=executor, reporter=JsonReporter())
     result = runner.run(config)
 
-    assert result.test_case_name == "success_runner"
+    assert result.metadata.test_case_name == "Youtube Playback Power Test (Success)"
     assert result.passed is True
     assert len(result.step_results) == 2
-    assert executor.executed_steps == ["1st step", "2nd step"]
+    assert executor.executed_steps == ["setup_device", "run_scenario"]
 
 
 class MockFailedExecutor:
@@ -75,9 +127,9 @@ class MockFailedExecutor:
     def execute(self, step: WorkflowStep) -> StepResult:
         self.executed_steps.append(step.name)
 
-        if step.name == "2nd step":
+        if step.name == "run_failed_scenario":
             return StepResult(
-                name=step.name,
+                step_name=step.name,
                 command=step.command,
                 success=False,
                 exit_code=1,
@@ -87,7 +139,7 @@ class MockFailedExecutor:
             )
 
         return StepResult(
-            name=step.name,
+            step_name=step.name,
             command=step.command,
             success=True,
             exit_code=0,
@@ -99,45 +151,17 @@ class MockFailedExecutor:
 
 @pytest.mark.parametrize(
     argnames="config",
-    argvalues=[
-        RunnerConfig(
-            test_case=DeviceTestCase(id="002", name="failed_runner", description="failed"),
-            device=DeviceInfo(serial="0000000000", product="faker_product", build="123456"),
-            workflow=Workflow(
-                steps=[
-                    WorkflowStep(
-                        name="1st step",
-                        type="command",
-                        command="echo Hello World",
-                        timeout_second=1,
-                    ),
-                    WorkflowStep(
-                        name="2nd step",
-                        type="command",
-                        command="exit 1",
-                        timeout_second=1,
-                    ),
-                    WorkflowStep(
-                        name="3rd step",
-                        type="command",
-                        command="echo Hello World",
-                        timeout_second=1,
-                    ),
-                ]
-            ),
-            artifact=ArtifactConfig(output_dir="./artifact/failed_runner_conifg"),
-        ),
-    ],
+    argvalues=[build_failure_runner_config()],
 )
 def test_runner_terminate_when_step_failed(config):
     executor = MockFailedExecutor()
     runner = DeviceTestRunner(executor=executor, reporter=JsonReporter())
     result = runner.run(config)
 
-    assert result.test_case_name == "failed_runner"
+    assert result.metadata.test_case_name == "Youtube Playback Power Test (Failed)"
     assert result.passed is False
     assert len(result.step_results) == 2
-    assert executor.executed_steps == ["1st step", "2nd step"]
+    assert executor.executed_steps == ["setup_device", "run_failed_scenario"]
 
     assert result.step_results[0].exit_code == 0
     assert result.step_results[1].exit_code == 1

@@ -8,17 +8,36 @@ device:
   product: pixel
   build: test_build
 
-workflow:
-  steps:
-    - name: setup_device
-      type: command
-      command: "bash scripts/setup_script.sh"
-      timeout_second: 10
-
-    - name: run_scenario
-      type: command
-      command: "bash scripts/run_scenario.sh"
-      timeout_second: 30
-
+lifecycle:
+  global_setup:
+    steps:
+      - name: clear_process
+        type: command
+        command: bash scripts/clear_process.sh
+        timeout_second: 10
+  setup:
+    steps:
+      - name: flash_device
+        type: command
+        command: bash scripts/flash_device.sh
+        timeout_second: 10
+  scenario:
+    steps:
+      - name: run_scenario
+        type: command
+        command: bash scripts/run_scenario.sh
+        timeout_second: 10
+  teardown:
+    steps:
+      - name: collect_artifact
+        type: command
+        command: bash scripts/collect_artifact.sh
+        timeout_second: 10
+  global_teardown:
+    steps:
+      - name: release_resource
+        type: command
+        command: bash scripts/release_resource.sh
+        timeout_second: 10
 artifact:
   output_dir: artifact/sample_device_config

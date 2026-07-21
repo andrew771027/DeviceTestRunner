@@ -1,14 +1,14 @@
 import subprocess
 import time
 
-from runner.models import StepResult, WorkflowStep
+from runner.models import LifecycleStep, StepResult
 
 
 class SubprocessExecutor:
 
-    def execute(self, step: WorkflowStep) -> StepResult:
+    def execute(self, step: LifecycleStep, stage: str) -> StepResult:
 
-        start_time = time.time()
+        start_time = time.perf_counter()
         # completed = None
 
         try:
@@ -21,37 +21,65 @@ class SubprocessExecutor:
                 timeout=step.timeout_second,
             )
 
-            duration_seconds = time.time() - start_time
+            duration_seconds = time.perf_counter() - start_time
 
             return StepResult(
-                step_name=step.name,
+                stage=stage,
+                name=step.name,
                 command=step.command,
                 success=completed.returncode == 0,
                 exit_code=completed.returncode,
                 duration_seconds=duration_seconds,
                 stdout=completed.stdout,
                 stderr=completed.stderr,
+                error="",
             )
 
-        except subprocess.TimeoutExpired as e:
-            raise e
-            # duration_seconds = time.time() - start_time
+        except subprocess.TimeoutExpired as error:
 
-            # stdout = e.stdout or ""
-            # stderr = e.stderr or ""
+            duration_seconds = time.perf_counter() - start_time
 
-            # if isinstance(stdout, bytes):
-            #     stdout = stdout.decode(encoding="utf-8", error="replace")
-            # if isinstance(stderr, bytes):
-            #     stderr = stderr.decode(encoding="utf-8", error="repalce")
+            stdout = error.stdout or ""
 
-            # return StepResult(
-            #     step_name=step.name,
-            #     command=step.command,
-            #     success=False,
-            #     exit_code=None,
-            #     duration_seconds=duration_seconds,
-            #     stdout=stdout,
-            #     stderr=stderr,
-            #     error=f"Timeout after {step.timeout_second} seconds",
-            # )
+            stderr = error.stderr or ""
+
+            return StepResult(
+                stage=stage,
+                name=step.name,
+                command=step.command,
+                success=False,
+                exit_code=None,
+                duration_seconds=duration_seconds,
+                stdout=self._normalize_output(stdout),
+                stderr=self._normalize_output(stderr),
+                error=f"Timeout after {step.timeout_second} seconds",
+            )
+
+        except OSError as error:
+            duration_seconds = time.perf_counter() - start_time
+
+            return StepResult(
+                stage=stage,
+                name=step.name,
+                command=step.command,
+                success=False,
+                exit_code=None,
+                duration_seconds=duration_seconds,
+                stdout="",
+                stderr="",
+                error=f"Unable to execute command: {error}",
+            )
+
+    @staticmethod
+    def _normalize_output(
+        output: str | bytes | None,
+    ) -> str:
+        if output is None:
+            return ""
+
+        if isinstance(output, bytes):
+            return output.decode(
+                "utf-8",
+                errors="replace",
+            )
+        return output

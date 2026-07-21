@@ -1,52 +1,57 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional
 
 
-@dataclass
+@dataclass(frozen=True)
 class DeviceTestCase:
     id: str
     name: str
     description: str
 
 
-@dataclass
+@dataclass(frozen=True)
 class DeviceInfo:
     serial: str
     product: str
     build: str
 
 
-@dataclass
-class WorkflowStep:
+@dataclass(frozen=True)
+class LifecycleStep:
     name: str
     type: str
     command: str
     timeout_second: int
 
 
-@dataclass
-class Workflow:
-    steps: List[WorkflowStep]
+@dataclass(frozen=True)
+class LifecycleConfig:
+    global_setup: List[LifecycleStep] = field(default_factory=list)
+    setup: List[LifecycleStep] = field(default_factory=list)
+    scenario: List[LifecycleStep] = field(default_factory=list)
+    teardown: List[LifecycleStep] = field(default_factory=list)
+    global_teardown: List[LifecycleStep] = field(default_factory=list)
 
 
-@dataclass
+@dataclass(frozen=True)
 class ArtifactConfig:
     output_dir: str
 
 
-@dataclass
+@dataclass(frozen=True)
 class RunnerConfig:
 
     test_case: DeviceTestCase
     device: DeviceInfo
-    workflow: Workflow
+    lifecycle: LifecycleConfig
     artifact: ArtifactConfig
 
 
-@dataclass
+@dataclass(frozen=True)
 class StepResult:
 
-    step_name: str
+    stage: str
+    name: str
     command: str
     success: bool
     exit_code: Optional[int]
@@ -60,26 +65,31 @@ class StepResult:
         return self.exit_code == 0
 
 
-@dataclass
+@dataclass(frozen=True)
 class RunMetadata:
     test_case_id: str
     test_case_name: str
+    test_case_description: str
     device_serial: str
     device_product: str
     device_build: str
     runner_version: str
+    started_at: str
+    finished_at: str
 
 
-@dataclass
+@dataclass(frozen=True)
 class ExecutionSummary:
     status: str
-    total_steps: int
+    configured_steps: int
+    executed_steps: int
     passed_steps: int
     failed_steps: int
+    skipped_steps: int
     duration_seconds: float
 
 
-@dataclass
+@dataclass(frozen=True)
 class RunResult:
 
     metadata: RunMetadata

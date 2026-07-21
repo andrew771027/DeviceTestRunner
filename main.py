@@ -24,7 +24,7 @@ def main():
     print()
 
     for step_result in result.step_results:
-        print(f"[Step] {step_result.step_name}")
+        print(f"[Step] {step_result.name}")
         print(f"  Success: {step_result.success}")
         print(f"  Exit Code: {step_result.exit_code}")
         print(f"  Duration: {step_result.duration_seconds:.2f}s")

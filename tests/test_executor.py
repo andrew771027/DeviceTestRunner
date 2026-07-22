@@ -1,4 +1,4 @@
-gitimport subprocess
+import subprocess
 import sys
 from unittest.mock import Mock
 
@@ -10,7 +10,7 @@ from runner.models import LifecycleStepContent
 
 @pytest.mark.parametrize(
     argnames="step, stage",
-    argvalues=[
+    argvalues=([
         (
             LifecycleStepContent(
                 name="test",
@@ -20,7 +20,7 @@ from runner.models import LifecycleStepContent
             ),
             "test_stage",
         ),
-    ],
+    ]),
 )
 def test_subprocess_executor_return_success(step, stage):
     executor = SubprocessExecutor()

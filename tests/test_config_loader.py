@@ -1,13 +1,12 @@
-from typing import List
 from runner.config import ConfigLoader
 from runner.models import (
     ArtifactConfig,
     DeviceInfo,
     DeviceTestCase,
-    RunnerConfig,
-    LifecycleSteps,
-    LifecycleStepContent,
     LifecycleConfig,
+    LifecycleStepContent,
+    LifecycleSteps,
+    RunnerConfig,
 )
 
 
@@ -69,6 +68,7 @@ def test_config_loader_loads_device_test_config(tmp_path):
     config = loader.load(str(config_file))
 
     assert isinstance(config, RunnerConfig)
+
     assert isinstance(config.test_case, DeviceTestCase)
     assert config.test_case.id == "hello_world_001"
     assert config.test_case.name == "hello_world"
@@ -115,6 +115,6 @@ def test_config_loader_loads_device_test_config(tmp_path):
     assert isinstance(config.lifecycle.global_teardown.steps[0], LifecycleStepContent)
     assert config.lifecycle.global_teardown.steps[0].name == "Hello World 6"
     assert config.lifecycle.global_teardown.steps[0].command == "echo 'Hello World 6'"
-    
+
     assert isinstance(config.artifact, ArtifactConfig)
     assert config.artifact.output_dir == "artufact/hello_world"

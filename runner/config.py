@@ -1,4 +1,4 @@
-from typing import Any, List, Dict
+from typing import Any
 
 import yaml
 
@@ -7,8 +7,8 @@ from runner.models import (
     DeviceInfo,
     DeviceTestCase,
     LifecycleConfig,
-    LifecycleSteps,
     LifecycleStepContent,
+    LifecycleSteps,
     RunnerConfig,
 )
 

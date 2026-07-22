@@ -10,17 +10,19 @@ from runner.models import LifecycleStepContent
 
 @pytest.mark.parametrize(
     argnames="step, stage",
-    argvalues=([
-        (
-            LifecycleStepContent(
-                name="test",
-                type="command",
-                command="echo 'Hello World'",
-                timeout_second=1,
+    argvalues=(
+        [
+            (
+                LifecycleStepContent(
+                    name="test",
+                    type="command",
+                    command="echo 'Hello World'",
+                    timeout_second=1,
+                ),
+                "test_stage",
             ),
-            "test_stage",
-        ),
-    ]),
+        ]
+    ),
 )
 def test_subprocess_executor_return_success(step, stage):
     executor = SubprocessExecutor()
@@ -49,7 +51,6 @@ def test_subprocess_executor_return_success(step, stage):
             ),
             "test_stage",
         ),
-        
     ],
 )
 def test_subprocess_executor_failure(step, stage):
@@ -67,18 +68,20 @@ def test_subprocess_executor_failure(step, stage):
     assert result.stdout == ""
 
 
-@pytest.mark.parametrize(argnames="step, stage", 
-                         argvalues=[
-                            (
-                                LifecycleStepContent(
-                                    name="timeout_test", 
-                                    type="command", 
-                                    command="echo 'Hello'", 
-                                    timeout_second=5),
-                                "test_stage"
-                            )
-                        ]
-                    )
+@pytest.mark.parametrize(
+    argnames="step, stage",
+    argvalues=[
+        (
+            LifecycleStepContent(
+                name="timeout_test",
+                type="command",
+                command="echo 'Hello'",
+                timeout_second=5,
+            ),
+            "test_stage",
+        )
+    ],
+)
 def test_subprocess_executor_passes_timeout_to_subprocess(monkeypatch, step, stage):
     completed_process = subprocess.CompletedProcess(
         args="echo 'Hello World'", returncode=0, stdout="Hello World\n", stderr=""
@@ -98,19 +101,21 @@ def test_subprocess_executor_passes_timeout_to_subprocess(monkeypatch, step, sta
 
     assert result.exit_code == 0
 
-@pytest.mark.parametrize(argnames="step, stage", 
-                         argvalues=[
-                            (
-                                LifecycleStepContent(
-                                        name="slow_step",
-                                        type="command",
-                                        command="slow command",
-                                        timeout_second=5,
-                                ),
-                                "test_stage"
-                            )
-                    ]
-                )
+
+@pytest.mark.parametrize(
+    argnames="step, stage",
+    argvalues=[
+        (
+            LifecycleStepContent(
+                name="slow_step",
+                type="command",
+                command="slow command",
+                timeout_second=5,
+            ),
+            "test_stage",
+        )
+    ],
+)
 def test_subprocess_executor_raised_timeout_error(monkeypatch, step, stage):
     def raised_timeout(*args, **kwargs):
         raise subprocess.TimeoutExpired(
@@ -122,7 +127,7 @@ def test_subprocess_executor_raised_timeout_error(monkeypatch, step, stage):
 
     executor = SubprocessExecutor()
 
-    result = SubprocessExecutor().execute(step=step, stage=stage)
+    result = executor.execute(step=step, stage=stage)
 
     assert result.name == "slow_step"
     assert result.command == "slow command"

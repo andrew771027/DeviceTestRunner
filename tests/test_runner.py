@@ -1,253 +1,163 @@
+from pathlib import Path
+from typing import List
+
 import pytest
 
 from runner.models import (
     ArtifactConfig,
     DeviceInfo,
     DeviceTestCase,
+    LifecycleConfig,
+    LifecycleStepContent,
+    LifecycleSteps,
     RunnerConfig,
     StepResult,
-    LifecycleConfig,
-    LifecycleSteps,
-    LifecycleStepContent,
 )
 from runner.reporter import JsonReporter
 from runner.runner import DeviceTestRunner
 
 
-def build_success_runner_config() -> RunnerConfig:
-    return RunnerConfig(
-        test_case=DeviceTestCase(
-            id="power_001",
-            name="Youtube Playback Power Test (Success)",
-            description=("Measure power behavior during " "Youtube playback"),
-        ),
-        device=DeviceInfo(
-            serial="emulator-5566",
-            product="pixel",
-            build="test_build",
-        ),
-        lifecycle=LifecycleConfig(
-            global_setup=LifecycleSteps(
-                steps=[LifecycleStepContent(
-                    name="global_setup",
-                    type="command",
-                    command="echo 'global_setup'",
-                    timeout_second=10,
-                ),
-                ],
-            ),
-            setup=LifecycleSteps(
-                steps=[LifecycleStepContent(
-                    name="setup",
-                    type="command",
-                    command="echo 'setup'",
-                    timeout_second=10,
-                ),
-                ],
-            ),
-            scenario=LifecycleSteps(
-                steps=[LifecycleStepContent(
-                    name="scenario 1",
-                    type="command",
-                    command="echo 'scenario'",
-                    timeout_second=30,
-                ),
-                    LifecycleStepContent(
-                        name="scenario 2",
-                        type="command",
-                        command="echo 'scenario'",
-                        timeout_second=30,
-                ),
-                ],
-            ),
-            teardown=LifecycleSteps(
-                steps=[LifecycleStepContent(
-                    name="teardown",
-                    type="command",
-                    command="echo 'teardown'",
-                    timeout_second=10,
-                ),
-                ],
-            ),
-            global_teardown=LifecycleSteps(
-                steps=[LifecycleStepContent(
-                    name="global_teardown",
-                    type="command",
-                    command="echo 'global_teardown'",
-                    timeout_second=10,
-                ),
-                ],
-            ),
-        ),
-        artifact=ArtifactConfig(
-            output_dir="artifact/sample_device_config",
-        ),
-    )
+class MockExecutor:
 
-
-def build_failure_runner_config() -> RunnerConfig:
-    return RunnerConfig(
-        test_case=DeviceTestCase(
-            id="power_001",
-            name="Youtube Playback Power Test (Failed)",
-            description=("Measure power behavior during " "Youtube playback"),
-        ),
-        device=DeviceInfo(
-            serial="emulator-5566",
-            product="pixel",
-            build="test_build",
-        ),
-        lifecycle=LifecycleConfig(
-            global_setup=LifecycleSteps(
-                steps=[
-                    LifecycleStepContent(
-                        name="global_setup",
-                        type="command",
-                        command="echo 'global_setup'",
-                        timeout_second=10,
-                    )
-                ]
-            ),
-            
-            setup=LifecycleSteps(
-                steps=[
-                    LifecycleStepContent(
-                        name="setup",
-                        type="command",
-                        command="echo 'setup'",
-                        timeout_second=10,
-                    )
-                ]
-            ),
-            scenario=LifecycleSteps(
-                steps=[
-                    LifecycleStepContent(
-                    name="scenario success",
-                    type="command",
-                    command="echo 'scenario'",
-                    timeout_second=30,
-                    ),
-                    LifecycleStepContent(
-                    name="scenario failed",
-                    type="command",
-                    command="exit 1",
-                    timeout_second=30,
-                    ),
-                ]
-            ),
-            teardown=LifecycleSteps(
-                steps=[
-                    LifecycleStepContent(
-                        name="teardown",
-                        type="command",
-                        command="echo 'teardown'",
-                        timeout_second=10,
-                    )
-                ]
-            ),
-            global_teardown=LifecycleSteps(
-                steps=[
-                    LifecycleStepContent(
-                        name="global_teardown",
-                        type="command",
-                        command="echo 'global_teardown'",
-                        timeout_second=10,
-                    )
-                ]
-            ),
-        ),
-        artifact=ArtifactConfig(
-            output_dir="artifact/sample_device_config",
-        ),
-    )
-
-
-class MockSuccessExecutor:
-    def __init__(self):
-        self.executed_steps = []
+    def __init__(self, failed_step_name: str | None = None):
+        self.failed_step_name = failed_step_name
+        self.executed_steps: List[tuple[str, str]] = []
 
     def execute(self, step: LifecycleStepContent, stage: str) -> StepResult:
         self.executed_steps.append(step.name)
+
+        success = step.name != self.failed_step_name
 
         return StepResult(
             stage=stage,
             name=step.name,
             command=step.command,
-            success=True,
-            exit_code=0,
-            duration_seconds=0,
-            stdout="ok",
-            stderr="",
+            success=success,
+            exit_code=0 if success else 1,
+            duration_seconds=0.01,
+            stdout="",
+            stderr="" if success else f"{step.name} failed",
         )
 
 
-class MockFailedExecutor:
-    def __init__(self):
-        self.executed_steps = []
-
-    def execute(self, step: LifecycleStepContent, stage: str) -> StepResult:
-        self.executed_steps.append(step.name)
-
-        if step.name == "scenario failed":
-            return StepResult(
-                stage=stage,
-                name=step.name,
-                command=step.command,
-                success=False,
-                exit_code=1,
-                duration_seconds=2,
-                stdout="",
-                stderr="failed",
-            )
-
-        return StepResult(
-            stage=stage,
-            name=step.name,
-            command=step.command,
-            success=True,
-            exit_code=0,
-            duration_seconds=2,
-            stdout="ok",
-            stderr="",
-        )
+def mock_step(name: str) -> LifecycleStepContent:
+    return LifecycleStepContent(
+        name=name,
+        type="command",
+        command=f"echo {name}",
+        timeout_second=10,
+    )
 
 
-@pytest.mark.parametrize(
-    argnames="config",
-    argvalues=[build_success_runner_config()],
-)
-def test_runner_executes_all_steps_when_success(config):
-    executor = MockSuccessExecutor()
+def mock_config(
+    tmp_path: Path,
+) -> RunnerConfig:
+    return RunnerConfig(
+        test_case=DeviceTestCase(
+            id="power_001",
+            name="power_001",
+            description="Description",
+        ),
+        device=DeviceInfo(
+            serial="device_001",
+            product="pixel",
+            build="build_001",
+        ),
+        lifecycle=LifecycleConfig(
+            global_setup=LifecycleSteps(steps=[mock_step("global_setup")]),
+            setup=LifecycleSteps(steps=[mock_step("setup")]),
+            scenario=LifecycleSteps(
+                steps=[
+                    mock_step("scenario_1"),
+                    mock_step("scenario_2"),
+                ]
+            ),
+            teardown=LifecycleSteps(steps=[mock_step("teardown")]),
+            global_teardown=LifecycleSteps(steps=[mock_step("global_teardown")]),
+        ),
+        artifact=ArtifactConfig(
+            output_dir=str(tmp_path),
+        ),
+    )
+
+
+def test_runner_executes_all_stages_and_all_steps_success(tmp_path):
+    config = mock_config(tmp_path)
+    executor = MockExecutor()
     runner = DeviceTestRunner(executor=executor, reporter=JsonReporter())
     result = runner.run(config)
 
-    assert result.metadata.test_case_name == "Youtube Playback Power Test (Success)"
+    assert result.metadata.test_case_name == "power_001"
     assert result.passed is True
+
+    assert result.summary.status == "PASSED"
+
     assert len(result.step_results) == 6
-    assert executor.executed_steps == ["global_setup", "setup", "scenario 1", "scenario 2", "teardown", "global_teardown"]
+
+    assert result.summary.configured_steps == 6
+    assert result.summary.executed_steps == 6
+    assert result.summary.passed_steps == 6
+    assert result.summary.failed_steps == 0
+    assert result.summary.skipped_steps == 0
+
+    assert executor.executed_steps == [
+        "global_setup",
+        "setup",
+        "scenario_1",
+        "scenario_2",
+        "teardown",
+        "global_teardown",
+    ]
+
+    assert result.step_results[0].stderr == ""
+    assert result.step_results[1].stderr == ""
+    assert result.step_results[2].stderr == ""
+    assert result.step_results[3].stderr == ""
+    assert result.step_results[4].stderr == ""
+    assert result.step_results[5].stderr == ""
 
 
 @pytest.mark.parametrize(
-    argnames="config",
-    argvalues=[build_failure_runner_config()],
+    argnames="failed_step_name",
+    argvalues=["scenario_2"],
 )
-def test_runner_terminate_when_step_failed(config):
-    executor = MockFailedExecutor()
+def test_runner_terminate_when_step_failed(tmp_path, failed_step_name):
+    config = mock_config(tmp_path)
+    executor = MockExecutor(failed_step_name=failed_step_name)
     runner = DeviceTestRunner(executor=executor, reporter=JsonReporter())
     result = runner.run(config)
 
-    assert result.metadata.test_case_name == "Youtube Playback Power Test (Failed)"
+    assert result.metadata.test_case_name == "power_001"
     assert result.passed is False
-    
+
+    assert len(result.step_results) == 6
+
     assert result.summary.configured_steps == 6
     assert result.summary.executed_steps == 6
     assert result.summary.passed_steps == 5
     assert result.summary.failed_steps == 1
     assert result.summary.skipped_steps == 0
 
-    assert sorted(executor.executed_steps) == sorted(["global_setup", "setup", "scenario success", "scenario failed", "teardown", "global_teardown"])
-    assert sorted([step.name for step in result.step_results if step.passed is True]) == sorted(["global_setup", "setup", "scenario success", "teardown", "global_teardown"])
-    assert sorted([step.name for step in result.step_results if step.passed is False]) == sorted(["scenario failed"])
+    assert executor.executed_steps == [
+        "global_setup",
+        "setup",
+        "scenario_1",
+        "scenario_2",
+        "teardown",
+        "global_teardown",
+    ]
+
+    assert [step.name for step in result.step_results if step.passed is True] == [
+        "global_setup",
+        "setup",
+        "scenario_1",
+        "teardown",
+        "global_teardown",
+    ]
+
+    assert [step.name for step in result.step_results if step.passed is False] == [failed_step_name]
+
+    assert result.summary.status == "FAILED"
 
     assert result.step_results[0].exit_code == 0
     assert result.step_results[1].exit_code == 0
@@ -255,3 +165,83 @@ def test_runner_terminate_when_step_failed(config):
     assert result.step_results[3].exit_code == 1
     assert result.step_results[4].exit_code == 0
     assert result.step_results[5].exit_code == 0
+
+    assert result.step_results[0].stderr == ""
+    assert result.step_results[1].stderr == ""
+    assert result.step_results[2].stderr == ""
+    assert result.step_results[3].stderr == f"{failed_step_name} failed"
+    assert result.step_results[4].stderr == ""
+    assert result.step_results[5].stderr == ""
+
+
+@pytest.mark.parametrize(argnames="failed_step_name", argvalues=["global_setup"])
+def test_global_setup_failure_only_run_global_teardown(tmp_path, failed_step_name):
+    config = mock_config(tmp_path)
+    executor = MockExecutor(failed_step_name=failed_step_name)
+    runner = DeviceTestRunner(executor=executor, reporter=JsonReporter())
+    result = runner.run(config)
+
+    assert result.metadata.test_case_name == "power_001"
+    assert result.passed is False
+
+    assert len(result.step_results) == 1
+
+    assert result.summary.configured_steps == 6
+    assert result.summary.executed_steps == 1
+    assert result.summary.passed_steps == 0
+    assert result.summary.failed_steps == 1
+    assert result.summary.skipped_steps == 5
+
+    assert executor.executed_steps == [
+        "global_setup",
+    ]
+
+    assert [step.name for step in result.step_results if step.passed is True] == []
+
+    assert [step.name for step in result.step_results if step.passed is False] == [
+        failed_step_name,
+    ]
+
+    assert result.summary.status == "FAILED"
+
+    assert result.step_results[0].exit_code == 1
+
+    assert result.step_results[0].stderr == f"{failed_step_name} failed"
+
+
+@pytest.mark.parametrize(argnames="failed_step_name", argvalues=["setup"])
+def test_setup_failure_only_run_teardown_and_global_teardown(tmp_path, failed_step_name):
+    config = mock_config(tmp_path)
+    executor = MockExecutor(failed_step_name=failed_step_name)
+    runner = DeviceTestRunner(executor=executor, reporter=JsonReporter())
+    result = runner.run(config)
+
+    assert result.metadata.test_case_name == "power_001"
+    assert result.passed is False
+
+    assert len(result.step_results) == 3
+
+    assert result.summary.configured_steps == 6
+    assert result.summary.executed_steps == 3
+    assert result.summary.passed_steps == 2
+    assert result.summary.failed_steps == 1
+    assert result.summary.skipped_steps == 3
+
+    assert [step.name for step in result.step_results if step.passed is True] == [
+        "global_setup",
+        "global_teardown",
+    ]
+
+    assert [step.name for step in result.step_results if step.passed is False] == [
+        failed_step_name,
+    ]
+
+    assert result.summary.status == "FAILED"
+
+    assert result.step_results[0].exit_code == 0
+    assert result.step_results[1].exit_code == 1
+    assert result.step_results[2].exit_code == 0
+
+    assert result.step_results[0].stderr == ""
+    assert result.step_results[1].stderr == f"{failed_step_name} failed"
+    assert result.step_results[2].stderr == ""

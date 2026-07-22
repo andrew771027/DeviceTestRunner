@@ -1,10 +1,13 @@
+import json
+from pathlib import Path
+
 from runner.config import ConfigLoader
 from runner.executor import SubprocessExecutor
 from runner.reporter import JsonReporter
 from runner.runner import DeviceTestRunner
 
 
-def test_integration_loader_runner_executor_success(tmp_path):
+def test_yaml_to_result_json(tmp_path):
     config_file = tmp_path / "intergration.yaml"
     config_file.write_text(
         """
@@ -18,20 +21,42 @@ device:
   product: product_003
   build: test_001
 
-workflow:
-  steps:
-    - name: step_1
-      type: command
-      command: "echo 'Hello World1'"
-      timeout_second: 10
-    - name: step_2
-      type: command
-      command: "echo 'Hello World2'"
-      timeout_second: 5
-    - name: step_3
-      type: command
-      command: "echo 'Hello World3'"
-      timeout_second: 1
+lifecycle:
+  global_setup:
+      steps:
+      - name: global_setup
+        type: command
+        command: "echo 'Hello World'"
+        timeout_second: 10
+  setup:
+      steps:
+      - name: setup
+        type: command
+        command: "echo 'Hello World'"
+        timeout_second: 5
+  scenario:
+      steps:
+      - name: scenario_1
+        type: command
+        command: "echo 'Hello World'"
+        timeout_second: 1
+      - name: scenario_2
+        type: command
+        command: "echo 'Hello World'"
+        timeout_second: 1
+  teardown:
+      steps:
+      - name: teardown
+        type: command
+        command: "echo 'Hello World'"
+        timeout_second: 1
+  global_teardown:
+      steps:
+      - name: global_teardown
+        type: command
+        command: "echo 'Hello World'"
+        timeout_second: 1
+
 
 artifact:
   output_dir: "artifact/intergration_test"
@@ -46,21 +71,55 @@ artifact:
     assert result.metadata.test_case_name == "intergration_test"
     assert result.passed is True
 
-    assert len(result.step_results) == 3
+    assert len(result.step_results) == 6
 
-    assert result.step_results[0].step_name == "step_1"
-    assert "Hello World1" in result.step_results[0].stdout
+    assert result.summary.status == "PASSED"
+    assert result.summary.executed_steps == 6
 
-    assert result.step_results[1].step_name == "step_2"
-    assert "Hello World2" in result.step_results[1].stdout
+    assert result.step_results[0].name == "global_setup"
+    assert "Hello World" in result.step_results[0].stdout
 
-    assert result.step_results[2].step_name == "step_3"
-    assert "Hello World3" in result.step_results[2].stdout
+    assert result.step_results[1].name == "setup"
+    assert "Hello World" in result.step_results[1].stdout
+
+    assert result.step_results[2].name == "scenario_1"
+    assert "Hello World" in result.step_results[2].stdout
+
+    assert result.step_results[3].name == "scenario_2"
+    assert "Hello World" in result.step_results[3].stdout
+
+    assert result.step_results[4].name == "teardown"
+    assert "Hello World" in result.step_results[4].stdout
+
+    assert result.step_results[5].name == "global_teardown"
+    assert "Hello World" in result.step_results[5].stdout
 
     assert "intergration_test" in result.metadata.test_case_name
 
+    run_dir = Path(result.artifact_dir)
+    assert run_dir.exists()
+    assert (run_dir / "result.json").exists()
 
-def test_integration_stops_after_failed_command(tmp_path):
+    scenario_stdout = run_dir / "scenario" / "scenario_1.stdout.log"
+    assert scenario_stdout.exists()
+
+    assert scenario_stdout.read_text(encoding="utf-8") == "Hello World\n"
+
+    scenario_stdout = run_dir / "scenario" / "scenario_2.stdout.log"
+    assert scenario_stdout.exists()
+
+    assert scenario_stdout.read_text(encoding="utf-8") == "Hello World\n"
+
+    report = json.loads((run_dir / "result.json").read_text(encoding="utf-8"))
+
+    assert report["metadata"]["runner_version"] == "1.3"
+
+    assert report["summary"]["status"] == "PASSED"
+
+    assert len(report["step_results"]) == 6
+
+
+def test_integration_stops_after_failed_step(tmp_path):
 
     config_file = tmp_path / "intergration.yaml"
     config_file.write_text(
@@ -75,21 +134,41 @@ device:
   product: product_003
   build: test_003
 
-workflow:
-  steps:
-    - name: step_1
-      type: command
-      command: "echo 'Hello World1'"
-      timeout_second: 10
-    - name: step_2
-      type: command
-      command: "python -c 'import sys; sys.exit(1)'"
-      timeout_second: 5
-    - name: step_3
-      type: command
-      command: "echo 'Hello World3'"
-      timeout_second: 1
-
+lifecycle:
+  global_setup:
+    steps:
+      - name: global_setup
+        type: command
+        command: "echo 'Hello World'"
+        timeout_second: 1
+  setup:
+    steps:
+      - name: setup
+        type: command
+        command: "echo 'Hello World'"
+        timeout_second: 1
+  scenario:
+      steps:
+      - name: scenario_1
+        type: command
+        command: "echo 'Hello World'"
+        timeout_second: 1
+      - name: scenario_2
+        type: command
+        command: "exit 1"
+        timeout_second: 1
+  teardown:
+    steps:
+      - name: teardown
+        type: command
+        command: "echo 'Hello World'"
+        timeout_second: 1
+  global_teardown:
+      steps:
+      - name: global_teardown
+        type: command
+        command: "echo 'Hello World'"
+        timeout_second: 1
 artifact:
   output_dir: "artifact/intergration_test"
 """,
@@ -102,17 +181,52 @@ artifact:
 
     result = runner.run(config)
 
-    assert len(result.step_results) == 2
-
     assert result.metadata.test_case_name == "intergration_test"
     assert result.passed is False
 
-    assert len(result.step_results) == 2
+    assert len(result.step_results) == 6
 
-    assert result.step_results[0].step_name == "step_1"
-    assert "Hello World1" in result.step_results[0].stdout
+    assert result.summary.status == "FAILED"
+    assert result.summary.executed_steps == 6
 
-    assert result.step_results[1].step_name == "step_2"
-    assert result.step_results[1].stdout == ""
+    assert result.step_results[0].name == "global_setup"
+    assert "Hello World" in result.step_results[0].stdout
+
+    assert result.step_results[1].name == "setup"
+    assert "Hello World" in result.step_results[1].stdout
+
+    assert result.step_results[2].name == "scenario_1"
+    assert "Hello World" in result.step_results[2].stdout
+
+    assert result.step_results[3].name == "scenario_2"
+    assert result.step_results[3].stdout == ""
+
+    assert result.step_results[4].name == "teardown"
+    assert "Hello World" in result.step_results[4].stdout
+
+    assert result.step_results[5].name == "global_teardown"
+    assert "Hello World" in result.step_results[5].stdout
 
     assert "intergration_test" in result.metadata.test_case_name
+
+    run_dir = Path(result.artifact_dir)
+    assert run_dir.exists()
+    assert (run_dir / "result.json").exists()
+
+    scenario_stdout = run_dir / "scenario" / "scenario_1.stdout.log"
+    assert scenario_stdout.exists()
+
+    assert scenario_stdout.read_text(encoding="utf-8") == "Hello World\n"
+
+    scenario_stdout = run_dir / "scenario" / "scenario_2.stdout.log"
+    assert scenario_stdout.exists()
+
+    assert scenario_stdout.read_text(encoding="utf-8") == ""
+
+    report = json.loads((run_dir / "result.json").read_text(encoding="utf-8"))
+
+    assert report["metadata"]["runner_version"] == "1.3"
+
+    assert report["summary"]["status"] == "FAILED"
+
+    assert len(report["step_results"]) == 6

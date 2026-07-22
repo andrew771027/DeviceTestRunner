@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 
 @dataclass(frozen=True)
@@ -17,7 +17,7 @@ class DeviceInfo:
 
 
 @dataclass(frozen=True)
-class LifecycleStep:
+class LifecycleStepContent:
     name: str
     type: str
     command: str
@@ -25,12 +25,17 @@ class LifecycleStep:
 
 
 @dataclass(frozen=True)
+class LifecycleSteps:
+    steps: List[LifecycleStepContent] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class LifecycleConfig:
-    global_setup: List[LifecycleStep] = field(default_factory=list)
-    setup: List[LifecycleStep] = field(default_factory=list)
-    scenario: List[LifecycleStep] = field(default_factory=list)
-    teardown: List[LifecycleStep] = field(default_factory=list)
-    global_teardown: List[LifecycleStep] = field(default_factory=list)
+    global_setup: LifecycleSteps = field(default_factory=LifecycleSteps)
+    setup: LifecycleSteps = field(default_factory=LifecycleSteps)
+    scenario: LifecycleSteps = field(default_factory=LifecycleSteps)
+    teardown: LifecycleSteps = field(default_factory=LifecycleSteps)
+    global_teardown: LifecycleSteps = field(default_factory=LifecycleSteps)
 
 
 @dataclass(frozen=True)

@@ -7,7 +7,7 @@ from runner.artifact import ArtifactManager
 from runner.executor import SubprocessExecutor
 from runner.models import (
     ExecutionSummary,
-    LifecycleStep,
+    LifecycleSteps,
     RunMetadata,
     RunnerConfig,
     RunResult,
@@ -39,7 +39,7 @@ class DeviceTestRunner:
 
         global_setup_success = self._run_stage(
             stage="global_setup",
-            steps=config.lifecycle.global_setup,
+            steps=config.lifecycle.global_setup.steps,
             run_dir=run_dir,
             artifact_manager=artifact_manager,
             step_results=step_results,
@@ -50,7 +50,7 @@ class DeviceTestRunner:
 
             setup_success = self._run_stage(
                 stage="setup",
-                steps=config.lifecycle.setup,
+                steps=config.lifecycle.setup.steps,
                 run_dir=run_dir,
                 artifact_manager=artifact_manager,
                 step_results=step_results,
@@ -61,7 +61,7 @@ class DeviceTestRunner:
 
                 self._run_stage(
                     stage="scenario",
-                    steps=config.lifecycle.scenario,
+                    steps=config.lifecycle.scenario.steps,
                     run_dir=run_dir,
                     artifact_manager=artifact_manager,
                     step_results=step_results,
@@ -70,7 +70,7 @@ class DeviceTestRunner:
 
                 self._run_stage(
                     stage="teardown",
-                    steps=config.lifecycle.teardown,
+                    steps=config.lifecycle.teardown.steps,
                     run_dir=run_dir,
                     artifact_manager=artifact_manager,
                     step_results=step_results,
@@ -79,7 +79,7 @@ class DeviceTestRunner:
 
             self._run_stage(
                 stage="global_teardown",
-                steps=config.lifecycle.global_teardown,
+                steps=config.lifecycle.global_teardown.steps,
                 run_dir=run_dir,
                 artifact_manager=artifact_manager,
                 step_results=step_results,
@@ -106,7 +106,7 @@ class DeviceTestRunner:
     def _run_stage(
         self,
         stage: str,
-        steps: List[LifecycleStep],
+        steps: List[LifecycleSteps],
         run_dir: Path,
         artifact_manager: ArtifactManager,
         step_results: List[StepResult],
@@ -201,10 +201,10 @@ class DeviceTestRunner:
         return sum(
             len(steps)
             for steps in (
-                lifecycle.global_setup,
-                lifecycle.setup,
-                lifecycle.scenario,
-                lifecycle.teardown,
-                lifecycle.global_teardown,
+                lifecycle.global_setup.steps,
+                lifecycle.setup.steps,
+                lifecycle.scenario.steps,
+                lifecycle.teardown.steps,
+                lifecycle.global_teardown.steps,
             )
         )

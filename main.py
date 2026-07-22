@@ -1,21 +1,32 @@
 import argparse
-
+import sys
 from runner.config import ConfigLoader
 from runner.executor import SubprocessExecutor
 from runner.reporter import JsonReporter
 from runner.runner import DeviceTestRunner
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", 
+                            required=True, 
+                            help="Path to the YAML config file.")
+    args = parser.parse_args()
+    return args
+
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config", required=True)
-    args = parser.parse_args()
+    try:
+        args = parse_args()
 
-    config = ConfigLoader().load(args.config)
+        config = ConfigLoader().load(args.config)
 
-    runner = DeviceTestRunner(executor=SubprocessExecutor(), reporter=JsonReporter())
+        runner = DeviceTestRunner(executor=SubprocessExecutor(), reporter=JsonReporter())
 
-    result = runner.run(config=config)
+        result = runner.run(config=config)
+
+    except (OSError, KeyError, TypeError, ValueError) as e:
+        print(f"Runner Error: {e}", file=sys.stderr)
+        return 2
 
     print("==== Device Test Runner v1.1 ====")
     print(f"Test Case ID: {result.metadata.test_case_id}")
@@ -33,7 +44,10 @@ def main():
             print(f"  Error: {step_result.error}")
 
         print()
-
+    
+    if result.summary.status == "PASSED": 
+        return 0
+    return 1
 
 if __name__ == "__main__":
     main()

@@ -1,12 +1,12 @@
 import subprocess
 import time
 
-from runner.models import LifecycleStep, StepResult
+from runner.models import LifecycleStepContent, StepResult
 
 
 class SubprocessExecutor:
 
-    def execute(self, step: LifecycleStep, stage: str) -> StepResult:
+    def execute(self, step: LifecycleStepContent, stage: str) -> StepResult:
 
         start_time = time.perf_counter()
         # completed = None

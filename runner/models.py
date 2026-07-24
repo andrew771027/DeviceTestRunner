@@ -61,8 +61,15 @@ class StepResult:
     success: bool
     exit_code: Optional[int]
     duration_seconds: float
+    
+    # subprocess 完整輸出
     stdout: str
     stderr: str
+
+    # 對應 artifact 檔案位置
+    stdout_log_path: str
+    stderr_log_path: str
+
     error: Optional[str] = None
 
     @property

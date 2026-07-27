@@ -17,15 +17,17 @@ from runner.reporter import JsonReporter
 
 
 class DeviceTestRunner:
-    VERSION = "1.3"
+    VERSION = "1.3.5"
 
     def __init__(
         self,
         executor: SubprocessExecutor,
         reporter: JsonReporter,
+        show_console_output: bool = True,
     ):
         self.executor = executor
         self.reporter = reporter
+        self.show_console_output = show_console_output 
 
     def run(self, config: RunnerConfig) -> RunResult:
         started_at = datetime.now(timezone.utc)
@@ -116,22 +118,19 @@ class DeviceTestRunner:
         stage_success = True
 
         for step in steps:
-            result = self.executor.execute(step, stage)
+            log_writer = artifact_manager.create_step_log_writer(
+                            run_dir=run_dir,
+                            stage=stage,
+                            step_name=step.name,
+                            show_console=self.show_console_output
+                        )
+
+            with log_writer:
+                result = self.executor.execute(step=step, 
+                                               stage=stage, 
+                                               log_writer=log_writer)
+            
             step_results.append(result)
-
-            artifact_manager.save_step_stdout(
-                run_dir=run_dir,
-                stage=stage,
-                step_name=result.name,
-                stdout=result.stdout,
-            )
-
-            artifact_manager.save_step_stderr(
-                run_dir=run_dir,
-                stage=stage,
-                step_name=result.name,
-                stderr=result.stderr,
-            )
 
             if not result.success:
                 stage_success = False

@@ -1,12 +1,14 @@
 import subprocess
 import sys
+from io import StringIO
 from unittest.mock import Mock
 
 import pytest
 
+from runner.artifact import ArtifactManager
 from runner.executor import SubprocessExecutor
 from runner.models import LifecycleStepContent
-from runner.artifact import ArtifactManager
+
 
 @pytest.mark.parametrize(
     argnames="step, stage",
@@ -31,7 +33,9 @@ def test_subprocess_executor_return_success(tmp_path, step, stage):
 
     run_dir = artifact_manager.create_run_directory(test_case_id="test_case_001")
 
-    log_writer = artifact_manager.create_step_log_writer(run_dir=run_dir, stage=stage, step_name=step.name, show_console=False)
+    log_writer = artifact_manager.create_step_log_writer(
+        run_dir=run_dir, stage=stage, step_name=step.name, show_console=False
+    )
 
     with log_writer:
         result = executor.execute(step=step, stage=stage, log_writer=log_writer)
@@ -42,7 +46,7 @@ def test_subprocess_executor_return_success(tmp_path, step, stage):
     assert result.exit_code == 0
     assert result.passed is True
     assert result.success is True
-    
+
     assert log_writer.stdout_path.read_text(encoding="utf-8") == result.stdout
     assert result.stdout == "Hello World\n"
 
@@ -71,7 +75,9 @@ def test_subprocess_executor_failure(tmp_path, step, stage):
 
     run_dir = artifact_manager.create_run_directory(test_case_id="test_case_001")
 
-    log_writer = artifact_manager.create_step_log_writer(run_dir=run_dir, stage=stage, step_name=step.name, show_console=False)
+    log_writer = artifact_manager.create_step_log_writer(
+        run_dir=run_dir, stage=stage, step_name=step.name, show_console=False
+    )
 
     with log_writer:
         result = executor.execute(step=step, stage=stage, log_writer=log_writer)
@@ -97,7 +103,7 @@ def test_subprocess_executor_failure(tmp_path, step, stage):
             LifecycleStepContent(
                 name="timeout_test",
                 type="command",
-                command="echo 'Hello'",
+                command="echo 'Hello World'",
                 timeout_second=5,
             ),
             "test_stage",
@@ -105,13 +111,16 @@ def test_subprocess_executor_failure(tmp_path, step, stage):
     ],
 )
 def test_subprocess_executor_passes_timeout_to_subprocess(tmp_path, monkeypatch, step, stage):
-    mock_process = Mock()
-    
-    mock_process.communicate.return_value = ("Hello World\n", "")
+    mocked_process = Mock()
 
-    mocked_popen = Mock(return_value=mock_process)
+    mocked_process.stdout = StringIO("Hello World\n")
+    mocked_process.stderr = StringIO("")
+    mocked_process.wait.return_value = 0
+    mocked_process.returncode = 0
 
-    monkeypatch.setattr(subprocess, "Popen", mocked_popen)
+    mocked_popen = Mock(return_value=mocked_process)
+
+    monkeypatch.setattr("runner.executor.subprocess.Popen", mocked_popen)
 
     executor = SubprocessExecutor()
 
@@ -119,22 +128,32 @@ def test_subprocess_executor_passes_timeout_to_subprocess(tmp_path, monkeypatch,
 
     run_dir = artifact_manager.create_run_directory(test_case_id="test_case_001")
 
-    log_writer = artifact_manager.create_step_log_writer(run_dir=run_dir, stage=stage, step_name=step.name, show_console=False)
+    log_writer = artifact_manager.create_step_log_writer(
+        run_dir=run_dir, stage=stage, step_name=step.name, show_console=False
+    )
 
     with log_writer:
         result = executor.execute(step=step, stage=stage, log_writer=log_writer)
 
     mocked_popen.assert_called_once_with(
-        "echo 'Hello'", 
-        shell=True, 
-        stdout=subprocess.PIPE, 
-        stderr=subprocess.PIPE, 
-        text=True
+        step.command,
+        shell=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        bufsize=1,
     )
 
-    mocked_process.communicate.assert_called_once_with(timeout=15)
+    mocked_process.wait.assert_called_once_with(timeout=5)
 
     assert result.exit_code == 0
+    assert result.stdout == "Hello World\n"
+    assert result.stderr == ""
+
+    assert log_writer.stdout_path.read_text(encoding="utf-8") == "Hello World\n"
+    assert log_writer.stderr_path.read_text(encoding="utf-8") == ""
 
 
 @pytest.mark.parametrize(
@@ -152,31 +171,46 @@ def test_subprocess_executor_passes_timeout_to_subprocess(tmp_path, monkeypatch,
     ],
 )
 def test_subprocess_executor_raised_timeout_error(tmp_path, monkeypatch, step, stage):
-    def raised_timeout(*args, **kwargs):
-        raise subprocess.TimeoutExpired(
-            cmd=kwargs.get("args", "slow command"),
-            timeout=5,
-        )
 
-    monkeypatch.setattr(subprocess, "run", raised_timeout)
+    mocked_process = Mock()
+
+    # Reader threads 會讀取這兩個 stream。
+    mocked_process.stdout = StringIO("")
+    mocked_process.stderr = StringIO("")
+
+    # timeout 應發生在 wait()，不是 Popen()。
+    mocked_process.wait.side_effect = subprocess.TimeoutExpired(
+        cmd=step.command,
+        timeout=step.timeout_second,
+    )
+
+    mocked_process.returncode = None
+
+    mocked_popen = Mock(return_value=mocked_process)
+
+    monkeypatch.setattr("runner.executor.subprocess.Popen", mocked_popen)
 
     artifact_manager = ArtifactManager(tmp_path)
 
     run_dir = artifact_manager.create_run_directory(test_case_id="test_case_001")
 
-    log_writer = artifact_manager.create_step_log_writer(run_dir=run_dir, stage=stage, step_name=step.name, show_console=False)
+    log_writer = artifact_manager.create_step_log_writer(
+        run_dir=run_dir, stage=stage, step_name=step.name, show_console=False
+    )
 
     executor = SubprocessExecutor()
 
     with log_writer:
         result = executor.execute(step=step, stage=stage, log_writer=log_writer)
 
+    mocked_popen.assert_called_once()
+
     assert result.name == "slow_step"
     assert result.command == "slow command"
     assert result.success is False
     assert result.exit_code is None
     assert result.passed is False
-    
+
     assert log_writer.stdout_path.read_text(encoding="utf-8") == result.stdout
     assert result.stderr == ""
     assert log_writer.stderr_path.read_text(encoding="utf-8") == result.stderr

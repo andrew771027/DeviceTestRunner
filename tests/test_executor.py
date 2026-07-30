@@ -11,10 +11,11 @@ from runner.models import LifecycleStepContent
 
 
 @pytest.mark.parametrize(
-    argnames="step, stage",
+    argnames="test_case_id, step, stage",
     argvalues=(
         [
             (
+                "test_case_001",
                 LifecycleStepContent(
                     name="test",
                     type="command",
@@ -26,12 +27,12 @@ from runner.models import LifecycleStepContent
         ]
     ),
 )
-def test_subprocess_executor_return_success(tmp_path, step, stage):
+def test_subprocess_executor_return_success(tmp_path, test_case_id, step, stage):
     executor = SubprocessExecutor()
 
     artifact_manager = ArtifactManager(tmp_path)
 
-    run_dir = artifact_manager.create_run_directory(test_case_id="test_case_001")
+    run_dir = artifact_manager.create_run_directory(test_case_id=test_case_id)
 
     log_writer = artifact_manager.create_step_log_writer(
         run_dir=run_dir, stage=stage, step_name=step.name, show_console=False
@@ -55,9 +56,10 @@ def test_subprocess_executor_return_success(tmp_path, step, stage):
 
 
 @pytest.mark.parametrize(
-    argnames="step, stage",
+    argnames="test_case_id, step, stage",
     argvalues=[
         (
+            "test_case_001",
             LifecycleStepContent(
                 name="test failed",
                 type="command",
@@ -68,12 +70,12 @@ def test_subprocess_executor_return_success(tmp_path, step, stage):
         ),
     ],
 )
-def test_subprocess_executor_failure(tmp_path, step, stage):
+def test_subprocess_executor_failure(tmp_path, test_case_id, step, stage):
     executor = SubprocessExecutor()
 
     artifact_manager = ArtifactManager(tmp_path)
 
-    run_dir = artifact_manager.create_run_directory(test_case_id="test_case_001")
+    run_dir = artifact_manager.create_run_directory(test_case_id=test_case_id)
 
     log_writer = artifact_manager.create_step_log_writer(
         run_dir=run_dir, stage=stage, step_name=step.name, show_console=False
@@ -97,9 +99,10 @@ def test_subprocess_executor_failure(tmp_path, step, stage):
 
 
 @pytest.mark.parametrize(
-    argnames="step, stage",
+    argnames="tase_case_id, step, stage",
     argvalues=[
         (
+            "test_case_001",
             LifecycleStepContent(
                 name="timeout_test",
                 type="command",
@@ -110,7 +113,9 @@ def test_subprocess_executor_failure(tmp_path, step, stage):
         )
     ],
 )
-def test_subprocess_executor_passes_timeout_to_subprocess(tmp_path, monkeypatch, step, stage):
+def test_subprocess_executor_passes_timeout_to_subprocess(
+    tmp_path, monkeypatch, tase_case_id, step, stage
+):
     mocked_process = Mock()
 
     mocked_process.stdout = StringIO("Hello World\n")
@@ -126,7 +131,7 @@ def test_subprocess_executor_passes_timeout_to_subprocess(tmp_path, monkeypatch,
 
     artifact_manager = ArtifactManager(tmp_path)
 
-    run_dir = artifact_manager.create_run_directory(test_case_id="test_case_001")
+    run_dir = artifact_manager.create_run_directory(test_case_id=tase_case_id)
 
     log_writer = artifact_manager.create_step_log_writer(
         run_dir=run_dir, stage=stage, step_name=step.name, show_console=False
@@ -157,9 +162,10 @@ def test_subprocess_executor_passes_timeout_to_subprocess(tmp_path, monkeypatch,
 
 
 @pytest.mark.parametrize(
-    argnames="step, stage",
+    argnames="test_case_id, step, stage",
     argvalues=[
         (
+            "test_case_001",
             LifecycleStepContent(
                 name="slow_step",
                 type="command",
@@ -170,7 +176,7 @@ def test_subprocess_executor_passes_timeout_to_subprocess(tmp_path, monkeypatch,
         )
     ],
 )
-def test_subprocess_executor_raised_timeout_error(tmp_path, monkeypatch, step, stage):
+def test_subprocess_executor_raised_timeout_error(tmp_path, monkeypatch, test_case_id, step, stage):
 
     mocked_process = Mock()
 
@@ -192,7 +198,7 @@ def test_subprocess_executor_raised_timeout_error(tmp_path, monkeypatch, step, s
 
     artifact_manager = ArtifactManager(tmp_path)
 
-    run_dir = artifact_manager.create_run_directory(test_case_id="test_case_001")
+    run_dir = artifact_manager.create_run_directory(test_case_id=test_case_id)
 
     log_writer = artifact_manager.create_step_log_writer(
         run_dir=run_dir, stage=stage, step_name=step.name, show_console=False
@@ -216,4 +222,4 @@ def test_subprocess_executor_raised_timeout_error(tmp_path, monkeypatch, step, s
     assert log_writer.stderr_path.read_text(encoding="utf-8") == result.stderr
     assert result.stdout == ""
 
-    assert result.error == "Timeout after 5 seconds"
+    assert result.error == f"Timeout after {step.timeout_second} seconds"

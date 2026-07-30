@@ -43,6 +43,8 @@ from runner.reporter import JsonReporter
                     duration_seconds=5.0,
                     stdout="Setup 1 completed.",
                     stderr="",
+                    stdout_log_path="",
+                    stderr_log_path="",
                 ),
                 StepResult(
                     stage="test_stage",
@@ -53,6 +55,8 @@ from runner.reporter import JsonReporter
                     duration_seconds=10.0,
                     stdout="Test 1 completed.",
                     stderr="",
+                    stdout_log_path="",
+                    stderr_log_path="",
                 ),
                 StepResult(
                     stage="test_stage",
@@ -63,6 +67,8 @@ from runner.reporter import JsonReporter
                     duration_seconds=15.0,
                     stdout="Test 2 failed.",
                     stderr="",
+                    stdout_log_path="",
+                    stderr_log_path="",
                 ),
             ],
         )

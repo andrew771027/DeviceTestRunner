@@ -76,6 +76,19 @@ artifact:
     assert result.summary.status == "PASSED"
     assert result.summary.executed_steps == 6
 
+    step_result = result.step_results[0]
+    assert step_result.stdout == "Hello World\n"
+    assert step_result.stderr == ""
+
+    stdout_path = Path(step_result.stdout_log_path)
+    stderr_path = Path(step_result.stderr_log_path)
+
+    assert stdout_path.exists()
+    assert stderr_path.exists()
+
+    assert stdout_path.read_text(encoding="utf-8") == step_result.stdout
+    assert stderr_path.read_text(encoding="utf-8") == step_result.stderr
+
     assert result.step_results[0].name == "global_setup"
     assert "Hello World" in result.step_results[0].stdout
 
@@ -112,7 +125,7 @@ artifact:
 
     report = json.loads((run_dir / "result.json").read_text(encoding="utf-8"))
 
-    assert report["metadata"]["runner_version"] == "1.3"
+    assert report["metadata"]["runner_version"] == "1.3.5"
 
     assert report["summary"]["status"] == "PASSED"
 
@@ -200,6 +213,21 @@ artifact:
 
     assert result.step_results[3].name == "scenario_2"
     assert result.step_results[3].stdout == ""
+    assert result.step_results[3].stderr == ""
+    assert result.step_results[3].exit_code == 1
+
+    failed_step_result = result.step_results[3]
+    assert failed_step_result.stdout == ""
+    assert failed_step_result.stderr == ""
+
+    stdout_path = Path(failed_step_result.stdout_log_path)
+    stderr_path = Path(failed_step_result.stderr_log_path)
+
+    assert stdout_path.exists()
+    assert stderr_path.exists()
+
+    assert stdout_path.read_text(encoding="utf-8") == failed_step_result.stdout
+    assert stderr_path.read_text(encoding="utf-8") == failed_step_result.stderr
 
     assert result.step_results[4].name == "teardown"
     assert "Hello World" in result.step_results[4].stdout
@@ -225,7 +253,7 @@ artifact:
 
     report = json.loads((run_dir / "result.json").read_text(encoding="utf-8"))
 
-    assert report["metadata"]["runner_version"] == "1.3"
+    assert report["metadata"]["runner_version"] == "1.3.5"
 
     assert report["summary"]["status"] == "FAILED"
 

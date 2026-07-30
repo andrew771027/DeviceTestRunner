@@ -139,6 +139,8 @@ def test_config_contains_all_section(config: RunnerConfig):
             duration_seconds=1,
             stderr="",
             stdout="",
+            stdout_log_path="",
+            stderr_log_path="",
             error=None,
         ),
     ],
@@ -159,6 +161,8 @@ def test_step_result_passed_when_exit_code_is_zero(result):
             duration_seconds=1,
             stderr="",
             stdout="",
+            stdout_log_path="",
+            stderr_log_path="",
             error=None,
         )
     ],

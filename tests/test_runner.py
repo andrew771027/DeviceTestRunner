@@ -15,7 +15,7 @@ from runner.models import (
 )
 from runner.reporter import JsonReporter
 from runner.runner import DeviceTestRunner
-
+from runner.artifact import StepLogWriter
 
 class MockExecutor:
 
@@ -23,10 +23,15 @@ class MockExecutor:
         self.failed_step_name = failed_step_name
         self.executed_steps: List[tuple[str, str]] = []
 
-    def execute(self, step: LifecycleStepContent, stage: str) -> StepResult:
+    def execute(self, step: LifecycleStepContent, stage: str, log_writer: StepLogWriter) -> StepResult:
         self.executed_steps.append(step.name)
 
         success = step.name != self.failed_step_name
+
+        log_writer.write_stdout(f"{step.name} stdout\n")
+
+        if not success:
+            log_writer.write_stderr(f"{step.name} failed\n")
 
         return StepResult(
             stage=stage,
@@ -35,8 +40,10 @@ class MockExecutor:
             success=success,
             exit_code=0 if success else 1,
             duration_seconds=0.01,
-            stdout="",
-            stderr="" if success else f"{step.name} failed",
+            stdout=log_writer.stdout_path,
+            stderr=log_writer.stderr_path,
+            stdout_log_path=str(log_writer.stdout_path),
+            stderr_log_path=str(log_writer.stderr_path),
         )
 
 
@@ -109,6 +116,12 @@ def test_runner_executes_all_stages_and_all_steps_success(tmp_path):
         "global_teardown",
     ]
 
+    first_result = result.step_results[0]
+    stdout_path = Path(first_result.stdout_log_path)
+    stderr_path = Path(first_result.stderr_log_path)
+    assert stdout_path.read_text(encoding="utf-8") == "global_setup stdout\n"
+    assert stderr_path.read_text(encoding="utf-8") == ""
+    
     assert result.step_results[0].stderr == ""
     assert result.step_results[1].stderr == ""
     assert result.step_results[2].stderr == ""
@@ -172,6 +185,15 @@ def test_runner_terminate_when_step_failed(tmp_path, failed_step_name):
     assert result.step_results[3].stderr == f"{failed_step_name} failed"
     assert result.step_results[4].stderr == ""
     assert result.step_results[5].stderr == ""
+
+    failed_step_result = next(step for step in result.step_results if step.name == failed_step_name)
+    assert failed_step_result.stage == "scenario"
+    assert failed_step_result.name == "scenario_2"
+    assert Path(failed_step_result.stdout_log_path).exists()
+    assert Path(failed_step_result.stderr_log_path).exists()
+    assert "scenario_2 failed" in Path(failed_step_result.stderr_log_path).read_text(encoding="utf-8")
+
+
 
 
 @pytest.mark.parametrize(argnames="failed_step_name", argvalues=["global_setup"])

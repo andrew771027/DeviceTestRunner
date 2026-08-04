@@ -4,12 +4,15 @@ from runner.config import ConfigLoader
 from runner.executor import SubprocessExecutor
 from runner.reporter import JsonReporter
 from runner.runner import DeviceTestRunner
+from runner.artifact_validator import ArtifactValidator
+from pathlib import Path
+
+PROJECT_DIRECTORY = Path(__file__).resolve().parent
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", 
-                            required=True, 
-                            help="Path to the YAML config file.")
+    parser.add_argument("--config", required=True, help="Path to the YAML config file.")
     args = parser.parse_args()
     return args
 
@@ -20,7 +23,11 @@ def main():
 
         config = ConfigLoader().load(args.config)
 
-        runner = DeviceTestRunner(executor=SubprocessExecutor(), reporter=JsonReporter())
+        runner = DeviceTestRunner(
+            executor=SubprocessExecutor(project_directory=PROJECT_DIRECTORY),
+            artifact_validator=ArtifactValidator(),
+            reporter=JsonReporter(),
+        )
 
         result = runner.run(config=config)
 
@@ -44,10 +51,11 @@ def main():
             print(f"  Error: {step_result.error}")
 
         print()
-    
-    if result.summary.status == "PASSED": 
+
+    if result.summary.status == "PASSED":
         return 0
     return 1
+
 
 if __name__ == "__main__":
     main()

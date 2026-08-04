@@ -42,6 +42,7 @@ class LifecycleConfig:
     teardown: LifecycleSteps = field(default_factory=LifecycleSteps)
     global_teardown: LifecycleSteps = field(default_factory=LifecycleSteps)
 
+
 @dataclass(frozen=True)
 class ArtifactValidationRule:
 
@@ -63,7 +64,9 @@ class ArtifactValidationConfig:
 @dataclass(frozen=True)
 class ArtifactConfig:
     output_dir: str
-    validation: ArtifactValidationConfig = field(default_factory=ArtifactValidationConfig)
+    validation: ArtifactValidationConfig = field(
+        default_factory=ArtifactValidationConfig
+    )
 
 
 @dataclass(frozen=True)
@@ -84,7 +87,7 @@ class StepResult:
     success: bool
     exit_code: Optional[int]
     duration_seconds: float
-    
+
     # subprocess 完整輸出
     stdout: str
     stderr: str
@@ -98,6 +101,7 @@ class StepResult:
     @property
     def passed(self) -> bool:
         return self.exit_code == 0
+
 
 @dataclass(frozen=True)
 class ArtifactValidationResult:
@@ -138,6 +142,7 @@ class ExecutionSummary:
 
     duration_seconds: float
 
+
 @dataclass(frozen=True)
 class RunResult:
 
@@ -145,7 +150,9 @@ class RunResult:
     summary: ExecutionSummary
     step_results: List[StepResult]
     artifact_dir: str | None = None
-    artifact_validation_results: List[ArtifactValidationResult] = field(default_factory=list)
+    artifact_validation_results: List[ArtifactValidationResult] = field(
+        default_factory=list
+    )
 
     @property
     def passed(self) -> bool:

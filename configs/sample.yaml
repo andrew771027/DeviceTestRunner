@@ -13,31 +13,31 @@ lifecycle:
     steps:
       - name: clear_process
         type: command
-        command: bash scripts/clear_process.sh
+        command: bash "$DEVICE_TEST_RUNNER_ROOT/scripts/clear_process.sh"
         timeout_second: 10
   setup:
     steps:
       - name: flash_device
         type: command
-        command: bash scripts/flash_device.sh
+        command: bash "$DEVICE_TEST_RUNNER_ROOT/scripts/flash_device.sh"
         timeout_second: 10
   scenario:
     steps:
       - name: run_scenario
         type: command
-        command: bash scripts/run_scenario.sh
+        command: bash "$DEVICE_TEST_RUNNER_ROOT/scripts/run_scenario.sh"
         timeout_second: 10
   teardown:
     steps:
       - name: collect_artifact
         type: command
-        command: bash scripts/collect_artifact.sh
+        command: bash "$DEVICE_TEST_RUNNER_ROOT/scripts/collect_artifact.sh"
         timeout_second: 10
   global_teardown:
     steps:
       - name: release_resource
         type: command
-        command: bash scripts/release_resource.sh
+        command: bash "$DEVICE_TEST_RUNNER_ROOT/scripts/release_resource.sh"
         timeout_second: 10
 artifact:
   output_dir: artifact/sample_device_config

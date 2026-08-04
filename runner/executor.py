@@ -1,3 +1,4 @@
+import os
 import subprocess
 import tempfile
 import threading
@@ -11,9 +12,30 @@ from runner.models import LifecycleStepContent, StepResult
 
 class SubprocessExecutor:
 
-    def execute(self, step: LifecycleStepContent, stage: str, log_writer: StepLogWriter | None = None) -> StepResult:
+    def __init__(
+        self,
+        project_directory: str | Path,
+    ):
+        self.project_directory = Path(project_directory).resolve()
+
+    def execute(
+        self,
+        step: LifecycleStepContent,
+        stage: str,
+        log_writer: StepLogWriter | None,
+        working_directory: str | Path,
+    ) -> StepResult:
+
         if log_writer is None:
-            log_writer = self._create_default_log_writer(stage=stage, step_name=step.name)
+            log_writer = self._create_default_log_writer(
+                stage=stage, step_name=step.name
+            )
+
+        environment = os.environ.copy()
+
+        environment["DEVICE_TEST_RUNNER_ROOT"] = str(self.project_directory)
+
+        environment["RUN_ARTIFACT_DIR"] = str(Path(working_directory).resolve())
 
         start_time = time.perf_counter()
         process: subprocess.Popen[str] | None = None
@@ -24,6 +46,8 @@ class SubprocessExecutor:
             process = subprocess.Popen(
                 step.command,
                 shell=True,
+                cwd=str(working_directory),
+                env=environment,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,

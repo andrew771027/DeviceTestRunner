@@ -4,6 +4,8 @@ import yaml
 
 from runner.models import (
     ArtifactConfig,
+    ArtifactValidationConfig,
+    ArtifactValidationRule,
     DeviceInfo,
     DeviceTestCase,
     LifecycleConfig,
@@ -36,9 +38,10 @@ class ConfigLoader:
             global_teardown=self._load_steps(lifecycle_raw.get("global_teardown", {})),
         )
 
-        artifact = self._load_artifact(raw)
-
-        artifact = ArtifactConfig(output_dir=raw["artifact"]["output_dir"])
+        artifact = ArtifactConfig(
+            output_dir=raw["artifact"]["output_dir"],
+            validation=self._load_validation(raw["artifact"]),
+        )
 
         return RunnerConfig(
             test_case=test_case,
@@ -63,7 +66,9 @@ class ConfigLoader:
 
         device = raw["device"]
 
-        return DeviceInfo(serial=device["serial"], product=device["product"], build=device["build"])
+        return DeviceInfo(
+            serial=device["serial"], product=device["product"], build=device["build"]
+        )
 
     @staticmethod
     def _load_steps(raw: dict[str, Any]) -> LifecycleSteps:
@@ -83,7 +88,19 @@ class ConfigLoader:
         )
 
     @staticmethod
-    def _load_artifact(raw: dict[str, dict]) -> ArtifactConfig:
-        artifact = raw["artifact"]
+    def _load_validation(raw: dict[str, dict]) -> ArtifactValidationConfig:
+        validation = raw["validation"]
 
-        return ArtifactConfig(output_dir=artifact["output_dir"])
+        return ArtifactValidationConfig(
+            rules=[
+                ArtifactValidationRule(
+                    name=rule["name"],
+                    type=rule["type"],
+                    path=rule["path"],
+                    min_size_bytes=rule.get("min_size_bytes"),
+                    max_size_bytes=rule.get("max_size_bytes"),
+                    allowed_extensions=list[rule.get("allowed_extensions", [])],
+                )
+                for rule in validation["rules"]
+            ]
+        )

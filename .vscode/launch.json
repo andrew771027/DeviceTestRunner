@@ -6,12 +6,17 @@
     "configurations": [
 
         {
-            "name": "Python Debugger: Current File with Arguments",
+            "name": "Python Debugger: main.py sample config",
             "type": "debugpy",
             "request": "launch",
-            "program": "${file}",
+            "program": "${workspaceFolder}/main.py",
+            "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
-            "args": "${command:pickArgs}"
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "args": [
+                "--config",
+                "./configs/sample.yaml"
+            ]
         },
         {
             "name": "Python Debugger: Test",

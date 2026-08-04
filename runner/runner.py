@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import List
 
 from runner.artifact import ArtifactManager
+from runner.artifact_validator import ArtifactValidator
 from runner.executor import SubprocessExecutor
 from runner.models import (
     ExecutionSummary,
@@ -12,22 +13,26 @@ from runner.models import (
     RunnerConfig,
     RunResult,
     StepResult,
+    ArtifactValidationResult,
 )
 from runner.reporter import JsonReporter
 
 
 class DeviceTestRunner:
-    VERSION = "1.3.5"
+    VERSION = "1.4.0"
 
     def __init__(
         self,
         executor: SubprocessExecutor,
+        artifact_validator: ArtifactValidator,
         reporter: JsonReporter,
         show_console_output: bool = True,
     ):
         self.executor = executor
+        self.artifact_validator = artifact_validator
         self.reporter = reporter
-        self.show_console_output = show_console_output 
+
+        self.show_console_output = show_console_output
 
     def run(self, config: RunnerConfig) -> RunResult:
         started_at = datetime.now(timezone.utc)
@@ -35,7 +40,9 @@ class DeviceTestRunner:
 
         artifact_manager = ArtifactManager(output_dir=config.artifact.output_dir)
 
-        run_dir = artifact_manager.create_run_directory(test_case_id=config.test_case.id)
+        run_dir = artifact_manager.create_run_directory(
+            test_case_id=config.test_case.id
+        )
 
         step_results: list[StepResult] = []
 
@@ -88,6 +95,10 @@ class DeviceTestRunner:
                 stop_on_failure=False,
             )
 
+            artifact_results = self.artifact_validator.validate_all(
+                rules=config.artifact.validation.rules, base_dir=run_dir
+            )
+
         finished_at = datetime.now(timezone.utc)
 
         duration_deconds = time.perf_counter() - started_counter
@@ -96,6 +107,7 @@ class DeviceTestRunner:
             config=config,
             run_dir=run_dir,
             step_results=step_results,
+            artifact_results=artifact_results,
             started_at=started_at,
             finished_at=finished_at,
             duration_seconds=duration_deconds,
@@ -119,17 +131,20 @@ class DeviceTestRunner:
 
         for step in steps:
             log_writer = artifact_manager.create_step_log_writer(
-                            run_dir=run_dir,
-                            stage=stage,
-                            step_name=step.name,
-                            show_console=self.show_console_output
-                        )
+                run_dir=run_dir,
+                stage=stage,
+                step_name=step.name,
+                show_console=self.show_console_output,
+            )
 
             with log_writer:
-                result = self.executor.execute(step=step, 
-                                               stage=stage, 
-                                               log_writer=log_writer)
-            
+                result = self.executor.execute(
+                    step=step,
+                    stage=stage,
+                    log_writer=log_writer,
+                    working_directory=run_dir,
+                )
+
             step_results.append(result)
 
             if not result.success:
@@ -145,6 +160,7 @@ class DeviceTestRunner:
         config: RunnerConfig,
         run_dir: Path,
         step_results: List[StepResult],
+        artifact_results: list[ArtifactValidationResult],
         started_at: datetime,
         finished_at: datetime,
         duration_seconds: float,
@@ -160,7 +176,17 @@ class DeviceTestRunner:
 
         skipped_steps = configured_steps - executed_steps
 
-        status = "PASSED" if failed_steps == 0 and skipped_steps == 0 else "FAILED"
+        configured_artifact_rules = len(artifact_results)
+
+        passed_artifact_rules = sum(result.passed for result in artifact_results)
+
+        failed_artifact_rules = sum(not result.passed for result in artifact_results)
+
+        status = self._calculate_status(
+            failed_steps=failed_steps,
+            skipped_steps=skipped_steps,
+            failed_artifact_rules=failed_artifact_rules,
+        )
 
         metadata = RunMetadata(
             test_case_id=config.test_case.id,
@@ -181,6 +207,9 @@ class DeviceTestRunner:
             passed_steps=passed_steps,
             failed_steps=failed_steps,
             skipped_steps=skipped_steps,
+            configured_artifact_rules=(configured_artifact_rules),
+            passed_artifact_rules=(passed_artifact_rules),
+            failed_artifact_rules=(failed_artifact_rules),
             duration_seconds=duration_seconds,
         )
 
@@ -188,6 +217,7 @@ class DeviceTestRunner:
             metadata=metadata,
             summary=summary,
             step_results=step_results,
+            artifact_validation_results=(artifact_results),
             artifact_dir=str(run_dir),
         )
 
@@ -207,3 +237,18 @@ class DeviceTestRunner:
                 lifecycle.global_teardown.steps,
             )
         )
+
+    @staticmethod
+    def _calculate_status(
+        failed_steps: int, skipped_steps: int, failed_artifact_rules: int
+    ) -> str:
+        if failed_steps > 0:
+            return "FAILED"
+
+        if skipped_steps > 0:
+            return "FAILED"
+
+        if failed_artifact_rules > 0:
+            return "FAILED"
+
+        return "PASSED"

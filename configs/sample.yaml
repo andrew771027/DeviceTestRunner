@@ -41,3 +41,24 @@ lifecycle:
         timeout_second: 10
 artifact:
   output_dir: artifact/sample_device_config
+  validation:
+    rules:
+      - name: check_artifact_log
+        type: exists
+        path: results/log.csv
+      
+      - name: check_artifact_size
+        type: file_size
+        path: results/size.csv
+        min_size_bytes: 10
+        max_size_bytes: 1048676
+      
+      - name: check_artifact_extension
+        type: file_extension
+        path: results/extension.csv
+        allowed_extensions:
+        - csv
+      
+      - name: check_artifact_directory
+        type: directory_not_empty
+        path: results/directory

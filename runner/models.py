@@ -4,6 +4,7 @@ from typing import List, Optional
 
 @dataclass(frozen=True)
 class DeviceTestCase:
+
     id: str
     name: str
     description: str
@@ -11,6 +12,7 @@ class DeviceTestCase:
 
 @dataclass(frozen=True)
 class DeviceInfo:
+
     serial: str
     product: str
     build: str
@@ -18,6 +20,7 @@ class DeviceInfo:
 
 @dataclass(frozen=True)
 class LifecycleStepContent:
+
     name: str
     type: str
     command: str
@@ -26,21 +29,41 @@ class LifecycleStepContent:
 
 @dataclass(frozen=True)
 class LifecycleSteps:
+
     steps: List[LifecycleStepContent] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
 class LifecycleConfig:
+
     global_setup: LifecycleSteps = field(default_factory=LifecycleSteps)
     setup: LifecycleSteps = field(default_factory=LifecycleSteps)
     scenario: LifecycleSteps = field(default_factory=LifecycleSteps)
     teardown: LifecycleSteps = field(default_factory=LifecycleSteps)
     global_teardown: LifecycleSteps = field(default_factory=LifecycleSteps)
 
+@dataclass(frozen=True)
+class ArtifactValidationRule:
+
+    name: str
+    type: str
+    path: str
+
+    max_size_bytes: Optional[int] = None
+    min_size_bytes: Optional[int] = None
+    allowed_extensions: List[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class ArtifactValidationConfig:
+
+    rules: List[ArtifactValidationRule] = field(default_factory=list)
+
 
 @dataclass(frozen=True)
 class ArtifactConfig:
     output_dir: str
+    validation: ArtifactValidationConfig = field(default_factory=ArtifactValidationConfig)
 
 
 @dataclass(frozen=True)
@@ -76,6 +99,16 @@ class StepResult:
     def passed(self) -> bool:
         return self.exit_code == 0
 
+@dataclass(frozen=True)
+class ArtifactValidationResult:
+    name: str
+    type: str
+    path: str
+    passed: bool
+    message: str
+
+    actual_size_bytes: Optional[int] = None
+
 
 @dataclass(frozen=True)
 class RunMetadata:
@@ -98,8 +131,12 @@ class ExecutionSummary:
     passed_steps: int
     failed_steps: int
     skipped_steps: int
-    duration_seconds: float
 
+    configured_artifact_rules: int
+    passed_artifact_rules: int
+    failed_artifact_rules: int
+
+    duration_seconds: float
 
 @dataclass(frozen=True)
 class RunResult:
@@ -108,6 +145,7 @@ class RunResult:
     summary: ExecutionSummary
     step_results: List[StepResult]
     artifact_dir: str | None = None
+    artifact_validation_results: List[ArtifactValidationResult] = field(default_factory=list)
 
     @property
     def passed(self) -> bool:

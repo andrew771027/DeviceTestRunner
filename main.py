@@ -7,7 +7,7 @@ from runner.runner import DeviceTestRunner
 from runner.artifact_validator import ArtifactValidator
 from pathlib import Path
 
-PROJECT_DIRECTORY = Path(__file__).resolve().parent
+PROJECT_ROOT = Path(__file__).resolve().parent
 
 
 def parse_args() -> argparse.Namespace:
@@ -24,7 +24,7 @@ def main():
         config = ConfigLoader().load(args.config)
 
         runner = DeviceTestRunner(
-            executor=SubprocessExecutor(project_directory=PROJECT_DIRECTORY),
+            executor=SubprocessExecutor(project_directory=PROJECT_ROOT),
             artifact_validator=ArtifactValidator(),
             reporter=JsonReporter(),
         )

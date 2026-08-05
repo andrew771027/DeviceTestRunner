@@ -1,7 +1,6 @@
 from pathlib import Path
-from typing import Callable
+from typing import Callable, List
 from runner.models import ArtifactValidationRule, ArtifactValidationResult
-from typing import List
 
 
 class ArtifactValidator:
@@ -27,7 +26,7 @@ class ArtifactValidator:
     ) -> ArtifactValidationResult:
         resolved_base_dir = Path(base_dir)
         resolved_path = self._resolve_path(
-            base_dir=rule.path, configured_path=resolved_base_dir
+            base_dir=resolved_base_dir, configured_path=rule.path
         )
 
         handler = self._handlers.get(rule.type)
@@ -55,13 +54,14 @@ class ArtifactValidator:
             )
 
     @staticmethod
-    def _resolve_path(base_dir: Path, configured_path: str) -> Path:
+    def _resolve_path(base_dir: str | Path, configured_path: str | Path) -> Path:
+        resolved_base_dir = Path(base_dir)
         path = Path(configured_path)
 
         if path.is_absolute():
             return path
 
-        return base_dir / path
+        return resolved_base_dir / path
 
     @staticmethod
     def _validate_exists(
@@ -168,8 +168,8 @@ class ArtifactValidator:
                 name=rule.name,
                 type=rule.type,
                 path=str(path),
-                passed=True,
-                message=("allowed_extensions cannot " "be empty."),
+                passed=False,
+                message=("allowed_extensions cannot be empty."),
             )
 
         actual_extension = path.suffix.lower()

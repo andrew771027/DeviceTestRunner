@@ -28,9 +28,9 @@ class MockExecutor:
         self.executed_steps: List[tuple[str, str]] = []
 
     def execute(
-        self, 
-        step: LifecycleStepContent, 
-        stage: str, 
+        self,
+        step: LifecycleStepContent,
+        stage: str,
         log_writer: StepLogWriter,
         working_directory: str | Path,
     ) -> StepResult:
@@ -80,10 +80,7 @@ def mock_step(name: str) -> LifecycleStepContent:
     )
 
 
-def mock_config(
-    tmp_path: Path,
-    min_size_bytes: int = 1
-) -> RunnerConfig:
+def mock_config(tmp_path: Path, min_size_bytes: int = 1) -> RunnerConfig:
     return RunnerConfig(
         test_case=DeviceTestCase(
             id="power_001",
@@ -113,27 +110,29 @@ def mock_config(
                 rules=[
                     ArtifactValidationRule(
                         name="test_file_exist",
-                        type="existing",
-                        path="results/test_file.txt"
+                        type="exists",
+                        path="results/test_file.txt",
                     ),
                     ArtifactValidationRule(
                         name="test_file_size",
-                        type="existing",
+                        type="file_size",
                         path="results/test_file.txt",
                         min_size_bytes=min_size_bytes,
-                    )
+                    ),
                 ]
-            )
+            ),
         ),
     )
 
 
-def test_runner_executes_all_stages_and_all_steps_success(tmp_path):
+def test_runner_executes_all_stages_and_all_steps_success(tmp_path: Path):
     config = mock_config(tmp_path)
     executor = MockExecutor()
-    runner = DeviceTestRunner(executor=executor, 
-                              artifact_validator=ArtifactValidator(), 
-                              reporter=JsonReporter())
+    runner = DeviceTestRunner(
+        executor=executor,
+        artifact_validator=ArtifactValidator(),
+        reporter=JsonReporter(),
+    )
     result = runner.run(config)
 
     assert result.metadata.test_case_name == "power_001"
@@ -179,9 +178,11 @@ def test_runner_executes_all_stages_and_all_steps_success(tmp_path):
 def test_runner_terminate_when_step_failed(tmp_path, failed_step_name):
     config = mock_config(tmp_path)
     executor = MockExecutor(failed_step_name=failed_step_name)
-    runner = DeviceTestRunner(executor=executor, 
-                              artifact_validator=ArtifactValidator(), 
-                              reporter=JsonReporter())
+    runner = DeviceTestRunner(
+        executor=executor,
+        artifact_validator=ArtifactValidator(),
+        reporter=JsonReporter(),
+    )
     result = runner.run(config)
 
     assert result.metadata.test_case_name == "power_001"
@@ -244,9 +245,11 @@ def test_runner_terminate_when_step_failed(tmp_path, failed_step_name):
 def test_global_setup_failure_only_run_global_teardown(tmp_path, failed_step_name):
     config = mock_config(tmp_path)
     executor = MockExecutor(failed_step_name=failed_step_name)
-    runner = DeviceTestRunner(executor=executor, 
-                              artifact_validator=ArtifactValidator(), 
-                              reporter=JsonReporter())
+    runner = DeviceTestRunner(
+        executor=executor,
+        artifact_validator=ArtifactValidator(),
+        reporter=JsonReporter(),
+    )
     result = runner.run(config)
 
     assert result.metadata.test_case_name == "power_001"
@@ -281,9 +284,11 @@ def test_global_setup_failure_only_run_global_teardown(tmp_path, failed_step_nam
 def test_setup_failure_only_run_global_teardown(tmp_path, failed_step_name):
     config = mock_config(tmp_path)
     executor = MockExecutor(failed_step_name=failed_step_name)
-    runner = DeviceTestRunner(executor=executor, 
-                              artifact_validator=ArtifactValidator(), 
-                              reporter=JsonReporter())
+    runner = DeviceTestRunner(
+        executor=executor,
+        artifact_validator=ArtifactValidator(),
+        reporter=JsonReporter(),
+    )
     result = runner.run(config)
 
     assert result.metadata.test_case_name == "power_001"
@@ -330,6 +335,7 @@ def test_setup_failure_only_run_global_teardown(tmp_path, failed_step_name):
     assert "setup" in (executed_names)
     assert "global_teardown" in (executed_names)
 
+
 def test_runner_passes_when_artifacts_are_valid(tmp_path: Path):
     config = mock_config(tmp_path)
     executor = MockExecutor()
@@ -337,9 +343,91 @@ def test_runner_passes_when_artifacts_are_valid(tmp_path: Path):
         executor=executor,
         artifact_validator=ArtifactValidator(),
         reporter=JsonReporter(),
-        show_console_output=False
+        show_console_output=False,
     )
 
     result = runner.run(config)
 
     assert result.summary.status == "PASSED"
+    assert result.summary.configured_artifact_rules == 2
+    assert result.summary.passed_artifact_rules == 2
+    assert result.summary.failed_artifact_rules == 0
+    assert all(validation.passed for validation in result.artifact_validation_results)
+
+
+def test_runner_fails_when_artifacts_invalid(tmp_path: Path):
+    config = mock_config(tmp_path, min_size_bytes=10_000)
+    executor = MockExecutor()
+    runner = DeviceTestRunner(
+        executor=executor,
+        artifact_validator=ArtifactValidator(),
+        reporter=JsonReporter(),
+        show_console_output=False,
+    )
+
+    result = runner.run(config)
+
+    assert result.summary.passed_steps == 6
+    assert result.summary.failed_steps == 0
+
+    assert result.summary.status == "FAILED"
+
+    assert result.summary.failed_artifact_rules == 1
+
+    failed_validation = next(
+        validation for validation in result.artifact_validation_results if not validation.passed
+    )
+
+    assert failed_validation.name == "test_file_size"
+    assert "smaller than the minimum" in (failed_validation.message)
+
+
+def test_runner_passes_without_validation_rules(tmp_path: Path):
+
+    config = RunnerConfig(
+        test_case=DeviceTestCase(
+            id="power_001",
+            name="power_001",
+            description="Description",
+        ),
+        device=DeviceInfo(
+            serial="device_001",
+            product="pixel",
+            build="build_001",
+        ),
+        lifecycle=LifecycleConfig(
+            global_setup=LifecycleSteps(steps=[mock_step("global_setup")]),
+            setup=LifecycleSteps(steps=[mock_step("setup")]),
+            scenario=LifecycleSteps(
+                steps=[
+                    mock_step("scenario_1"),
+                    mock_step("scenario_2"),
+                ]
+            ),
+            teardown=LifecycleSteps(steps=[mock_step("teardown")]),
+            global_teardown=LifecycleSteps(steps=[mock_step("global_teardown")]),
+        ),
+        artifact=ArtifactConfig(
+            output_dir=str(tmp_path),
+        ),
+    )
+
+    executor = MockExecutor()
+    runner = DeviceTestRunner(
+        executor=executor,
+        artifact_validator=ArtifactValidator(),
+        reporter=JsonReporter(),
+        show_console_output=False,
+    )
+
+    result = runner.run(config)
+
+    assert result.summary.status == "PASSED"
+    assert result.summary.configured_steps == 6
+    assert result.summary.passed_steps == 6
+    assert result.summary.executed_steps == 6
+    assert result.summary.skipped_steps == 0
+    assert result.summary.failed_steps == 0
+
+    assert result.summary.configured_artifact_rules == 0
+    assert result.artifact_validation_results == []

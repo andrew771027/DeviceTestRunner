@@ -1,4 +1,5 @@
 from pathlib import Path
+
 from runner.config import ConfigLoader
 from runner.models import (
     ArtifactConfig,
@@ -120,10 +121,11 @@ def test_config_loader_loads_device_test_config(tmp_path: Path):
     assert isinstance(config.artifact, ArtifactConfig)
     assert config.artifact.output_dir == "artufact/hello_world"
 
+
 def test_load_artifact_validation_config(tmp_path: Path):
     config_file = tmp_path / "config.yaml"
     config_file.write_text(
-    """
+        """
     test_case:
         id: hello_world_001
         name: hello_world
@@ -165,10 +167,9 @@ def test_load_artifact_validation_config(tmp_path: Path):
 """,
         encoding="utf-8",
     )
-    
 
     config = ConfigLoader().load(config_file)
-    
+
     rules = config.artifact.validation.rules
 
     assert len(rules) == 3
@@ -186,7 +187,7 @@ def test_load_artifact_validation_config(tmp_path: Path):
     assert rules[2].name == "result_extension"
     assert rules[2].type == "file_extension"
     assert sorted(rules[2].allowed_extensions) == sorted(["txt", "csv"])
-    
+
 
 def test_artifact_validation_is_optional(tmp_path: Path):
     config_file = tmp_path / "config.yaml"

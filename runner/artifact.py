@@ -2,14 +2,20 @@ import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List
-from typing import TextIO
+from typing import List, TextIO
 
 
 class StepLogWriter:
     """負責單一 step 的 stdout/stderr。"""
 
-    def __init__(self, stage: str, step_name: str, stdout_path: Path, stderr_path: Path, show_console: bool = True):
+    def __init__(
+        self,
+        stage: str,
+        step_name: str,
+        stdout_path: Path,
+        stderr_path: Path,
+        show_console: bool = True,
+    ):
         self.stage = stage
         self.step_name = step_name
         self.stdout_path = stdout_path
@@ -78,11 +84,7 @@ class StepLogWriter:
         return "".join(self._stderr_lines)
 
     def _print_console(self, stream_name: str, text: str, output_stream: TextIO) -> None:
-        prefix = (
-            f"[{self.stage}]"
-            f"[{self.step_name}]"
-            f"[{stream_name}] "
-        )
+        prefix = f"[{self.stage}]" f"[{self.step_name}]" f"[{stream_name}] "
 
         print(
             f"{prefix}{text}",
@@ -115,8 +117,12 @@ class ArtifactManager:
 
         return run_dir
 
-    def create_step_log_writer(self, run_dir: Path, stage: str, step_name: str, show_console: bool) -> StepLogWriter:
-        stdout_path, stderr_path = self._build_step_log_paths(run_dir=run_dir, stage=stage, step_name=step_name)
+    def create_step_log_writer(
+        self, run_dir: Path, stage: str, step_name: str, show_console: bool
+    ) -> StepLogWriter:
+        stdout_path, stderr_path = self._build_step_log_paths(
+            run_dir=run_dir, stage=stage, step_name=step_name
+        )
 
         return StepLogWriter(
             stage=stage,
@@ -127,13 +133,17 @@ class ArtifactManager:
         )
 
     def save_step_stdout(self, run_dir: Path, stage: str, step_name: str, stdout: str) -> Path:
-        stdout_path, _ = self._build_step_log_paths(run_dir=run_dir, stage=stage, step_name=step_name)
+        stdout_path, _ = self._build_step_log_paths(
+            run_dir=run_dir, stage=stage, step_name=step_name
+        )
         stdout_path.parent.mkdir(parents=True, exist_ok=True)
         stdout_path.write_text(stdout, encoding="utf-8")
         return stdout_path
 
     def save_step_stderr(self, run_dir: Path, stage: str, step_name: str, stderr: str) -> Path:
-        _, stderr_path = self._build_step_log_paths(run_dir=run_dir, stage=stage, step_name=step_name)
+        _, stderr_path = self._build_step_log_paths(
+            run_dir=run_dir, stage=stage, step_name=step_name
+        )
         stderr_path.parent.mkdir(parents=True, exist_ok=True)
         stderr_path.write_text(stderr, encoding="utf-8")
         return stderr_path

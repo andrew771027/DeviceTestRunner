@@ -7,13 +7,13 @@ from runner.artifact import ArtifactManager
 from runner.artifact_validator import ArtifactValidator
 from runner.executor import SubprocessExecutor
 from runner.models import (
+    ArtifactValidationResult,
     ExecutionSummary,
     LifecycleSteps,
     RunMetadata,
     RunnerConfig,
     RunResult,
     StepResult,
-    ArtifactValidationResult,
 )
 from runner.reporter import JsonReporter
 
@@ -37,12 +37,11 @@ class DeviceTestRunner:
     def run(self, config: RunnerConfig) -> RunResult:
         started_at = datetime.now(timezone.utc)
         started_counter = time.perf_counter()
+        artifact_results: List[ArtifactValidationResult] = []
 
         artifact_manager = ArtifactManager(output_dir=config.artifact.output_dir)
 
-        run_dir = artifact_manager.create_run_directory(
-            test_case_id=config.test_case.id
-        )
+        run_dir = artifact_manager.create_run_directory(test_case_id=config.test_case.id)
 
         step_results: list[StepResult] = []
 
@@ -239,9 +238,7 @@ class DeviceTestRunner:
         )
 
     @staticmethod
-    def _calculate_status(
-        failed_steps: int, skipped_steps: int, failed_artifact_rules: int
-    ) -> str:
+    def _calculate_status(failed_steps: int, skipped_steps: int, failed_artifact_rules: int) -> str:
         if failed_steps > 0:
             return "FAILED"
 

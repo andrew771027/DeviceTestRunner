@@ -89,7 +89,8 @@ class ConfigLoader:
 
     @staticmethod
     def _load_validation(raw: dict[str, dict]) -> ArtifactValidationConfig:
-        validation = raw["validation"]
+        validation = raw.get("validation", {})
+        
 
         return ArtifactValidationConfig(
             rules=[
@@ -99,8 +100,8 @@ class ConfigLoader:
                     path=rule["path"],
                     min_size_bytes=rule.get("min_size_bytes"),
                     max_size_bytes=rule.get("max_size_bytes"),
-                    allowed_extensions=list[rule.get("allowed_extensions", [])],
+                    allowed_extensions=rule.get("allowed_extensions", []),
                 )
-                for rule in validation["rules"]
+                for rule in validation.get("rules", [])
             ]
         )

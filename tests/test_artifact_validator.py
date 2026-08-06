@@ -181,3 +181,95 @@ def test_file_extension_rule_requires_extensions(tmp_path: Path):
 
     assert result.passed is False
     assert result.message == "allowed_extensions cannot be empty."
+
+
+def test_directory_not_empty_passes(tmp_path: Path):
+    directory = tmp_path / "test_directory"
+    directory.mkdir()
+    (directory / "test_file.txt").write_text("Hello World!", encoding="utf-8")
+
+    rule = ArtifactValidationRule(
+        name="test_directory",
+        type="directory_not_empty",
+        path="test_directory"
+
+    )
+
+    result = ArtifactValidator().validate(rule=rule, base_dir=tmp_path)
+
+    assert result.passed is True
+    assert result.name == "test_directory"
+    assert result.type == "directory_not_empty"
+    assert result.path == str(directory)
+    assert result.message == "Directory is not empty."
+
+def test_directory_not_empty_fails_when_empty(tmp_path: Path):
+    directory = tmp_path / "test_directory"
+    directory.mkdir()
+
+    rule = ArtifactValidationRule(
+        name="test_directory",
+        type="directory_not_empty",
+        path="test_directory"
+    )
+
+    result = ArtifactValidator().validate(rule=rule, base_dir=tmp_path)
+
+    assert result.passed is False
+    assert result.name == "test_directory"
+    assert result.type == "directory_not_empty"
+    assert result.path == str(directory)
+    assert result.message == "Directory is empty."
+
+def test_directory_not_empty_fails_for_file(tmp_path: Path):
+    target = tmp_path / "test_file"
+    target.write_text("Hello World!", encoding="utf-8")
+
+    rule = ArtifactValidationRule(
+        name="test_file",
+        type="directory_not_empty",
+        path="test_file"
+    )
+
+    result = ArtifactValidator().validate(rule=rule, base_dir=tmp_path)
+
+    assert result.passed is False
+    assert result.message == "Artifact is not a directory."
+
+def test_unsupported_validation_type_fails(tmp_path: Path):
+    rule = ArtifactValidationRule(
+        name="unknown_rule",
+        type="unsupported_type",
+        path="output.txt"
+    )
+
+    result = ArtifactValidator().validate(rule=rule, base_dir=tmp_path)
+
+    assert result.passed is False
+    assert result.name == "unknown_rule"
+    assert result.type == "unsupported_type"
+    assert result.message == f"Unknown validation type: {rule.type}."
+
+def test_validate_all_returns_all_results(tmp_path: Path):
+    target = tmp_path / "exists.txt"
+    target.write_text("Hello world!", encoding="utf-8")
+
+    rules = [
+        ArtifactValidationRule(
+            name="existing",
+            type="exists",
+            path="exists.txt",
+        ),
+        ArtifactValidationRule(
+            name="missing",
+            type="exists",
+            path="missing.txt",
+        ),
+        
+    ]
+
+    results = ArtifactValidator().validate_all(rules=rules, base_dir=tmp_path)
+
+    assert len(results) == 2
+    assert results[0].passed is True
+    assert results[1].passed is False

@@ -37,7 +37,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(resolved_path),
                 passed=False,
-                message=f"Unknown validation type: {rule.type}",
+                message=f"Unknown validation type: {rule.type}.",
             )
 
         try:

@@ -2,13 +2,14 @@ import subprocess
 import sys
 from io import StringIO
 from unittest.mock import Mock
-
+from pathlib import Path
 import pytest
 
 from runner.artifact import ArtifactManager
 from runner.executor import SubprocessExecutor
 from runner.models import LifecycleStepContent
 
+PROJECT_ROOT = Path(__file__).resolve().parent
 
 @pytest.mark.parametrize(
     argnames="test_case_id, step, stage",
@@ -28,7 +29,7 @@ from runner.models import LifecycleStepContent
     ),
 )
 def test_subprocess_executor_return_success(tmp_path, test_case_id, step, stage):
-    executor = SubprocessExecutor()
+    executor = SubprocessExecutor(project_directory=PROJECT_ROOT)
 
     artifact_manager = ArtifactManager(tmp_path)
 
@@ -39,7 +40,7 @@ def test_subprocess_executor_return_success(tmp_path, test_case_id, step, stage)
     )
 
     with log_writer:
-        result = executor.execute(step=step, stage=stage, log_writer=log_writer)
+        result = executor.execute(step=step, stage=stage, log_writer=log_writer, working_directory=run_dir)
 
     assert result.stage == "test_stage"
     assert result.name == "test"
@@ -71,7 +72,7 @@ def test_subprocess_executor_return_success(tmp_path, test_case_id, step, stage)
     ],
 )
 def test_subprocess_executor_failure(tmp_path, test_case_id, step, stage):
-    executor = SubprocessExecutor()
+    executor = SubprocessExecutor(project_directory=PROJECT_ROOT)
 
     artifact_manager = ArtifactManager(tmp_path)
 
@@ -82,7 +83,7 @@ def test_subprocess_executor_failure(tmp_path, test_case_id, step, stage):
     )
 
     with log_writer:
-        result = executor.execute(step=step, stage=stage, log_writer=log_writer)
+        result = executor.execute(step=step, stage=stage, log_writer=log_writer, working_directory=run_dir)
 
     assert result.stage == "test_stage"
     assert result.name == "test failed"
@@ -127,7 +128,7 @@ def test_subprocess_executor_passes_timeout_to_subprocess(
 
     monkeypatch.setattr("runner.executor.subprocess.Popen", mocked_popen)
 
-    executor = SubprocessExecutor()
+    executor = SubprocessExecutor(project_directory=PROJECT_ROOT)
 
     artifact_manager = ArtifactManager(tmp_path)
 
@@ -138,18 +139,22 @@ def test_subprocess_executor_passes_timeout_to_subprocess(
     )
 
     with log_writer:
-        result = executor.execute(step=step, stage=stage, log_writer=log_writer)
+        result = executor.execute(step=step, stage=stage, log_writer=log_writer, working_directory=run_dir)
 
-    mocked_popen.assert_called_once_with(
-        step.command,
-        shell=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        bufsize=1,
-    )
+    mocked_popen.assert_called_once()
+    args, kwargs = mocked_popen.call_args
+
+    assert args == (step.command,)
+    assert kwargs["shell"] is True
+    assert kwargs["cwd"] == str(run_dir)
+    assert kwargs["env"]["DEVICE_TEST_RUNNER_ROOT"] == str(PROJECT_ROOT.resolve())
+    assert kwargs["env"]["RUN_ARTIFACT_DIR"] == str(run_dir.resolve())
+    assert kwargs["stdout"] == subprocess.PIPE
+    assert kwargs["stderr"] == subprocess.PIPE
+    assert kwargs["text"] is True
+    assert kwargs["encoding"] == "utf-8"
+    assert kwargs["errors"] == "replace"
+    assert kwargs["bufsize"] == 1
 
     mocked_process.wait.assert_called_once_with(timeout=5)
 
@@ -204,10 +209,10 @@ def test_subprocess_executor_raised_timeout_error(tmp_path, monkeypatch, test_ca
         run_dir=run_dir, stage=stage, step_name=step.name, show_console=False
     )
 
-    executor = SubprocessExecutor()
+    executor = SubprocessExecutor(project_directory=PROJECT_ROOT)
 
     with log_writer:
-        result = executor.execute(step=step, stage=stage, log_writer=log_writer)
+        result = executor.execute(step=step, stage=stage, log_writer=log_writer, working_directory=run_dir)
 
     mocked_popen.assert_called_once()
 

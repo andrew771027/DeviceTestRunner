@@ -2,6 +2,8 @@ import pytest
 
 from runner.models import (
     ArtifactConfig,
+    ArtifactValidationConfig,
+    ArtifactValidationRule,
     DeviceInfo,
     DeviceTestCase,
     LifecycleConfig,
@@ -9,6 +11,7 @@ from runner.models import (
     LifecycleSteps,
     RunnerConfig,
     StepResult,
+
 )
 
 
@@ -78,7 +81,25 @@ from runner.models import (
                     ]
                 ),
             ),
-            artifact=ArtifactConfig(output_dir="artifact/sample_device_config"),
+            artifact=ArtifactConfig(output_dir="artifact/sample_device_config",
+                                    validation=ArtifactValidationConfig(
+                                                    rules=[
+                                                        ArtifactValidationRule(
+                                                            name="test_file_exist",
+                                                            type="exists",
+                                                            path="results/test_file.txt",
+                                                        ),
+                                                        ArtifactValidationRule(
+                                                            name="test_file_size",
+                                                            type="file_size",
+                                                            path="results/test_file.txt",
+                                                            min_size_bytes=1,
+                                                            max_size_bytes=100,
+                                                        ),
+                                                    ]
+                                                ),
+                                                
+        )
         )
     ],
 )
@@ -124,7 +145,21 @@ def test_config_contains_all_section(config: RunnerConfig):
     assert config.lifecycle.global_teardown.steps[0].command == "bash scripts/cleanup.sh"
     assert config.lifecycle.global_teardown.steps[0].timeout_second == 10
 
+    assert hasattr(config.artifact, "output_dir")
     assert config.artifact.output_dir == "artifact/sample_device_config"
+
+    assert hasattr(config.artifact, "validation")
+    assert len(config.artifact.validation.rules) == 2
+    assert config.artifact.validation.rules[0].name == "test_file_exist"
+    assert config.artifact.validation.rules[0].type == "exists"
+    assert config.artifact.validation.rules[0].path == "results/test_file.txt"
+
+    assert config.artifact.validation.rules[1].name == "test_file_size"
+    assert config.artifact.validation.rules[1].type == "file_size"
+    assert config.artifact.validation.rules[1].path == "results/test_file.txt"
+    assert config.artifact.validation.rules[1].min_size_bytes == 1
+    assert config.artifact.validation.rules[1].max_size_bytes == 100
+
 
 
 @pytest.mark.parametrize(

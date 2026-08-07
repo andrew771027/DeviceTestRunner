@@ -5,12 +5,12 @@ from typing import List
 
 import pytest
 
-from runner.models import ExecutionSummary, RunMetadata, RunResult, StepResult
+from runner.models import (ExecutionSummary, RunMetadata, RunResult, StepResult, ArtifactValidationResult)
 from runner.reporter import JsonReporter
 
 
 @pytest.mark.parametrize(
-    argnames="metadata, summary, step_results",
+    argnames="metadata, summary, step_results, artifact_validation_results",
     argvalues=[
         (
             RunMetadata(
@@ -31,6 +31,9 @@ from runner.reporter import JsonReporter
                 passed_steps=2,
                 failed_steps=1,
                 skipped_steps=0,
+                configured_artifact_rules=2,
+                passed_artifact_rules=2,
+                failed_artifact_rules=0,
                 duration_seconds=600.0,
             ),
             [
@@ -71,6 +74,25 @@ from runner.reporter import JsonReporter
                     stderr_log_path="",
                 ),
             ],
+            [
+                ArtifactValidationResult(
+                    name="test_file_exists",
+                    type="exists",
+                    path="results/test_file.txt",
+                    passed=True,
+                    message="File Exists"
+                ),
+                ArtifactValidationResult(
+                    name="test_file_size",
+                    type="file_size",
+                    path="results/test_file.txt",
+                    passed=False,
+                    message="File size excede maxmium.",
+                    actual_size_bytes=1,
+                )
+
+            ]
+            
         )
     ],
 )
@@ -79,6 +101,7 @@ def test_save_result_json(
     metadata: RunMetadata,
     summary: ExecutionSummary,
     step_results: List[StepResult],
+    artifact_validation_results: List[ArtifactValidationResult],
 ):
 
     run_result = RunResult(
@@ -86,6 +109,7 @@ def test_save_result_json(
         summary=summary,
         step_results=step_results,
         artifact_dir=str(tmp_path),
+        artifact_validation_results=artifact_validation_results
     )
 
     output_path = JsonReporter().save(result=run_result, output_dir=tmp_path)
@@ -98,3 +122,5 @@ def test_save_result_json(
     assert saved["metadata"] == asdict(metadata)
     assert saved["summary"] == asdict(summary)
     assert saved["step_results"] == [asdict(result) for result in step_results]
+    assert saved["artifact_dir"] == str(tmp_path)
+    assert saved["artifact_validation_results"] == [asdict(result) for result in artifact_validation_results]

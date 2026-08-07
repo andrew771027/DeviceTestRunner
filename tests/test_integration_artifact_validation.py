@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+
 from runner.artifact_validator import ArtifactValidator
 from runner.config import ConfigLoader
 from runner.executor import SubprocessExecutor
@@ -8,12 +9,13 @@ from runner.runner import DeviceTestRunner
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 
+
 def test_command_creates_and_validates_artifact(tmp_path: Path):
     output_dir = tmp_path / "artifacts"
     config_path = tmp_path / "config.yaml"
 
     config_path.write_text(
-    f"""
+        f"""
     test_case:
         id: integration_001
         name: artifact integration test
@@ -58,9 +60,8 @@ def test_command_creates_and_validates_artifact(tmp_path: Path):
                   path: results/test_file.csv
                   allowed_extensions:
                     - csv
-    """
-        ,
-        encoding="utf-8"
+    """,
+        encoding="utf-8",
     )
 
     config = ConfigLoader().load(config_path)
@@ -69,7 +70,7 @@ def test_command_creates_and_validates_artifact(tmp_path: Path):
         executor=SubprocessExecutor(project_directory=PROJECT_ROOT),
         artifact_validator=ArtifactValidator(),
         reporter=JsonReporter(),
-        show_console_output=False
+        show_console_output=False,
     )
 
     result = runner.run(config)
@@ -90,7 +91,7 @@ def test_command_creates_and_validates_artifact(tmp_path: Path):
 
     assert test_file.exists()
 
-    result_json = Path(result.artifact_dir) / "result.json" 
+    result_json = Path(result.artifact_dir) / "result.json"
 
     saved = json.loads(result_json.read_text(encoding="utf-8"))
 
@@ -98,12 +99,13 @@ def test_command_creates_and_validates_artifact(tmp_path: Path):
     assert len(saved["artifact_validation_results"]) == 3
     assert all(item["passed"] for item in saved["artifact_validation_results"])
 
+
 def test_run_fails_when_command_does_not_create_artifact(tmp_path: Path):
     output_dir = tmp_path / "artifacts"
     config_path = tmp_path / "config.yaml"
 
     config_path.write_text(
-    f"""
+        f"""
     test_case:
         id: integration_missing
         name: missing artifact test
@@ -134,8 +136,9 @@ def test_run_fails_when_command_does_not_create_artifact(tmp_path: Path):
                 - name: test_file_exist
                   type: exists
                   path: results/test_file.txt
-""", 
-    encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
 
     config = ConfigLoader().load(config_path)
     runner = DeviceTestRunner(
@@ -158,6 +161,7 @@ def test_run_fails_when_command_does_not_create_artifact(tmp_path: Path):
 
     assert validation.passed is False
     assert validation.message == "Artifact does not exist."
+
 
 def test_command_runs_inside_run_directory(tmp_path: Path):
     output_dir = tmp_path / "artifacts"
@@ -196,7 +200,7 @@ def test_command_runs_inside_run_directory(tmp_path: Path):
                   type: existsa
                   path: current_directory.txt
 """,
-    encoding="utf-8"
+        encoding="utf-8",
     )
 
     config = ConfigLoader().load(config_path)
@@ -204,7 +208,7 @@ def test_command_runs_inside_run_directory(tmp_path: Path):
         executor=SubprocessExecutor(PROJECT_ROOT),
         artifact_validator=ArtifactValidator(),
         reporter=JsonReporter(),
-        show_console_output=False
+        show_console_output=False,
     )
 
     result = runner.run(config)

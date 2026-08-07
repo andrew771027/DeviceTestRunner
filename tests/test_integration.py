@@ -1,13 +1,14 @@
 import json
 from pathlib import Path
 
+from runner.artifact_validator import ArtifactValidator
 from runner.config import ConfigLoader
 from runner.executor import SubprocessExecutor
 from runner.reporter import JsonReporter
 from runner.runner import DeviceTestRunner
-from runner.artifact_validator import ArtifactValidator
 
 PROJECT_ROOT = Path(__file__).resolve().parent
+
 
 def test_yaml_to_result_json(tmp_path):
     config_file = tmp_path / "intergration.yaml"
@@ -67,9 +68,11 @@ artifact:
     )
 
     config = ConfigLoader().load(str(config_file))
-    runner = DeviceTestRunner(executor=SubprocessExecutor(project_directory=PROJECT_ROOT), 
-                              artifact_validator=ArtifactValidator(), 
-                              reporter=JsonReporter())
+    runner = DeviceTestRunner(
+        executor=SubprocessExecutor(project_directory=PROJECT_ROOT),
+        artifact_validator=ArtifactValidator(),
+        reporter=JsonReporter(),
+    )
     result = runner.run(config)
 
     assert result.metadata.test_case_name == "intergration_test"
@@ -194,9 +197,11 @@ artifact:
 
     config = ConfigLoader().load(config_file)
 
-    runner = DeviceTestRunner(executor=SubprocessExecutor(project_directory=PROJECT_ROOT), 
-                              artifact_validator=ArtifactValidator(), 
-                              reporter=JsonReporter())
+    runner = DeviceTestRunner(
+        executor=SubprocessExecutor(project_directory=PROJECT_ROOT),
+        artifact_validator=ArtifactValidator(),
+        reporter=JsonReporter(),
+    )
 
     result = runner.run(config)
 

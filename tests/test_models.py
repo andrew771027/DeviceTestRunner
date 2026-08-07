@@ -11,7 +11,6 @@ from runner.models import (
     LifecycleSteps,
     RunnerConfig,
     StepResult,
-
 )
 
 
@@ -81,25 +80,25 @@ from runner.models import (
                     ]
                 ),
             ),
-            artifact=ArtifactConfig(output_dir="artifact/sample_device_config",
-                                    validation=ArtifactValidationConfig(
-                                                    rules=[
-                                                        ArtifactValidationRule(
-                                                            name="test_file_exist",
-                                                            type="exists",
-                                                            path="results/test_file.txt",
-                                                        ),
-                                                        ArtifactValidationRule(
-                                                            name="test_file_size",
-                                                            type="file_size",
-                                                            path="results/test_file.txt",
-                                                            min_size_bytes=1,
-                                                            max_size_bytes=100,
-                                                        ),
-                                                    ]
-                                                ),
-                                                
-        )
+            artifact=ArtifactConfig(
+                output_dir="artifact/sample_device_config",
+                validation=ArtifactValidationConfig(
+                    rules=[
+                        ArtifactValidationRule(
+                            name="test_file_exist",
+                            type="exists",
+                            path="results/test_file.txt",
+                        ),
+                        ArtifactValidationRule(
+                            name="test_file_size",
+                            type="file_size",
+                            path="results/test_file.txt",
+                            min_size_bytes=1,
+                            max_size_bytes=100,
+                        ),
+                    ]
+                ),
+            ),
         )
     ],
 )
@@ -159,7 +158,6 @@ def test_config_contains_all_section(config: RunnerConfig):
     assert config.artifact.validation.rules[1].path == "results/test_file.txt"
     assert config.artifact.validation.rules[1].min_size_bytes == 1
     assert config.artifact.validation.rules[1].max_size_bytes == 100
-
 
 
 @pytest.mark.parametrize(

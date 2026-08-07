@@ -5,7 +5,13 @@ from typing import List
 
 import pytest
 
-from runner.models import (ExecutionSummary, RunMetadata, RunResult, StepResult, ArtifactValidationResult)
+from runner.models import (
+    ArtifactValidationResult,
+    ExecutionSummary,
+    RunMetadata,
+    RunResult,
+    StepResult,
+)
 from runner.reporter import JsonReporter
 
 
@@ -80,7 +86,7 @@ from runner.reporter import JsonReporter
                     type="exists",
                     path="results/test_file.txt",
                     passed=True,
-                    message="File Exists"
+                    message="File Exists",
                 ),
                 ArtifactValidationResult(
                     name="test_file_size",
@@ -89,10 +95,8 @@ from runner.reporter import JsonReporter
                     passed=False,
                     message="File size excede maxmium.",
                     actual_size_bytes=1,
-                )
-
-            ]
-            
+                ),
+            ],
         )
     ],
 )
@@ -109,7 +113,7 @@ def test_save_result_json(
         summary=summary,
         step_results=step_results,
         artifact_dir=str(tmp_path),
-        artifact_validation_results=artifact_validation_results
+        artifact_validation_results=artifact_validation_results,
     )
 
     output_path = JsonReporter().save(result=run_result, output_dir=tmp_path)
@@ -123,4 +127,6 @@ def test_save_result_json(
     assert saved["summary"] == asdict(summary)
     assert saved["step_results"] == [asdict(result) for result in step_results]
     assert saved["artifact_dir"] == str(tmp_path)
-    assert saved["artifact_validation_results"] == [asdict(result) for result in artifact_validation_results]
+    assert saved["artifact_validation_results"] == [
+        asdict(result) for result in artifact_validation_results
+    ]

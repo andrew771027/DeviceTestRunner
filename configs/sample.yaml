@@ -56,36 +56,36 @@ artifact:
       - name: check_artifact_log
         type: exists
         path: ./log.csv
-      
+
       - name: check_artifact_size
         type: file_size
         path: ./size.csv
         min_size_bytes: 10
         max_size_bytes: 1048676
-      
+
       - name: check_artifact_extension
         type: file_extension
         path: ./extension.csv
         allowed_extensions:
         - csv
-      
+
       - name: check_artifact_directory
         type: directory_not_empty
         path: ./directory
 
-      - name: test_csv_file_exists 
-        type: exists 
-        path: ./test_csv_file.csv 
-      
-      - name: test_csv_file_content 
-        type: csv_content 
-        path: ./test_csv_file.csv 
-        required_columns: 
-          - timestamp 
+      - name: test_csv_file_exists
+        type: exists
+        path: ./test_csv_file.csv
+
+      - name: test_csv_file_content
+        type: csv_content
+        path: ./test_csv_file.csv
+        required_columns:
+          - timestamp
           - power
-          - voltage 
+          - voltage
         min_rows: 2
-      
+
       - name: test_json_file_content
         type: json_content
         path: ./test_json_file.json

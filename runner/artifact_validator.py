@@ -1,5 +1,7 @@
+import json
+import csv
 from pathlib import Path
-from typing import Callable, List
+from typing import Callable, List, Any
 from runner.models import ArtifactValidationRule, ArtifactValidationResult
 
 
@@ -12,6 +14,8 @@ class ArtifactValidator:
             "file_size": self._validate_file_size,
             "file_extension": self._validate_file_extension,
             "directory_not_empty": self._validate_directory_not_empty,
+            "csv_content": self._validate_csv_content,
+            "json_content": self._validate_json_content,
         }
 
     def validate_all(
@@ -227,6 +231,180 @@ class ArtifactValidator:
             passed=has_contents,
             message=message,
         )
+
+    @staticmethod
+    def _validate_csv_content(rule: ArtifactValidationRule, path: Path) -> ArtifactValidationResult:
+        if not path.exists():
+            return ArtifactValidationResult(
+                name=rule.name,
+                type=rule.type,
+                path=str(path),
+                passed=False,
+                message="CSV file does not exists."
+            )
+        if not path.is_file():
+            return ArtifactValidationResult(
+                name=rule.name,
+                type=rule.type,
+                path=str(path),
+                passed=False,
+                message="Artifact is not a file."
+            )
+
+        try:
+            with path.open("r", encoding="utf-8", newline="") as file:
+
+                reader = csv.DictReader(file)
+
+                if reader.fieldnames is None:
+                    return ArtifactValidationResult(
+                        name=rule.name,
+                        type=rule.type,
+                        path=str(path),
+                        passed=False,
+                        message="CSV header is missing."
+                    )
+
+                actual_columns = {column.strip() for column in reader.fieldnames} 
+
+                missing_columns = [column for column in rule.required_columns if column not in actual_columns]
+
+                if missing_columns:
+                    return ArtifactValidationResult(
+                        name=rule.name,
+                        type=rule.type,
+                        path=str(path),
+                        passed=False,
+                        message=f"CSV missing requred columns: {missing_columns}"
+                    )
+
+                row_count = sum(1 for _ in reader)
+
+        except (csv.Error, UnicodeDecodeError) as error:
+            return ArtifactValidationResult(
+                name=rule.name,
+                type=rule.type,
+                path=str(path),
+                passed=False,
+                message=f"Unable to parse CSV: {error}"
+            )
+
+        if rule.min_rows is not None and row_count < rule.min_rows:
+            return ArtifactValidationResult(
+                name=rule.name,
+                type=rule.type,
+                path=str(path),
+                passed=False,
+                message=f"CSV contains {row_count} data rows, fewer than minimum {rule.min_rows}"
+            )
+
+        return ArtifactValidationResult(
+            name=rule.name,
+            type=rule.type,
+            path=str(path),
+            passed=True,
+            message=f"CSV content is valid. Rows: {row_count}, coumns: {sorted(actual_columns)}."
+        )
+
+    @staticmethod
+    def _validate_json_content(rule: ArtifactValidationRule, path: Path) -> ArtifactValidationResult:
+        if not path.exists():
+            return ArtifactValidationResult(
+                name=rule.name,
+                type=rule.type,
+                path=str(path),
+                passed=False,
+                message="JSON file does not exists."
+            )
+
+        if not path.is_file():
+            return ArtifactValidationResult(
+                name=rule.name,
+                type=rule.type,
+                path=str(path),
+                passed=False,
+                message="Artifact is not a file."   
+            )
+
+        try:
+            with path.open("r", encoding="utf-8") as file:
+                data = json.load(file)
+
+        except (json.JSONDecodeError, UnicodeDecodeError) as error:
+            return ArtifactValidationResult(
+                name=rule.name,
+                type=rule.type,
+                path=str(path),
+                passed=False,
+                message=f"Unable to parse JSON: {error}"
+            )
+
+        missing_paths = []
+
+        for json_path in rule.required_json_paths:
+            exists, _ = ArtifactValidator._get_json_path_value(data=data, json_path=json_path)
+
+            if not exists:
+                missing_paths.append(json_path)
+
+        if missing_paths:
+            return ArtifactValidationRule(
+                name=rule.name,
+                type=rule.type,
+                path=str(path),
+                passed=False,
+                message=f"JSON missing required paths: {missing_paths}"
+            )
+
+        mismatches = []
+
+        for json_path, expected_value in rule.expected_json_values.items():
+            exists, actual_value = ArtifactValidator._get_json_path_value(data=data, json_path=json_path)
+
+            if not exists:
+                mismatches.append(
+                    f"{json_path}: path does not exist"
+                )
+
+                continue
+
+            if actual_value != expected_value:
+                mismatches.append(
+                    f"{json_path}: expected {expected_value!r}, actual {actual_value!r}"
+                )
+
+        if mismatches:
+            return ArtifactValidationResult(
+                name=rule.name,
+                type=rule.type,
+                path=str(path),
+                passed=False,
+                message=f"JSON value validation failed: {mismatches}"
+            )
+
+        return ArtifactValidationResult(
+            name=rule.name,
+            type=rule.type,
+            path=str(path),
+            passed=True,
+            message=f"JSON content is valid."
+        )
+        
+
+    @staticmethod
+    def _get_json_path_value(data: Any, json_path: str) -> tuple[bool, Any]:
+        current = data
+
+        for key in json_path.split("."):
+            if not isinstance(current, dict):
+                return False, None
+
+            if key not in current:
+                return False, None
+
+            current = current[key]
+
+        return True, current
 
     @staticmethod
     def _normalize_extensions(extension: str) -> str:

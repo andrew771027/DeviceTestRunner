@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Any
 
 
 @dataclass(frozen=True)
@@ -50,10 +50,20 @@ class ArtifactValidationRule:
     type: str
     path: str
 
+    # file_size
     max_size_bytes: Optional[int] = None
     min_size_bytes: Optional[int] = None
+
+    # file_extension
     allowed_extensions: List[str] = field(default_factory=list)
 
+    # csv_content
+    required_columns: list[str] = field(default_factory=list)
+    min_rows: Optional[int] = None
+
+    # json_content
+    required_json_paths: list[str] = field(default_factory=list)
+    expected_json_values: dict[str, Any] = field(default_factory=dict)
 
 @dataclass(frozen=True)
 class ArtifactValidationConfig:

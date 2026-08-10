@@ -19,7 +19,7 @@ from runner.reporter import JsonReporter
 
 
 class DeviceTestRunner:
-    VERSION = "1.4.0"
+    VERSION = "1.4.1"
 
     def __init__(
         self,

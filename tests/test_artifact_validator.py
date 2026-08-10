@@ -279,3 +279,111 @@ def test_validate_all_returns_all_results(tmp_path: Path):
     assert len(results) == 2
     assert results[0].passed is True
     assert results[1].passed is False
+
+
+def test_csv_content(tmp_path: Path):
+
+    target = tmp_path / "test_csv_file.csv"
+    target.write_text("timestamp,power,voltage\n" "1,100,4.2\n" "2,120,4.1\n", encoding="utf-8")
+
+    rule = ArtifactValidationRule(
+        name="csv_content",
+        type="csv_content",
+        path="test_csv_file.csv",
+        required_columns=["timestamp", "power"],
+        min_rows=2,
+    )
+
+    result = ArtifactValidator().validate(rule=rule, base_dir=tmp_path)
+
+    assert result.passed is True
+    assert result.name == "csv_content"
+    assert result.type == "csv_content"
+    assert "CSV content is valid" in result.message
+
+
+def test_csv_content_fails_when_column_missin(tmp_path: Path):
+
+    target = tmp_path / "test_csv_file.csv"
+    target.write_text("timestamp,voltage\n" "1,4.2\n" "2,4.1\n", encoding="utf-8")
+
+    rule = ArtifactValidationRule(
+        name="csv_content",
+        type="csv_content",
+        path="test_csv_file.csv",
+        required_columns=["timestamp", "power"],
+        min_rows=2,
+    )
+
+    result = ArtifactValidator().validate(rule=rule, base_dir=tmp_path)
+
+    assert result.passed is False
+    assert result.name == "csv_content"
+    assert result.type == "csv_content"
+    assert result.message == "CSV missing requred columns: ['power']"
+
+
+def test_csv_content_fails_when_raw_too_few(tmp_path: Path):
+
+    target = tmp_path / "test_csv_file.csv"
+    target.write_text(
+        ("timestamp,power\n" "1,100\n"),
+        encoding="utf-8",
+    )
+
+    rule = ArtifactValidationRule(
+        name="csv_content",
+        type="csv_content",
+        path="test_csv_file.csv",
+        required_columns=["timestamp", "power"],
+        min_rows=2,
+    )
+
+    result = ArtifactValidator().validate(rule=rule, base_dir=tmp_path)
+
+    assert result.passed is False
+    assert result.name == "csv_content"
+    assert result.type == "csv_content"
+    assert result.message == f"CSV contains 1 data rows, fewer than minimum {rule.min_rows}"
+
+
+def test_csv_content_fails_when_only_header(tmp_path: Path):
+
+    target = tmp_path / "test_csv_file.csv"
+    target.write_text(
+        "timestamp,power\n",
+        encoding="utf-8",
+    )
+
+    rule = ArtifactValidationRule(
+        name="csv_content",
+        type="csv_content",
+        path="test_csv_file.csv",
+        required_columns=["timestamp", "power"],
+        min_rows=1,
+    )
+
+    result = ArtifactValidator().validate(rule=rule, base_dir=tmp_path)
+
+    assert result.passed is False
+    assert result.name == "csv_content"
+    assert result.type == "csv_content"
+    assert result.message == f"CSV contains 0 data rows, fewer than minimum {rule.min_rows}"
+
+
+def test_csv_content_fails_when_missing(tmp_path: Path):
+
+    rule = ArtifactValidationRule(
+        name="csv_content",
+        type="csv_content",
+        path="test_csv_file.csv",
+        required_columns=["timestamp", "power"],
+        min_rows=1,
+    )
+
+    result = ArtifactValidator().validate(rule=rule, base_dir=tmp_path)
+
+    assert result.passed is False
+    assert result.name == "csv_content"
+    assert result.type == "csv_content"
+    assert result.message == "CSV file does not exists."

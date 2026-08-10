@@ -1,8 +1,9 @@
-import json
 import csv
+import json
 from pathlib import Path
-from typing import Callable, List, Any
-from runner.models import ArtifactValidationRule, ArtifactValidationResult
+from typing import Any, Callable, List
+
+from runner.models import ArtifactValidationResult, ArtifactValidationRule
 
 
 class ArtifactValidator:
@@ -29,9 +30,7 @@ class ArtifactValidator:
         self, rule: ArtifactValidationRule, base_dir: str | Path
     ) -> ArtifactValidationResult:
         resolved_base_dir = Path(base_dir)
-        resolved_path = self._resolve_path(
-            base_dir=resolved_base_dir, configured_path=rule.path
-        )
+        resolved_path = self._resolve_path(base_dir=resolved_base_dir, configured_path=rule.path)
 
         handler = self._handlers.get(rule.type)
 
@@ -68,9 +67,7 @@ class ArtifactValidator:
         return resolved_base_dir / path
 
     @staticmethod
-    def _validate_exists(
-        rule: ArtifactValidationRule, path: Path
-    ) -> ArtifactValidationResult:
+    def _validate_exists(rule: ArtifactValidationRule, path: Path) -> ArtifactValidationResult:
         passed = path.exists()
 
         if passed:
@@ -87,9 +84,7 @@ class ArtifactValidator:
         )
 
     @staticmethod
-    def _validate_file_size(
-        rule: ArtifactValidationRule, path: Path
-    ) -> ArtifactValidationResult:
+    def _validate_file_size(rule: ArtifactValidationRule, path: Path) -> ArtifactValidationResult:
         if not path.exists():
             return ArtifactValidationResult(
                 name=rule.name,
@@ -240,7 +235,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(path),
                 passed=False,
-                message="CSV file does not exists."
+                message="CSV file does not exists.",
             )
         if not path.is_file():
             return ArtifactValidationResult(
@@ -248,7 +243,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(path),
                 passed=False,
-                message="Artifact is not a file."
+                message="Artifact is not a file.",
             )
 
         try:
@@ -262,12 +257,14 @@ class ArtifactValidator:
                         type=rule.type,
                         path=str(path),
                         passed=False,
-                        message="CSV header is missing."
+                        message="CSV header is missing.",
                     )
 
-                actual_columns = {column.strip() for column in reader.fieldnames} 
+                actual_columns = {column.strip() for column in reader.fieldnames}
 
-                missing_columns = [column for column in rule.required_columns if column not in actual_columns]
+                missing_columns = [
+                    column for column in rule.required_columns if column not in actual_columns
+                ]
 
                 if missing_columns:
                     return ArtifactValidationResult(
@@ -275,7 +272,7 @@ class ArtifactValidator:
                         type=rule.type,
                         path=str(path),
                         passed=False,
-                        message=f"CSV missing requred columns: {missing_columns}"
+                        message=f"CSV missing requred columns: {missing_columns}",
                     )
 
                 row_count = sum(1 for _ in reader)
@@ -286,7 +283,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(path),
                 passed=False,
-                message=f"Unable to parse CSV: {error}"
+                message=f"Unable to parse CSV: {error}",
             )
 
         if rule.min_rows is not None and row_count < rule.min_rows:
@@ -295,7 +292,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(path),
                 passed=False,
-                message=f"CSV contains {row_count} data rows, fewer than minimum {rule.min_rows}"
+                message=f"CSV contains {row_count} data rows, fewer than minimum {rule.min_rows}",
             )
 
         return ArtifactValidationResult(
@@ -303,18 +300,20 @@ class ArtifactValidator:
             type=rule.type,
             path=str(path),
             passed=True,
-            message=f"CSV content is valid. Rows: {row_count}, coumns: {sorted(actual_columns)}."
+            message=f"CSV content is valid. Rows: {row_count}, coumns: {sorted(actual_columns)}.",
         )
 
     @staticmethod
-    def _validate_json_content(rule: ArtifactValidationRule, path: Path) -> ArtifactValidationResult:
+    def _validate_json_content(
+        rule: ArtifactValidationRule, path: Path
+    ) -> ArtifactValidationResult:
         if not path.exists():
             return ArtifactValidationResult(
                 name=rule.name,
                 type=rule.type,
                 path=str(path),
                 passed=False,
-                message="JSON file does not exists."
+                message="JSON file does not exists.",
             )
 
         if not path.is_file():
@@ -323,7 +322,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(path),
                 passed=False,
-                message="Artifact is not a file."   
+                message="Artifact is not a file.",
             )
 
         try:
@@ -336,7 +335,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(path),
                 passed=False,
-                message=f"Unable to parse JSON: {error}"
+                message=f"Unable to parse JSON: {error}",
             )
 
         missing_paths = []
@@ -353,18 +352,18 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(path),
                 passed=False,
-                message=f"JSON missing required paths: {missing_paths}"
+                message=f"JSON missing required paths: {missing_paths}",
             )
 
         mismatches = []
 
         for json_path, expected_value in rule.expected_json_values.items():
-            exists, actual_value = ArtifactValidator._get_json_path_value(data=data, json_path=json_path)
+            exists, actual_value = ArtifactValidator._get_json_path_value(
+                data=data, json_path=json_path
+            )
 
             if not exists:
-                mismatches.append(
-                    f"{json_path}: path does not exist"
-                )
+                mismatches.append(f"{json_path}: path does not exist")
 
                 continue
 
@@ -379,7 +378,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(path),
                 passed=False,
-                message=f"JSON value validation failed: {mismatches}"
+                message=f"JSON value validation failed: {mismatches}",
             )
 
         return ArtifactValidationResult(
@@ -387,9 +386,8 @@ class ArtifactValidator:
             type=rule.type,
             path=str(path),
             passed=True,
-            message=f"JSON content is valid."
+            message=f"JSON content is valid.",
         )
-        
 
     @staticmethod
     def _get_json_path_value(data: Any, json_path: str) -> tuple[bool, Any]:

@@ -27,6 +27,16 @@ lifecycle:
         type: command
         command: bash "$DEVICE_TEST_RUNNER_ROOT/scripts/run_scenario.sh"
         timeout_second: 10
+      - name: create_csv_test_file
+        type: command
+        command: |
+          printf "timestamp,power,voltage\n1,100,4.2\n2,120,4.1\n" > ./test_csv_file.csv
+        timeout_second: 10
+      - name: create_json_test_file
+        type: command
+        command: |
+          printf '{"status":"PASSED","metrics":{"average_power":110.0,"sample_count":2}}' > ./test_json_file.json
+        timeout_second: 10
   teardown:
     steps:
       - name: collect_artifact
@@ -45,20 +55,46 @@ artifact:
     rules:
       - name: check_artifact_log
         type: exists
-        path: results/log.csv
+        path: ./log.csv
       
       - name: check_artifact_size
         type: file_size
-        path: results/size.csv
+        path: ./size.csv
         min_size_bytes: 10
         max_size_bytes: 1048676
       
       - name: check_artifact_extension
         type: file_extension
-        path: results/extension.csv
+        path: ./extension.csv
         allowed_extensions:
         - csv
       
       - name: check_artifact_directory
         type: directory_not_empty
-        path: results/directory
+        path: ./directory
+
+      - name: test_csv_file_exists 
+        type: exists 
+        path: ./test_csv_file.csv 
+      
+      - name: test_csv_file_content 
+        type: csv_content 
+        path: ./test_csv_file.csv 
+        required_columns: 
+          - timestamp 
+          - power
+          - voltage 
+        min_rows: 2
+      
+      - name: test_json_file_content
+        type: json_content
+        path: ./test_json_file.json
+
+        required_json_paths:
+          - status
+          - metrics.average_power
+          - metrics.sample_count
+
+        expected_json_values:
+          status: PASSED
+          metrics.sample_count: 2

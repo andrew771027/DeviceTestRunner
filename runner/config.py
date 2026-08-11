@@ -98,7 +98,7 @@ class ConfigLoader:
                     min_size_bytes=rule.get("min_size_bytes"),
                     max_size_bytes=rule.get("max_size_bytes"),
                     allowed_extensions=rule.get("allowed_extensions", []),
-                    required_columns=list(rule.get("required_column", [])),
+                    required_columns=list(rule.get("required_columns", [])),
                     min_rows=rule.get("min_rows"),
                     required_json_paths=list(rule.get("required_json_paths", [])),
                     expected_json_values=dict(rule.get("expected_json_values", {})),

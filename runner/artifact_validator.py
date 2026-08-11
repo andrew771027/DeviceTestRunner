@@ -347,7 +347,7 @@ class ArtifactValidator:
                 missing_paths.append(json_path)
 
         if missing_paths:
-            return ArtifactValidationRule(
+            return ArtifactValidationResult(
                 name=rule.name,
                 type=rule.type,
                 path=str(path),

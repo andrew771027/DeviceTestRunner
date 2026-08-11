@@ -247,3 +247,64 @@ def test_artifact_validation_is_optional(tmp_path: Path):
     config = loader.load(str(config_file))
 
     assert config.artifact.validation.rules == []
+
+def test_load_csv_and_json_validation_rules(tmp_path: Path):
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        """
+   test_case: 
+    id: power_001 
+    name: Power Test 
+    description: Content validation 
+   device: 
+    serial: fake 
+    product: pixel 
+    build: build_001 
+   lifecycle: 
+    global_setup: 
+        steps: [] 
+    setup: 
+        steps: [] 
+    scenario: 
+        steps: [] 
+    teardown: 
+        steps: [] 
+    global_teardown: 
+        steps: [] 
+   artifact: 
+    output_dir: artifacts 
+    validation: 
+        rules: 
+        - name: csv_rule 
+          type: csv_content 
+          path: results/power.csv 
+          required_columns: 
+          - timestamp 
+          - power 
+          min_rows: 10 
+        - name: json_rule 
+          type: json_content 
+          path: results/result.json 
+          required_json_paths: 
+            - status 
+            - metrics.average_power 
+          expected_json_values: 
+            status: PASSED 
+            metrics.sample_count: 100 
+""", encoding="utf-8"
+    )
+
+    config = ConfigLoader().load(config_file)
+
+    rules = config.artifact.validation.rules
+
+    csv_rule = rules[0]
+    assert csv_rule.type == "csv_content"
+    assert csv_rule.required_columns == ["timestamp", "power"]
+    assert csv_rule.min_rows == 10
+
+    json_rule = rules[1]
+    assert json_rule.type == "json_content"
+    assert json_rule.required_json_paths == ["status", "metrics.average_power"]
+    assert json_rule.expected_json_values["status"] == "PASSED"
+    assert json_rule.expected_json_values["metrics"]["sample_count"] == 100

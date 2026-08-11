@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from runner.artifact_validator import ArtifactValidator
@@ -387,3 +388,142 @@ def test_csv_content_fails_when_missing(tmp_path: Path):
     assert result.name == "csv_content"
     assert result.type == "csv_content"
     assert result.message == "CSV file does not exists."
+
+def test_json_content(tmp_path: Path):
+
+    target = tmp_path / "test_json_file.json"
+    target.write_text(
+        json.dumps({
+            "status": "PASSED",
+            "metrics": {
+                "average_power": 110.0,
+                "sample_count": 2,
+            }
+        }
+        ),
+        encoding="utf-8"
+    )
+
+    rule = ArtifactValidationRule(
+        name="json_content",
+        type="json_content",
+        path="test_json_file.json",
+        required_json_paths=[
+            "status",
+            "metrics.average_power",
+            "metrics.sample_count"
+        ],
+        expected_json_values={
+            "status": "PASSED",
+            "metrics.sample_count":2
+        }
+    )
+
+    result = ArtifactValidator().validate(rule=rule, base_dir=tmp_path)
+
+    assert result.passed is True
+    assert result.message == "JSON content is valid."
+
+def test_json_content_fails_when_path_missing(tmp_path: Path):
+    target = tmp_path / "test_json_file.json"
+    target.write_text(
+        json.dumps({
+            "status": "PASSED",
+            "metrics": {
+                "sample_count": 2,
+            }
+        })
+        ,encoding="utf-8"
+    )
+
+    rule = ArtifactValidationRule(
+            name="json_content",
+            type="json_content",
+            path="test_json_file.json",
+            required_json_paths=[
+                "status",
+                "metrics.average_power",
+            ],
+        )
+
+    result = ArtifactValidator().validate(rule=rule, base_dir=tmp_path)
+
+    assert result.passed is False
+    assert result.message == "JSON missing required paths: ['metrics.average_power']"
+
+def test_json_content_fails_when_value_mismatch(tmp_path: Path):
+    target = tmp_path / "test_json_file.json"
+    target.write_text(
+        json.dumps(
+            {
+                "status": "FAILED",
+                "metrics": {
+                    "sample_count": 2
+                }
+            }
+        ),
+        encoding="utf-8"
+    )
+
+    rule = ArtifactValidationRule(
+        name="json_content",
+        type="json_content",
+        path="test_json_file.json",
+        expected_json_values={
+            "status": "PASSED",
+        }
+    )
+
+    result = ArtifactValidator().validate(rule=rule, base_dir=tmp_path)
+
+    assert result.passed is False
+    assert result.message == "JSON value validation failed: [\"status: expected 'PASSED', actual 'FAILED'\"]"
+
+def test_json_content_fails_when_json_invalid(tmp_path: Path):
+    target = tmp_path / "test_json_file.json"
+    target.write_text(
+        """ { "status": "PASSED", } """, encoding="utf-8"
+    )
+
+    rule = ArtifactValidationRule(
+        name="json_content",
+        type="json_content",
+        path="test_json_file.json"
+    )
+
+    result = ArtifactValidator().validate(rule=rule, base_dir=tmp_path)
+
+    assert result.passed is False
+    assert "Unable to parse JSON" in result.message
+
+def test_get_json_path_value_returns_nested_value():
+    data = {
+        "metrics": {
+            "power" : {
+                "average": 123.5
+            }
+        }
+    }
+
+    exists, value = ArtifactValidator._get_json_path_value(
+        data=data,
+        json_path="metrics.power.average"
+    )
+
+    assert exists is True
+    assert value == 123.5
+
+def test_get_json_path_value_returns_false_when_missing():
+    data = {
+        "metrics": {
+            "power" :{}
+        }
+    }
+
+    exists, value =ArtifactValidator._get_json_path_value(
+        data=data,
+        json_path="metrics.power.average"
+    )
+
+    assert exists is False
+    assert value is None

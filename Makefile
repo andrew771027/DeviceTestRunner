@@ -4,3 +4,8 @@ exec:
 
 test:
 	@pytest -v ./tests
+
+test_cov:
+	@pytest -v ./tests \
+			--cov=runner \
+			--cov-report=term-missing 

@@ -218,3 +218,228 @@ def test_command_runs_inside_run_directory(tmp_path: Path):
     actual_directory = cwd_file.read_text(encoding="utf-8").strip()
 
     assert actual_directory == str(Path(result.artifact_dir).resolve())
+
+def test_csv_and_json_content_validation(tmp_path: Path):
+    output_dir = tmp_path / 'artifacts'
+    config_file = tmp_path / 'config.yaml'
+
+    config_file.write_text(
+        f"""
+    test_case:
+        id: integration
+        name: artifact content integration
+        description: csv json validation
+    device:
+        serial: fake device
+        product: fake_pixel
+        build: fake_build
+    lifecycle:
+        global_setup:
+            steps: []
+        setup:
+            steps:
+            - name: create_results 
+              type: command 
+              command: mkdir -p results 
+              timeout_second: 5
+        scenario:
+            steps:
+            - name: create_csv 
+              type: command 
+              command: | 
+                printf "timestamp,power\\n1,100\\n2,120\\n" > results/test_csv_file.csv
+              timeout_second: 5 
+            - name: create_json 
+              type: command 
+              command: | 
+                printf '{{"status":"PASSED","metrics":{{"average_power":110.0,"sample_count":2}}}}' > results/test_json_file.json
+              timeout_second: 5
+        teardown:
+            steps: []
+        global_teardown:
+            steps: []
+    artifact:
+        output_dir: {output_dir}
+        validation:
+            rules:
+                - name: csv_content
+                  type: csv_content
+                  path: results/test_csv_file.csv
+                  required_columns:
+                    - timestamp
+                    - power
+                  min_rows: 2
+                - name: json_content
+                  type: json_content
+                  path: results/test_json_file.json
+                  required_json_paths:
+                    - status
+                    - metrics.average_power
+                    - metrics.sample_count
+                  expected_json_values:
+                    status: PASSED
+                    metrics.sample_count: 2
+""", 
+encoding="utf-8")
+
+    config = ConfigLoader().load(config_file)
+
+    runner = DeviceTestRunner(
+        executor=SubprocessExecutor(project_directory=PROJECT_ROOT),
+        artifact_validator=ArtifactValidator(),
+        reporter=JsonReporter(),
+        show_console_output=False,
+    )
+
+    result = runner.run(config)
+
+    assert result.summary.status == "PASSED"
+    assert result.summary.configured_artifact_rules == 2
+    assert result.summary.passed_artifact_rules == 2
+    assert result.summary.failed_artifact_rules == 0
+
+    validaiton_results = result.artifact_validation_results
+
+    assert len(validaiton_results) == 2
+    assert validaiton_results[0].passed is True
+    assert validaiton_results[1].passed is True
+
+    saved_report = json.loads(
+        (Path(result.artifact_dir) / "result.json").read_text(encoding='utf-8')
+    )
+
+    assert saved_report["metadata"]["runner_version"] == "1.4.1"
+    assert saved_report["summary"]["status"] == "PASSED"
+
+def test_run_fails_when_csv_content_invalid(tmp_path: Path):
+    output_dir = tmp_path / "artifact"
+    config_file = tmp_path / "config.yaml"
+
+    config_file.write_text(
+        f"""
+        test_case:
+            id: csv_failure
+            name: CSV Failure
+            description: Invalid CSV contract
+        device:
+            serial: fake_device
+            product: fake_pixel
+            build: fake_build
+        lifecycle:
+            global_setup:
+                steps: []
+            setup:
+                steps: []
+            scenario:
+                steps:
+                    - name: create_bad_csv 
+                      type: command 
+                      command: touch test_csv_file.csv
+                      timeout_second: 5
+            teardown:
+                steps: []
+            global_teardown:
+                steps: []
+        artifact:
+            output_dir: {output_dir}
+            validation:
+                rules:
+                    - name: csv_contract
+                      type: csv_content
+                      path: test_csv_file.csv
+                      required_column:
+                        - timestamp
+                        - power
+                      min_rows: 1
+""", encoding="utf-8"
+    )
+
+    config = ConfigLoader().load(config_file)
+    runner = DeviceTestRunner(
+        executor=SubprocessExecutor(project_directory=PROJECT_ROOT),
+        artifact_validator=ArtifactValidator(),
+        reporter=JsonReporter(),
+        show_console_output=False
+    )
+    result = runner.run(config)
+
+    # step
+    assert result.summary.configured_steps == 1
+    assert result.summary.passed_steps == 1
+    assert result.summary.failed_steps == 0
+    assert result.summary.skipped_steps == 0
+
+    # rule
+    assert result.summary.passed_artifact_rules == 0
+    assert result.summary.failed_artifact_rules == 1
+
+    # run
+    assert result.summary.status == "FAILED"
+
+    validation = result.artifact_validation_results[0]
+
+    assert validation.passed is False
+    assert validation.message == "CSV header is missing."
+
+def test_run_fails_when_json_status_invalid(tmp_path: Path):
+    output_dir = tmp_path / "artifact"
+    config_file = tmp_path / "config.yaml"
+
+    config_file.write_text(
+    f"""
+        test_case:
+            id: json_failure
+            name: JSON Failure
+            description: Invalid JSON result
+        device:
+            serial: fake_device
+            product: fake_pixel
+            build: fake_build
+        lifecycle:
+            global_setup:
+                steps: []
+            setup:
+                steps: []
+            scenario:
+                steps:
+                - name: create_json 
+                  type: command 
+                  command: | 
+                    printf '{{"status":"FAILED"}}' > test_json_file.json 
+                  timeout_second: 5
+            teardown:
+                steps: []
+            global_teardown:
+                steps: []
+        artifact:
+            output_dir: {output_dir}
+            validation:
+                rules:
+                    - name: json_content
+                      type: json_content
+                      path: test_json_file.json
+                      required_json_paths:
+                        - status
+                      expected_json_values:
+                        status: PASSED
+
+""", encoding="utf-8")
+
+    config = ConfigLoader().load(config_file)
+    runner = DeviceTestRunner(
+        executor=SubprocessExecutor(project_directory=PROJECT_ROOT),
+        artifact_validator=ArtifactValidator(),
+        reporter=JsonReporter(),
+        show_console_output=False)
+
+    result = runner.run(config)
+
+    assert result.summary.configured_steps == 1
+    assert result.summary.passed_steps == 1
+    assert result.summary.failed_steps == 0
+
+    assert result.summary.passed_artifact_rules == 0
+    assert result.summary.failed_artifact_rules == 1
+
+    assert result.summary.status == "FAILED"
+    assert "expected 'PASSED'" in result.artifact_validation_results[0].message

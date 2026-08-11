@@ -24,11 +24,13 @@ class DeviceTestRunner:
     def __init__(
         self,
         executor: SubprocessExecutor,
+        artifact_manager: ArtifactManager,
         artifact_validator: ArtifactValidator,
         reporter: JsonReporter,
         show_console_output: bool = True,
     ):
         self.executor = executor
+        self.artifact_manager = artifact_manager
         self.artifact_validator = artifact_validator
         self.reporter = reporter
 
@@ -39,9 +41,9 @@ class DeviceTestRunner:
         started_counter = time.perf_counter()
         artifact_results: List[ArtifactValidationResult] = []
 
-        artifact_manager = ArtifactManager(output_dir=config.artifact.output_dir)
-
-        run_dir = artifact_manager.create_run_directory(test_case_id=config.test_case.id)
+        run_dir = self.artifact_manager.create_run_directory(
+            test_case_id=config.test_case.id
+        )
 
         step_results: list[StepResult] = []
 
@@ -49,7 +51,7 @@ class DeviceTestRunner:
             stage="global_setup",
             steps=config.lifecycle.global_setup.steps,
             run_dir=run_dir,
-            artifact_manager=artifact_manager,
+            artifact_manager=self.artifact_manager,
             step_results=step_results,
             stop_on_failure=True,
         )
@@ -60,7 +62,7 @@ class DeviceTestRunner:
                 stage="setup",
                 steps=config.lifecycle.setup.steps,
                 run_dir=run_dir,
-                artifact_manager=artifact_manager,
+                artifact_manager=self.artifact_manager,
                 step_results=step_results,
                 stop_on_failure=True,
             )
@@ -71,7 +73,7 @@ class DeviceTestRunner:
                     stage="scenario",
                     steps=config.lifecycle.scenario.steps,
                     run_dir=run_dir,
-                    artifact_manager=artifact_manager,
+                    artifact_manager=self.artifact_manager,
                     step_results=step_results,
                     stop_on_failure=True,
                 )
@@ -80,7 +82,7 @@ class DeviceTestRunner:
                     stage="teardown",
                     steps=config.lifecycle.teardown.steps,
                     run_dir=run_dir,
-                    artifact_manager=artifact_manager,
+                    artifact_manager=self.artifact_manager,
                     step_results=step_results,
                     stop_on_failure=False,
                 )
@@ -89,7 +91,7 @@ class DeviceTestRunner:
                 stage="global_teardown",
                 steps=config.lifecycle.global_teardown.steps,
                 run_dir=run_dir,
-                artifact_manager=artifact_manager,
+                artifact_manager=self.artifact_manager,
                 step_results=step_results,
                 stop_on_failure=False,
             )
@@ -238,7 +240,9 @@ class DeviceTestRunner:
         )
 
     @staticmethod
-    def _calculate_status(failed_steps: int, skipped_steps: int, failed_artifact_rules: int) -> str:
+    def _calculate_status(
+        failed_steps: int, skipped_steps: int, failed_artifact_rules: int
+    ) -> str:
         if failed_steps > 0:
             return "FAILED"
 

@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+from runner.artifact import ArtifactManager
 from runner.artifact_validator import ArtifactValidator
 from runner.config import ConfigLoader
 from runner.executor import SubprocessExecutor
@@ -68,6 +69,7 @@ def test_command_creates_and_validates_artifact(tmp_path: Path):
 
     runner = DeviceTestRunner(
         executor=SubprocessExecutor(project_directory=PROJECT_ROOT),
+        artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
         reporter=JsonReporter(),
         show_console_output=False,
@@ -143,6 +145,7 @@ def test_run_fails_when_command_does_not_create_artifact(tmp_path: Path):
     config = ConfigLoader().load(config_path)
     runner = DeviceTestRunner(
         executor=SubprocessExecutor(project_directory=PROJECT_ROOT),
+        artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
         reporter=JsonReporter(),
         show_console_output=False,
@@ -206,6 +209,7 @@ def test_command_runs_inside_run_directory(tmp_path: Path):
     config = ConfigLoader().load(config_path)
     runner = DeviceTestRunner(
         executor=SubprocessExecutor(PROJECT_ROOT),
+        artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
         reporter=JsonReporter(),
         show_console_output=False,
@@ -288,6 +292,7 @@ def test_csv_and_json_content_validation(tmp_path: Path):
 
     runner = DeviceTestRunner(
         executor=SubprocessExecutor(project_directory=PROJECT_ROOT),
+        artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
         reporter=JsonReporter(),
         show_console_output=False,
@@ -361,6 +366,7 @@ def test_run_fails_when_csv_content_invalid(tmp_path: Path):
     config = ConfigLoader().load(config_file)
     runner = DeviceTestRunner(
         executor=SubprocessExecutor(project_directory=PROJECT_ROOT),
+        artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
         reporter=JsonReporter(),
         show_console_output=False,
@@ -435,6 +441,7 @@ def test_run_fails_when_json_status_invalid(tmp_path: Path):
     config = ConfigLoader().load(config_file)
     runner = DeviceTestRunner(
         executor=SubprocessExecutor(project_directory=PROJECT_ROOT),
+        artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
         reporter=JsonReporter(),
         show_console_output=False,

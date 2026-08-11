@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+from runner.artifact import ArtifactManager
 from runner.artifact_validator import ArtifactValidator
 from runner.config import ConfigLoader
 from runner.executor import SubprocessExecutor
@@ -70,6 +71,7 @@ artifact:
     config = ConfigLoader().load(str(config_file))
     runner = DeviceTestRunner(
         executor=SubprocessExecutor(project_directory=PROJECT_ROOT),
+        artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
         reporter=JsonReporter(),
     )
@@ -199,6 +201,7 @@ artifact:
 
     runner = DeviceTestRunner(
         executor=SubprocessExecutor(project_directory=PROJECT_ROOT),
+        artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
         reporter=JsonReporter(),
     )

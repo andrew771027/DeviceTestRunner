@@ -5,6 +5,7 @@ from runner.executor import SubprocessExecutor
 from runner.reporter import JsonReporter
 from runner.runner import DeviceTestRunner
 from runner.artifact_validator import ArtifactValidator
+from runner.artifact import ArtifactManager
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -25,6 +26,7 @@ def main():
 
         runner = DeviceTestRunner(
             executor=SubprocessExecutor(project_directory=PROJECT_ROOT),
+            artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
             artifact_validator=ArtifactValidator(),
             reporter=JsonReporter(),
         )

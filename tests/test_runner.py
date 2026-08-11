@@ -3,7 +3,7 @@ from typing import List
 
 import pytest
 
-from runner.artifact import StepLogWriter
+from runner.artifact import StepLogWriter, ArtifactManager
 from runner.artifact_validator import ArtifactValidator
 from runner.models import (
     ArtifactConfig,
@@ -130,6 +130,7 @@ def test_runner_executes_all_stages_and_all_steps_success(tmp_path: Path):
     executor = MockExecutor()
     runner = DeviceTestRunner(
         executor=executor,
+        artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
         reporter=JsonReporter(),
     )
@@ -180,6 +181,7 @@ def test_runner_terminate_when_step_failed(tmp_path, failed_step_name):
     executor = MockExecutor(failed_step_name=failed_step_name)
     runner = DeviceTestRunner(
         executor=executor,
+        artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
         reporter=JsonReporter(),
     )
@@ -213,7 +215,9 @@ def test_runner_terminate_when_step_failed(tmp_path, failed_step_name):
         "global_teardown",
     ]
 
-    assert [step.name for step in result.step_results if step.passed is False] == [failed_step_name]
+    assert [step.name for step in result.step_results if step.passed is False] == [
+        failed_step_name
+    ]
 
     assert result.summary.status == "FAILED"
 
@@ -231,14 +235,16 @@ def test_runner_terminate_when_step_failed(tmp_path, failed_step_name):
     assert result.step_results[4].stderr == ""
     assert result.step_results[5].stderr == ""
 
-    failed_step_result = next(step for step in result.step_results if step.name == failed_step_name)
+    failed_step_result = next(
+        step for step in result.step_results if step.name == failed_step_name
+    )
     assert failed_step_result.stage == "scenario"
     assert failed_step_result.name == failed_step_name
     assert Path(failed_step_result.stdout_log_path).exists()
     assert Path(failed_step_result.stderr_log_path).exists()
-    assert f"{failed_step_name} failed" in Path(failed_step_result.stderr_log_path).read_text(
-        encoding="utf-8"
-    )
+    assert f"{failed_step_name} failed" in Path(
+        failed_step_result.stderr_log_path
+    ).read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize(argnames="failed_step_name", argvalues=["global_setup"])
@@ -247,6 +253,7 @@ def test_global_setup_failure_only_run_global_teardown(tmp_path, failed_step_nam
     executor = MockExecutor(failed_step_name=failed_step_name)
     runner = DeviceTestRunner(
         executor=executor,
+        artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
         reporter=JsonReporter(),
     )
@@ -286,6 +293,7 @@ def test_setup_failure_only_run_global_teardown(tmp_path, failed_step_name):
     executor = MockExecutor(failed_step_name=failed_step_name)
     runner = DeviceTestRunner(
         executor=executor,
+        artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
         reporter=JsonReporter(),
     )
@@ -321,14 +329,16 @@ def test_setup_failure_only_run_global_teardown(tmp_path, failed_step_name):
     assert result.step_results[1].stderr == f"{failed_step_name} failed"
     assert result.step_results[2].stderr == ""
 
-    failed_step_result = next(step for step in result.step_results if step.name == failed_step_name)
+    failed_step_result = next(
+        step for step in result.step_results if step.name == failed_step_name
+    )
     assert failed_step_result.stage == "setup"
     assert failed_step_result.name == failed_step_name
     assert Path(failed_step_result.stdout_log_path).exists()
     assert Path(failed_step_result.stderr_log_path).exists()
-    assert f"{failed_step_name} failed" in Path(failed_step_result.stderr_log_path).read_text(
-        encoding="utf-8"
-    )
+    assert f"{failed_step_name} failed" in Path(
+        failed_step_result.stderr_log_path
+    ).read_text(encoding="utf-8")
 
     executed_names = [step for step in (runner.executor.executed_steps)]
     assert "global_setup" in (executed_names)
@@ -341,6 +351,7 @@ def test_runner_passes_when_artifacts_are_valid(tmp_path: Path):
     executor = MockExecutor()
     runner = DeviceTestRunner(
         executor=executor,
+        artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
         reporter=JsonReporter(),
         show_console_output=False,
@@ -360,6 +371,7 @@ def test_runner_fails_when_artifacts_invalid(tmp_path: Path):
     executor = MockExecutor()
     runner = DeviceTestRunner(
         executor=executor,
+        artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
         reporter=JsonReporter(),
         show_console_output=False,
@@ -375,7 +387,9 @@ def test_runner_fails_when_artifacts_invalid(tmp_path: Path):
     assert result.summary.failed_artifact_rules == 1
 
     failed_validation = next(
-        validation for validation in result.artifact_validation_results if not validation.passed
+        validation
+        for validation in result.artifact_validation_results
+        if not validation.passed
     )
 
     assert failed_validation.name == "test_file_size"
@@ -415,6 +429,7 @@ def test_runner_passes_without_validation_rules(tmp_path: Path):
     executor = MockExecutor()
     runner = DeviceTestRunner(
         executor=executor,
+        artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
         reporter=JsonReporter(),
         show_console_output=False,

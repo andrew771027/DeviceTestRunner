@@ -1,12 +1,13 @@
 import argparse
 import sys
+from pathlib import Path
+
+from runner.artifact import ArtifactManager
+from runner.artifact_validator import ArtifactValidator
 from runner.config import ConfigLoader
 from runner.executor import SubprocessExecutor
 from runner.reporter import JsonReporter
 from runner.runner import DeviceTestRunner
-from runner.artifact_validator import ArtifactValidator
-from runner.artifact import ArtifactManager
-from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 
@@ -46,11 +47,7 @@ def main():
     for step_result in result.step_results:
         print(f"[Step] {step_result.name}")
         print(f"  Success: {step_result.success}")
-        print(f"  Exit Code: {step_result.exit_code}")
         print(f"  Duration: {step_result.duration_seconds:.2f}s")
-
-        if step_result.error:
-            print(f"  Error: {step_result.error}")
 
         print()
 

@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Optional, Any
+from typing import Any, List, Optional
 
 
 @dataclass(frozen=True)
@@ -44,6 +44,12 @@ class LifecycleConfig:
 
 
 @dataclass(frozen=True)
+class RetryConfig:
+    max_attempts: int = 1
+    delay_seconds: float = 0.0
+
+
+@dataclass(frozen=True)
 class ArtifactValidationRule:
 
     name: str
@@ -65,6 +71,7 @@ class ArtifactValidationRule:
     required_json_paths: list[str] = field(default_factory=list)
     expected_json_values: dict[str, Any] = field(default_factory=dict)
 
+
 @dataclass(frozen=True)
 class ArtifactValidationConfig:
 
@@ -74,9 +81,7 @@ class ArtifactValidationConfig:
 @dataclass(frozen=True)
 class ArtifactConfig:
     output_dir: str
-    validation: ArtifactValidationConfig = field(
-        default_factory=ArtifactValidationConfig
-    )
+    validation: ArtifactValidationConfig = field(default_factory=ArtifactValidationConfig)
 
 
 @dataclass(frozen=True)
@@ -85,32 +90,42 @@ class RunnerConfig:
     test_case: DeviceTestCase
     device: DeviceInfo
     lifecycle: LifecycleConfig
+    retry: RetryConfig
     artifact: ArtifactConfig
 
 
 @dataclass(frozen=True)
-class StepResult:
-
-    stage: str
-    name: str
-    command: str
+class StepAttemptResult:
+    attempt: int
     success: bool
     exit_code: Optional[int]
     duration_seconds: float
 
     # subprocess 完整輸出
+
     stdout: str
     stderr: str
 
     # 對應 artifact 檔案位置
+
     stdout_log_path: str
     stderr_log_path: str
-
-    error: Optional[str] = None
+    error: str = ""
 
     @property
     def passed(self) -> bool:
         return self.exit_code == 0
+
+
+@dataclass(frozen=True)
+class StepResult:
+    stage: str
+    name: str
+    command: str
+    attempts: int
+    success: bool
+    attempt_results: list[StepAttemptResult]
+    duration_seconds: float
 
 
 @dataclass(frozen=True)
@@ -158,11 +173,9 @@ class RunResult:
 
     metadata: RunMetadata
     summary: ExecutionSummary
-    step_results: List[StepResult]
+    step_results: List[StepAttemptResult]
     artifact_dir: str | None = None
-    artifact_validation_results: List[ArtifactValidationResult] = field(
-        default_factory=list
-    )
+    artifact_validation_results: List[ArtifactValidationResult] = field(default_factory=list)
 
     @property
     def passed(self) -> bool:

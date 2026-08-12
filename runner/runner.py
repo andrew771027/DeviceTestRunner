@@ -10,16 +10,19 @@ from runner.models import (
     ArtifactValidationResult,
     ExecutionSummary,
     LifecycleSteps,
+    RetryConfig,
     RunMetadata,
     RunnerConfig,
     RunResult,
+    StepAttemptResult,
     StepResult,
 )
 from runner.reporter import JsonReporter
+from runner.retry import RetryPolicy
 
 
 class DeviceTestRunner:
-    VERSION = "1.4.1"
+    VERSION = "1.5.0"
 
     def __init__(
         self,
@@ -41,15 +44,14 @@ class DeviceTestRunner:
         started_counter = time.perf_counter()
         artifact_results: List[ArtifactValidationResult] = []
 
-        run_dir = self.artifact_manager.create_run_directory(
-            test_case_id=config.test_case.id
-        )
+        run_dir = self.artifact_manager.create_run_directory(test_case_id=config.test_case.id)
 
         step_results: list[StepResult] = []
 
         global_setup_success = self._run_stage(
             stage="global_setup",
             steps=config.lifecycle.global_setup.steps,
+            retry_config=config.retry,
             run_dir=run_dir,
             artifact_manager=self.artifact_manager,
             step_results=step_results,
@@ -61,6 +63,7 @@ class DeviceTestRunner:
             setup_success = self._run_stage(
                 stage="setup",
                 steps=config.lifecycle.setup.steps,
+                retry_config=config.retry,
                 run_dir=run_dir,
                 artifact_manager=self.artifact_manager,
                 step_results=step_results,
@@ -72,6 +75,7 @@ class DeviceTestRunner:
                 self._run_stage(
                     stage="scenario",
                     steps=config.lifecycle.scenario.steps,
+                    retry_config=config.retry,
                     run_dir=run_dir,
                     artifact_manager=self.artifact_manager,
                     step_results=step_results,
@@ -81,6 +85,7 @@ class DeviceTestRunner:
                 self._run_stage(
                     stage="teardown",
                     steps=config.lifecycle.teardown.steps,
+                    retry_config=config.retry,
                     run_dir=run_dir,
                     artifact_manager=self.artifact_manager,
                     step_results=step_results,
@@ -90,6 +95,7 @@ class DeviceTestRunner:
             self._run_stage(
                 stage="global_teardown",
                 steps=config.lifecycle.global_teardown.steps,
+                retry_config=config.retry,
                 run_dir=run_dir,
                 artifact_manager=self.artifact_manager,
                 step_results=step_results,
@@ -122,6 +128,7 @@ class DeviceTestRunner:
         self,
         stage: str,
         steps: List[LifecycleSteps],
+        retry_config: RetryConfig,
         run_dir: Path,
         artifact_manager: ArtifactManager,
         step_results: List[StepResult],
@@ -129,26 +136,66 @@ class DeviceTestRunner:
     ) -> bool:
 
         stage_success = True
+        retry_policy = RetryPolicy(retry_config)
 
         for step in steps:
-            log_writer = artifact_manager.create_step_log_writer(
-                run_dir=run_dir,
-                stage=stage,
-                step_name=step.name,
-                show_console=self.show_console_output,
-            )
 
-            with log_writer:
-                result = self.executor.execute(
-                    step=step,
+            attempt_results: list[StepAttemptResult] = []
+
+            step_started_at = time.perf_counter()
+
+            final_success = False
+
+            for attempt in range(1, retry_config.max_attempts + 1):
+
+                log_writer = artifact_manager.create_step_log_writer(
+                    run_dir=run_dir,
                     stage=stage,
-                    log_writer=log_writer,
-                    working_directory=run_dir,
+                    step_name=step.name,
+                    attempt=attempt,
+                    show_console=self.show_console_output,
                 )
 
-            step_results.append(result)
+                with log_writer:
+                    attempt_result = self.executor.execute(
+                        step=step,
+                        stage=stage,
+                        attempt=attempt,
+                        log_writer=log_writer,
+                        working_directory=run_dir,
+                    )
 
-            if not result.success:
+                attempt_results.append(attempt_result)
+
+                if attempt_result.success:
+                    final_success = True
+                    break
+
+                should_retry = retry_policy.should_retry(
+                    attempt=attempt, success=attempt_result.success
+                )
+
+                if not should_retry:
+                    break
+
+                if retry_policy.deloay_seconds > 0:
+                    time.sleep(retry_policy.deloay_seconds)
+
+            step_duration_seconds = time.perf_counter() - step_started_at
+
+            step_result = StepResult(
+                stage=stage,
+                name=step.name,
+                command=step.command,
+                success=final_success,
+                attempts=len(attempt_results),
+                attempt_results=attempt_results,
+                duration_seconds=step_duration_seconds,
+            )
+
+            step_results.append(step_result)
+
+            if not step_result.success:
                 stage_success = False
 
                 if stop_on_failure:
@@ -240,9 +287,7 @@ class DeviceTestRunner:
         )
 
     @staticmethod
-    def _calculate_status(
-        failed_steps: int, skipped_steps: int, failed_artifact_rules: int
-    ) -> str:
+    def _calculate_status(failed_steps: int, skipped_steps: int, failed_artifact_rules: int) -> str:
         if failed_steps > 0:
             return "FAILED"
 

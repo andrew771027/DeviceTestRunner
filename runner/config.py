@@ -11,6 +11,7 @@ from runner.models import (
     LifecycleConfig,
     LifecycleStepContent,
     LifecycleSteps,
+    RetryConfig,
     RunnerConfig,
 )
 
@@ -43,10 +44,13 @@ class ConfigLoader:
             validation=self._load_validation(raw["artifact"]),
         )
 
+        retry = self._load_retry(raw)
+
         return RunnerConfig(
             test_case=test_case,
             device=device,
             lifecycle=lifecycle,
+            retry=retry,
             artifact=artifact,
         )
 
@@ -106,3 +110,18 @@ class ConfigLoader:
                 for rule in validation.get("rules", [])
             ]
         )
+
+    @staticmethod
+    def _load_retry(raw: dict[str, dict]) -> RetryConfig:
+        retry = raw.get("retry", {})
+
+        max_attempts = retry.get("max_attempts", 1)
+        delay_seconds = retry.get("delay_seconds", 0.0)
+
+        if max_attempts < 1:
+            raise ValueError("retry.max_attempts must be >= 1")
+
+        if delay_seconds < 0:
+            raise ValueError("retry.delay_seconds must be >= 0")
+
+        return RetryConfig(max_attempts=max_attempts, delay_seconds=delay_seconds)

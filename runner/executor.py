@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import TextIO
 
 from runner.artifact import StepLogWriter
-from runner.models import LifecycleStepContent, StepResult
+from runner.models import LifecycleStepContent, StepAttemptResult
 
 
 class SubprocessExecutor:
@@ -22,14 +22,13 @@ class SubprocessExecutor:
         self,
         step: LifecycleStepContent,
         stage: str,
+        attempt: int,
         log_writer: StepLogWriter | None,
         working_directory: str | Path,
-    ) -> StepResult:
+    ) -> StepAttemptResult:
 
         if log_writer is None:
-            log_writer = self._create_default_log_writer(
-                stage=stage, step_name=step.name
-            )
+            log_writer = self._create_default_log_writer(stage=stage, step_name=step.name)
 
         environment = os.environ.copy()
 
@@ -90,10 +89,8 @@ class SubprocessExecutor:
             duration_seconds = time.perf_counter() - start_time
             success = not time_out and exit_code == 0
 
-            return StepResult(
-                stage=stage,
-                name=step.name,
-                command=step.command,
+            return StepAttemptResult(
+                attempt=attempt,
                 success=success,
                 exit_code=exit_code,
                 duration_seconds=duration_seconds,
@@ -110,10 +107,8 @@ class SubprocessExecutor:
 
             log_writer.write_stderr(f"{error_message}\n")
 
-            return StepResult(
-                stage=stage,
-                name=step.name,
-                command=step.command,
+            return StepAttemptResult(
+                attempt=attempt,
                 success=False,
                 exit_code=None,
                 duration_seconds=duration_seconds,
@@ -133,10 +128,8 @@ class SubprocessExecutor:
             if process is not None:
                 self._stop_process(process)
 
-            return StepResult(
-                stage=stage,
-                name=step.name,
-                command=step.command,
+            return StepAttemptResult(
+                attempt=attempt,
                 success=False,
                 exit_code=process.returncode if process is not None else None,
                 duration_seconds=duration_seconds,

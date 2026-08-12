@@ -118,15 +118,20 @@ class ArtifactManager:
         return run_dir
 
     def create_step_log_writer(
-        self, run_dir: Path, stage: str, step_name: str, show_console: bool
+        self,
+        run_dir: Path,
+        stage: str,
+        step_name: str,
+        attempt: int,
+        show_console: bool,
     ) -> StepLogWriter:
         stdout_path, stderr_path = self._build_step_log_paths(
-            run_dir=run_dir, stage=stage, step_name=step_name
+            run_dir=run_dir, stage=stage, step_name=step_name, attempt=attempt
         )
 
         return StepLogWriter(
             stage=stage,
-            step_name=step_name,
+            step_name=(f"{step_name}" f"[attempt={attempt}]"),
             stdout_path=stdout_path,
             stderr_path=stderr_path,
             show_console=show_console,
@@ -148,13 +153,15 @@ class ArtifactManager:
         stderr_path.write_text(stderr, encoding="utf-8")
         return stderr_path
 
-    def _build_step_log_paths(self, run_dir: Path, stage: str, step_name: str) -> tuple[Path, Path]:
+    def _build_step_log_paths(
+        self, run_dir: Path, stage: str, step_name: str, attempt: int
+    ) -> tuple[Path, Path]:
         stage_dir = run_dir / self._sanitize_name(stage)
         stage_dir.mkdir(parents=True, exist_ok=True)
 
         safe_step_name = self._sanitize_name(step_name)
-        stdout_path = stage_dir / f"{safe_step_name}.stdout.log"
-        stderr_path = stage_dir / f"{safe_step_name}.stderr.log"
+        stdout_path = stage_dir / f"{safe_step_name}" / f"attempt_{attempt}.stdout.log"
+        stderr_path = stage_dir / f"{safe_step_name}" / f"attempt_{attempt}.stderr.log"
         return stdout_path, stderr_path
 
     @staticmethod

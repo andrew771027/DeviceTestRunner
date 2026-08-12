@@ -8,6 +8,10 @@ device:
   product: pixel
   build: test_build
 
+retry:
+  max_attempts: 3
+  delay_seconds: 1
+
 lifecycle:
   global_setup:
     steps:

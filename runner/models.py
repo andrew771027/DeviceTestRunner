@@ -179,4 +179,6 @@ class RunResult:
 
     @property
     def passed(self) -> bool:
-        return all(result.exit_code == 0 for result in self.step_results)
+        return all(
+            step_attempt_results[-1].exit_code == 0 for step_attempt_results in self.step_results
+        )

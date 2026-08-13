@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from runner.config import ConfigLoader
 from runner.models import (
     ArtifactConfig,
@@ -320,3 +322,147 @@ def test_load_csv_and_json_validation_rules(tmp_path: Path):
     assert json_rule.required_json_paths == ["status", "metrics.average_power"]
     assert json_rule.expected_json_values["status"] == "PASSED"
     assert json_rule.expected_json_values["metrics.sample_count"] == 100
+
+
+def test_load_retry_config(tmp_path: Path):
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        """
+    test_case:
+        id: retry_001
+        name: Retry Test
+        description: retry
+    device:
+        serial: fake_serial
+        product: fake_pixel
+        build: fake_build
+    retry:
+        max_attempts: 3
+        delay_seconds: 3
+    lifecycle:
+        global_setup:
+            steps: []
+        setup:
+            steps: []
+        scenario:
+            steps: []
+        teardown:
+            steps: []
+        global_teardown:
+            steps: []
+    artifact:
+        output_dir: artifacts
+""",
+        encoding="UTF-8",
+    )
+
+    config = ConfigLoader().load(config_file)
+
+    assert hasattr(config, "retry")
+    assert config.retry.max_attempts == 3
+    assert config.retry.delay_seconds == 3
+
+
+def test_retry_config_uses_default_values(tmp_path: Path):
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        """
+       test_case:
+           id: retry_001
+           name: Retry Test
+           description: retry
+       device:
+           serial: fake_serial
+           product: fake_pixel
+           build: fake_build
+       lifecycle:
+           global_setup:
+               steps: []
+           setup:
+               steps: []
+           scenario:
+               steps: []
+           teardown:
+               steps: []
+           global_teardown:
+               steps: []
+       artifact:
+           output_dir: artifacts
+   """,
+        encoding="utf-8",
+    )
+
+    config = ConfigLoader().load(config_file)
+
+    assert config.retry.max_attempts == 1
+    assert config.retry.delay_seconds == 0
+
+
+def test_retry_max_attempts_must_be_positive(tmp_path: Path):
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        """
+       test_case:
+           id: retry_001
+           name: Retry Test
+           description: retry
+       device:
+           serial: fake_serial
+           product: fake_pixel
+           build: fake_build
+       retry:
+           max_attempts: -10
+       lifecycle:
+           global_setup:
+               steps: []
+           setup:
+               steps: []
+           scenario:
+               steps: []
+           teardown:
+               steps: []
+           global_teardown:
+               steps: []
+       artifact:
+           output_dir: artifacts
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=("retry.max_attempts must be >= 1")):
+        ConfigLoader().load(config_file)
+
+
+def test_retry_delay_seconds_must_be_positive(tmp_path: Path):
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        """
+       test_case:
+           id: retry_001
+           name: Retry Test
+           description: retry
+       device:
+           serial: fake_serial
+           product: fake_pixel
+           build: fake_build
+       retry:
+           delay_seconds: -10
+       lifecycle:
+           global_setup:
+               steps: []
+           setup:
+               steps: []
+           scenario:
+               steps: []
+           teardown:
+               steps: []
+           global_teardown:
+               steps: []
+       artifact:
+           output_dir: artifacts
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=("retry.delay_seconds must be >= 0")):
+        ConfigLoader().load(config_file)

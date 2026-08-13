@@ -41,6 +41,10 @@ lifecycle:
         command: |
           printf '{"status":"PASSED","metrics":{"average_power":110.0,"sample_count":2}}' > ./test_json_file.json
         timeout_second: 10
+      - name: run_unstable_command
+        type: command
+        command: bash "$DEVICE_TEST_RUNNER_ROOT/scripts/unstable.sh"
+        timeout_second: 10
   teardown:
     steps:
       - name: collect_artifact

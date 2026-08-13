@@ -4,7 +4,7 @@ from runner.models import RetryConfig
 class RetryPolicy:
 
     def __init__(self, config: RetryConfig):
-        self.config = RetryConfig
+        self.config = config
 
     def should_retry(self, attempt: int, success: bool) -> bool:
         if success:

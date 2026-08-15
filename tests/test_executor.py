@@ -14,7 +14,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 
 
 @pytest.mark.parametrize(
-    argnames="test_case_id, step, stage",
+    argnames="test_case_id, step, stage, attempt",
     argvalues=(
         [
             (
@@ -26,11 +26,12 @@ PROJECT_ROOT = Path(__file__).resolve().parent
                     timeout_second=1,
                 ),
                 "test_stage",
+                1,
             ),
         ]
     ),
 )
-def test_subprocess_executor_return_success(tmp_path, test_case_id, step, stage):
+def test_subprocess_executor_return_success(tmp_path, test_case_id, step, stage, attempt):
     executor = SubprocessExecutor(project_directory=PROJECT_ROOT)
 
     artifact_manager = ArtifactManager(tmp_path)
@@ -38,17 +39,23 @@ def test_subprocess_executor_return_success(tmp_path, test_case_id, step, stage)
     run_dir = artifact_manager.create_run_directory(test_case_id=test_case_id)
 
     log_writer = artifact_manager.create_step_log_writer(
-        run_dir=run_dir, stage=stage, step_name=step.name, show_console=False
+        run_dir=run_dir,
+        stage=stage,
+        step_name=step.name,
+        attempt=attempt,
+        show_console=False,
     )
 
     with log_writer:
         result = executor.execute(
-            step=step, stage=stage, log_writer=log_writer, working_directory=run_dir
+            step=step,
+            stage=stage,
+            attempt=attempt,
+            log_writer=log_writer,
+            working_directory=run_dir,
         )
 
-    assert result.stage == "test_stage"
-    assert result.name == "test"
-    assert result.command == "echo 'Hello World'"
+    assert result.attempt == attempt
     assert result.exit_code == 0
     assert result.passed is True
     assert result.success is True
@@ -61,7 +68,7 @@ def test_subprocess_executor_return_success(tmp_path, test_case_id, step, stage)
 
 
 @pytest.mark.parametrize(
-    argnames="test_case_id, step, stage",
+    argnames="test_case_id, step, stage, attempt",
     argvalues=[
         (
             "test_case_001",
@@ -72,10 +79,11 @@ def test_subprocess_executor_return_success(tmp_path, test_case_id, step, stage)
                 timeout_second=1,
             ),
             "test_stage",
+            1,
         ),
     ],
 )
-def test_subprocess_executor_failure(tmp_path, test_case_id, step, stage):
+def test_subprocess_executor_failure(tmp_path, test_case_id, step, stage, attempt):
     executor = SubprocessExecutor(project_directory=PROJECT_ROOT)
 
     artifact_manager = ArtifactManager(tmp_path)
@@ -83,17 +91,23 @@ def test_subprocess_executor_failure(tmp_path, test_case_id, step, stage):
     run_dir = artifact_manager.create_run_directory(test_case_id=test_case_id)
 
     log_writer = artifact_manager.create_step_log_writer(
-        run_dir=run_dir, stage=stage, step_name=step.name, show_console=False
+        run_dir=run_dir,
+        stage=stage,
+        step_name=step.name,
+        attempt=attempt,
+        show_console=False,
     )
 
     with log_writer:
         result = executor.execute(
-            step=step, stage=stage, log_writer=log_writer, working_directory=run_dir
+            step=step,
+            stage=stage,
+            attempt=attempt,
+            log_writer=log_writer,
+            working_directory=run_dir,
         )
 
-    assert result.stage == "test_stage"
-    assert result.name == "test failed"
-    assert result.command == f'{sys.executable} -c "import sys; sys.exit(1)"'
+    assert result.attempt == attempt
     assert result.exit_code == 1
     assert result.success is False
     assert result.passed is False
@@ -106,7 +120,7 @@ def test_subprocess_executor_failure(tmp_path, test_case_id, step, stage):
 
 
 @pytest.mark.parametrize(
-    argnames="tase_case_id, step, stage",
+    argnames="tase_case_id, step, stage, attempt",
     argvalues=[
         (
             "test_case_001",
@@ -117,11 +131,12 @@ def test_subprocess_executor_failure(tmp_path, test_case_id, step, stage):
                 timeout_second=5,
             ),
             "test_stage",
+            1,
         )
     ],
 )
 def test_subprocess_executor_passes_timeout_to_subprocess(
-    tmp_path, monkeypatch, tase_case_id, step, stage
+    tmp_path, monkeypatch, tase_case_id, step, stage, attempt
 ):
     mocked_process = Mock()
 
@@ -141,12 +156,20 @@ def test_subprocess_executor_passes_timeout_to_subprocess(
     run_dir = artifact_manager.create_run_directory(test_case_id=tase_case_id)
 
     log_writer = artifact_manager.create_step_log_writer(
-        run_dir=run_dir, stage=stage, step_name=step.name, show_console=False
+        run_dir=run_dir,
+        stage=stage,
+        step_name=step.name,
+        attempt=attempt,
+        show_console=False,
     )
 
     with log_writer:
         result = executor.execute(
-            step=step, stage=stage, log_writer=log_writer, working_directory=run_dir
+            step=step,
+            stage=stage,
+            attempt=attempt,
+            log_writer=log_writer,
+            working_directory=run_dir,
         )
 
     mocked_popen.assert_called_once()
@@ -175,7 +198,7 @@ def test_subprocess_executor_passes_timeout_to_subprocess(
 
 
 @pytest.mark.parametrize(
-    argnames="test_case_id, step, stage",
+    argnames="test_case_id, step, stage, attempt",
     argvalues=[
         (
             "test_case_001",
@@ -186,10 +209,13 @@ def test_subprocess_executor_passes_timeout_to_subprocess(
                 timeout_second=5,
             ),
             "test_stage",
+            1,
         )
     ],
 )
-def test_subprocess_executor_raised_timeout_error(tmp_path, monkeypatch, test_case_id, step, stage):
+def test_subprocess_executor_raised_timeout_error(
+    tmp_path, monkeypatch, test_case_id, step, stage, attempt
+):
 
     mocked_process = Mock()
 
@@ -214,20 +240,27 @@ def test_subprocess_executor_raised_timeout_error(tmp_path, monkeypatch, test_ca
     run_dir = artifact_manager.create_run_directory(test_case_id=test_case_id)
 
     log_writer = artifact_manager.create_step_log_writer(
-        run_dir=run_dir, stage=stage, step_name=step.name, show_console=False
+        run_dir=run_dir,
+        stage=stage,
+        step_name=step.name,
+        attempt=attempt,
+        show_console=False,
     )
 
     executor = SubprocessExecutor(project_directory=PROJECT_ROOT)
 
     with log_writer:
         result = executor.execute(
-            step=step, stage=stage, log_writer=log_writer, working_directory=run_dir
+            step=step,
+            stage=stage,
+            attempt=attempt,
+            log_writer=log_writer,
+            working_directory=run_dir,
         )
 
     mocked_popen.assert_called_once()
 
-    assert result.name == "slow_step"
-    assert result.command == "slow command"
+    assert result.attempt == 1
     assert result.success is False
     assert result.exit_code is None
     assert result.passed is False

@@ -173,12 +173,10 @@ class RunResult:
 
     metadata: RunMetadata
     summary: ExecutionSummary
-    step_results: List[StepAttemptResult]
+    step_results: List[StepResult]
     artifact_dir: str | None = None
     artifact_validation_results: List[ArtifactValidationResult] = field(default_factory=list)
 
     @property
     def passed(self) -> bool:
-        return all(
-            step_attempt_results[-1].exit_code == 0 for step_attempt_results in self.step_results
-        )
+        return all(step_result.success for step_result in self.step_results)

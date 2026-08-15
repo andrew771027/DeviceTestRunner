@@ -178,8 +178,8 @@ class DeviceTestRunner:
                 if not should_retry:
                     break
 
-                if retry_policy.deloay_seconds > 0:
-                    time.sleep(retry_policy.deloay_seconds)
+                if retry_policy.delay_seconds > 0:
+                    time.sleep(retry_policy.delay_seconds)
 
             step_duration_seconds = time.perf_counter() - step_started_at
 

@@ -9,7 +9,9 @@ from runner.models import (
     LifecycleConfig,
     LifecycleStepContent,
     LifecycleSteps,
+    RetryConfig,
     RunnerConfig,
+    StepAttemptResult,
     StepResult,
 )
 
@@ -79,6 +81,10 @@ from runner.models import (
                         ),
                     ]
                 ),
+            ),
+            retry=RetryConfig(
+                max_attempts=3,
+                delay_seconds=1,
             ),
             artifact=ArtifactConfig(
                 output_dir="artifact/sample_device_config",
@@ -167,19 +173,27 @@ def test_config_contains_all_section(config: RunnerConfig):
             stage="test_stage",
             name="test_step",
             command="echo 'Hello World'",
+            attempts=1,
             success=True,
-            exit_code=0,
+            attempt_results=[
+                StepAttemptResult(
+                    attempt=1,
+                    success=True,
+                    exit_code=0,
+                    duration_seconds=1,
+                    stdout="",
+                    stderr="",
+                    stdout_log_path="",
+                    stderr_log_path="",
+                    error="",
+                )
+            ],
             duration_seconds=1,
-            stderr="",
-            stdout="",
-            stdout_log_path="",
-            stderr_log_path="",
-            error=None,
         ),
     ],
 )
 def test_step_result_passed_when_exit_code_is_zero(result):
-    assert result.passed is True
+    assert result.success is True
 
 
 @pytest.mark.parametrize(
@@ -189,16 +203,24 @@ def test_step_result_passed_when_exit_code_is_zero(result):
             stage="test_stage",
             name="test_step",
             command="echo 'Hello World'",
+            attempts=1,
             success=False,
-            exit_code=1,
+            attempt_results=[
+                StepAttemptResult(
+                    attempt=1,
+                    success=False,
+                    exit_code=1,
+                    duration_seconds=1,
+                    stdout="",
+                    stderr="",
+                    stdout_log_path="",
+                    stderr_log_path="",
+                    error="",
+                )
+            ],
             duration_seconds=1,
-            stderr="",
-            stdout="",
-            stdout_log_path="",
-            stderr_log_path="",
-            error=None,
         )
     ],
 )
 def test_step_result_failed_when_exit_code_is_not_zero(result):
-    assert result.passed is False
+    assert result.success is False

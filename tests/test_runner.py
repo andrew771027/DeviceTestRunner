@@ -81,7 +81,7 @@ class MockExecutor:
 class MockFailedOnceExecutor:
 
     def __init__(self):
-        self.call_count = 0
+        self.failed_once = False
 
     def execute(
         self,
@@ -92,14 +92,13 @@ class MockFailedOnceExecutor:
         working_directory: str | Path,
     ) -> StepAttemptResult:
 
-        self.call_count += 1
-        success = self.call_count >= 2
-
-        if success:
-            log_writer.write_stdout("success\n")
-            self.reset_counter()
-        else:
+        if not self.failed_once:
+            self.failed_once = True
+            success = False
             log_writer.write_stderr("temporary failure\n")
+        else:
+            success = True
+            log_writer.write_stdout("success\n")
 
         return StepAttemptResult(
             attempt=attempt,
@@ -111,9 +110,6 @@ class MockFailedOnceExecutor:
             stdout_log_path=str(log_writer.stdout_path),
             stderr_log_path=str(log_writer.stderr_path),
         )
-
-    def reset_counter(self):
-        self.call_count = 0
 
 
 class MockAlwaysFailExecutor:
@@ -137,6 +133,35 @@ class MockAlwaysFailExecutor:
             attempt=attempt,
             success=False,
             exit_code=1,
+            duration_seconds=0.01,
+            stdout=log_writer.stdout,
+            stderr=log_writer.stderr,
+            stdout_log_path=str(log_writer.stdout_path),
+            stderr_log_path=str(log_writer.stderr_path),
+        )
+
+
+class MockAlwaysPassExecutor:
+    def __init__(self):
+        self.call_count = 0
+
+    def execute(
+        self,
+        step: LifecycleStepContent,
+        stage: str,
+        attempt: int,
+        log_writer: StepLogWriter,
+        working_directory: str | Path,
+    ) -> StepAttemptResult:
+
+        self.call_count += 1
+
+        log_writer.write_stderr("success\n")
+
+        return StepAttemptResult(
+            attempt=attempt,
+            success=True,
+            exit_code=0,
             duration_seconds=0.01,
             stdout=log_writer.stdout,
             stderr=log_writer.stderr,
@@ -217,7 +242,7 @@ def mock_retry_config(tmp_path: Path) -> RunnerConfig:
         ),
         retry=RetryConfig(
             max_attempts=2,
-            delay_seconds=1,
+            delay_seconds=2,
         ),
         lifecycle=LifecycleConfig(
             global_setup=LifecycleSteps(steps=[mock_step("global_setup")]),
@@ -237,6 +262,7 @@ def mock_retry_config(tmp_path: Path) -> RunnerConfig:
     )
 
 
+@pytest.mark.test_lifecycle
 def test_runner_executes_all_stages_and_all_steps_success(tmp_path: Path):
     config = mock_config(tmp_path)
     executor = MockExecutor()
@@ -284,6 +310,7 @@ def test_runner_executes_all_stages_and_all_steps_success(tmp_path: Path):
     assert result.step_results[5].attempt_results[-1].stderr == ""
 
 
+@pytest.mark.test_lifecycle
 @pytest.mark.parametrize(
     argnames="failed_step_name",
     argvalues=["scenario_2"],
@@ -368,6 +395,7 @@ def test_runner_terminate_when_step_failed(tmp_path, failed_step_name):
     ).read_text(encoding="utf-8")
 
 
+@pytest.mark.test_lifecycle
 @pytest.mark.parametrize(argnames="failed_step_name", argvalues=["global_setup"])
 def test_global_setup_failure_only_run_global_teardown(tmp_path, failed_step_name):
     config = mock_config(tmp_path)
@@ -410,6 +438,7 @@ def test_global_setup_failure_only_run_global_teardown(tmp_path, failed_step_nam
     assert result.step_results[0].attempt_results[-1].stderr == f"{failed_step_name} failed"
 
 
+@pytest.mark.test_lifecycle
 @pytest.mark.parametrize(argnames="failed_step_name", argvalues=["setup"])
 def test_setup_failure_only_run_global_teardown(tmp_path, failed_step_name):
     config = mock_config(tmp_path)
@@ -467,6 +496,7 @@ def test_setup_failure_only_run_global_teardown(tmp_path, failed_step_name):
     assert "global_teardown" in (executed_names)
 
 
+@pytest.mark.artifact
 def test_runner_passes_when_artifacts_are_valid(tmp_path: Path):
     config = mock_config(tmp_path)
     executor = MockExecutor()
@@ -487,6 +517,7 @@ def test_runner_passes_when_artifacts_are_valid(tmp_path: Path):
     assert all(validation.passed for validation in result.artifact_validation_results)
 
 
+@pytest.mark.artifact
 def test_runner_fails_when_artifacts_invalid(tmp_path: Path):
     config = mock_config(tmp_path, min_size_bytes=10_000)
     executor = MockExecutor()
@@ -515,6 +546,7 @@ def test_runner_fails_when_artifacts_invalid(tmp_path: Path):
     assert "smaller than the minimum" in (failed_validation.message)
 
 
+@pytest.mark.artifact
 def test_runner_passes_without_validation_rules(tmp_path: Path):
 
     config = RunnerConfig(
@@ -571,6 +603,7 @@ def test_runner_passes_without_validation_rules(tmp_path: Path):
     assert result.artifact_validation_results == []
 
 
+@pytest.mark.retry
 def test_step_passes_after_retry(tmp_path: Path):
     config = mock_retry_config(tmp_path)
     executor = MockFailedOnceExecutor()
@@ -592,6 +625,7 @@ def test_step_passes_after_retry(tmp_path: Path):
     assert step_result.attempt_results[1].success is True
 
 
+@pytest.mark.retry
 def test_step_fails_after_max_attempts(tmp_path: Path):
     config = mock_retry_config(tmp_path)
     executor = MockAlwaysFailExecutor()
@@ -611,3 +645,69 @@ def test_step_fails_after_max_attempts(tmp_path: Path):
     assert len(step_result.attempt_results) == 2
     assert step_result.attempt_results[0].success is False
     assert step_result.attempt_results[1].success is False
+
+
+@pytest.mark.retry
+def test_successful_step_is_not_retried(tmp_path: Path):
+
+    config = mock_retry_config(tmp_path)
+    executor = MockAlwaysPassExecutor()
+    runner = DeviceTestRunner(
+        executor=executor,
+        artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
+        artifact_validator=ArtifactValidator(),
+        reporter=JsonReporter(),
+    )
+    result = runner.run(config)
+
+    assert result.step_results[0].attempts == 1
+    assert result.summary.status == "PASSED"
+
+
+@pytest.mark.retry
+def test_retry_creates_separate_log_files(tmp_path: Path):
+
+    config = mock_retry_config(tmp_path)
+    executor = MockFailedOnceExecutor()
+    runner = DeviceTestRunner(
+        executor=executor,
+        artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
+        artifact_validator=ArtifactValidator(),
+        reporter=JsonReporter(),
+    )
+    result = runner.run(config)
+
+    step_result = result.step_results[0]
+    attempt_1 = step_result.attempt_results[0]
+
+    assert Path(attempt_1.stderr_log_path).exists()
+    assert "attempt_1" in attempt_1.stderr_log_path
+
+    attempt_2 = step_result.attempt_results[1]
+
+    assert Path(attempt_2.stdout_log_path).exists()
+    assert "attempt_2" in attempt_2.stdout_log_path
+
+
+@pytest.mark.retry
+def test_retry_waits_between_attempts(tmp_path, monkeypatch):
+
+    sleep_calls = []
+
+    def fake_sleep(seconds):
+        sleep_calls.append(seconds)
+
+    monkeypatch.setattr("runner.runner.time.sleep", fake_sleep)
+
+    config = mock_retry_config(tmp_path)
+    executor = MockFailedOnceExecutor()
+    runner = DeviceTestRunner(
+        executor=executor,
+        artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
+        artifact_validator=ArtifactValidator(),
+        reporter=JsonReporter(),
+    )
+
+    runner.run(config)
+
+    assert sleep_calls == [2]

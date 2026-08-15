@@ -12,5 +12,9 @@ class RetryPolicy:
         return attempt < self.config.max_attempts
 
     @property
-    def deloay_seconds(self) -> float:
+    def delay_seconds(self) -> float:
         return self.config.delay_seconds
+
+    @property
+    def deloay_seconds(self) -> float:
+        return self.delay_seconds

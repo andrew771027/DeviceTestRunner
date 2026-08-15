@@ -2,7 +2,7 @@
 
 Device Test Runner 是一個針對 **Device Validation Domain** 設計的測試流程執行器。
 
-它負責載入測試設定、執行測試生命週期、控制外部 commands 或 scripts、保存執行結果與 artifacts，並逐步延伸至 artifact validation、retry、timeout、recorder lifecycle，以及未來的 controller／worker 架構。
+它負責載入測試設定、執行測試生命週期、控制外部 commands 或 scripts、保存並驗證執行 artifacts，以及依照 policy 重試失敗步驟。後續將延伸至 timeout、recorder lifecycle，以及 controller／worker 架構。
 
 Device Test Runner 的定位不是取代既有的硬體測試腳本，而是在既有工具之上提供一層統一的 **orchestration layer**。
 
@@ -28,7 +28,6 @@ Device Test Runner 將這些既有工具組合成一致的測試生命週期，�
 
 * Execution order
 * Step status
-* Timeout
 * Retry
 * stdout
 * stderr
@@ -36,6 +35,8 @@ Device Test Runner 將這些既有工具組合成一致的測試生命週期，�
 * Validation
 * Cleanup
 * Execution summary
+
+目前已完成 lifecycle orchestration、artifact management、artifact validation 與 retry policy；timeout、recorder lifecycle 和 distributed execution 仍在規劃中。
 
 ---
 
@@ -99,16 +100,14 @@ Config Loader
 RunnerConfig
         ↓
 DeviceTestRunner
-        ↓
-Lifecycle Orchestration
-        ↓
-CommandStepExecutor
-        ↓
-subprocess
-        ↓
-ArtifactManager
-        ↓
-report.json / stdout / stderr / artifacts
+        ├── Lifecycle Orchestration
+        ├── RetryPolicy
+        ├── SubprocessExecutor
+        ├── ArtifactManager
+        ├── ArtifactValidator
+        └── JsonReporter
+                ↓
+       result.json / per-attempt logs / validation results
 ```
 
 Device Test Runner 的核心資料流：
@@ -123,13 +122,13 @@ Executor
 StepResult
   ↓
 ArtifactManager
-  ↓
-RunResult / report.json
+        ↓
+RunResult / result.json
 ```
 
 詳細架構說明請參考：
 
-* [Architecture](docs/architecture.md)
+* [Architecture v1.5.0](docs/architecture_v1.5.0.md)
 * [Roadmap](docs/roadmap.md)
 
 ---
@@ -179,26 +178,29 @@ collect recorder artifacts
 ## Project Structure
 
 ```text
-device-test-runner/
+DeviceTestRunner/
 ├── README.md
 ├── CHANGELOG.md
+├── main.py
 ├── pyproject.toml
 ├── configs/
-│   └── sample_device_test.yaml
+│   └── sample.yaml
 ├── docs/
-│   ├── architecture.md
+│   ├── architecture_v1.5.0.md
 │   └── roadmap.md
-├── src/
-│   └── device_test_runner/
-│       ├── __init__.py
-│       ├── artifact.py
-│       ├── config_loader.py
-│       ├── executor.py
-│       ├── models.py
-│       └── runner.py
+├── runner/
+│   ├── artifact.py
+│   ├── artifact_validator.py
+│   ├── config.py
+│   ├── executor.py
+│   ├── models.py
+│   ├── reporter.py
+│   ├── retry.py
+│   └── runner.py
 └── tests/
-    ├── unit/
-    └── integration/
+    ├── test_artifact_validator.py
+    ├── test_retry.py
+    └── ...
 ```
 
 實際目錄可能隨版本演進調整。
@@ -220,6 +222,10 @@ device:
   product: pixel
   build: build_12345
 
+retry:
+  max_attempts: 3
+  delay_seconds: 1
+
 lifecycle:
   global_setup:
     steps:
@@ -239,7 +245,8 @@ lifecycle:
     steps:
       - name: run_idle_scenario
         type: command
-        command: python3 scripts/run_idle_scenario.py
+        command: |
+          printf "timestamp,power\n1,110\n" > result.csv
         timeout_second: 300
 
   teardown:
@@ -258,6 +265,19 @@ lifecycle:
 
 artifact:
   output_dir: artifacts
+  validation:
+    rules:
+      - name: check_result_exists
+        type: exists
+        path: result.csv
+
+      - name: check_result_content
+        type: csv_content
+        path: result.csv
+        required_columns:
+          - timestamp
+          - power
+        min_rows: 1
 ```
 
 ---
@@ -340,36 +360,34 @@ pytest
 pytest -v
 ```
 
-只執行 unit tests：
+只執行 retry 相關測試：
 
 ```bash
-pytest tests/unit
+pytest -m retry
 ```
 
-只執行 integration tests：
+只執行 artifact 相關測試：
 
 ```bash
-pytest tests/integration
+pytest -m artifact
 ```
 
 ---
 
 ## Running Device Test Runner
 
-實際執行方式會依目前版本的 CLI 或 entry point 調整。
-
-預期使用方式：
+使用目前的 entry point 執行：
 
 ```bash
-python3 -m device_test_runner configs/sample_device_test.yaml
+python3 main.py --config configs/sample.yaml
 ```
 
 未來 CLI 預計提供：
 
 ```bash
-device-test-runner run configs/sample_device_test.yaml
-device-test-runner validate configs/sample_device_test.yaml
-device-test-runner report show artifacts/<run-id>/report.json
+device-test-runner run configs/sample.yaml
+device-test-runner validate configs/sample.yaml
+device-test-runner report show artifacts/<run-id>/result.json
 ```
 
 ---
@@ -383,20 +401,21 @@ device-test-runner report show artifacts/<run-id>/report.json
 ```text
 artifacts/
 └── power_idle_test_20260722_223000/
-    ├── report.json
-    ├── stdout/
-    │   ├── global_setup_check_environment.log
-    │   ├── setup_check_device.log
-    │   └── scenario_run_idle_scenario.log
-    ├── stderr/
-    │   ├── global_setup_check_environment.log
-    │   ├── setup_check_device.log
-    │   └── scenario_run_idle_scenario.log
-    └── recorder/
-        └── power.csv
+    ├── result.json
+    ├── global_setup/
+    │   └── check_environment/
+    │       ├── attempt_1.stdout.log
+    │       └── attempt_1.stderr.log
+    ├── scenario/
+    │   └── run_idle_scenario/
+    │       ├── attempt_1.stdout.log
+    │       ├── attempt_1.stderr.log
+    │       ├── attempt_2.stdout.log
+    │       └── attempt_2.stderr.log
+    └── result.csv
 ```
 
-`report.json` 預期包含：
+`result.json` 包含：
 
 * Test case metadata
 * Device metadata
@@ -409,8 +428,9 @@ artifacts/
 * stdout and stderr artifact paths
 * Validation results
 * Retry information
-* Timeout information
 * Failure summary
+
+相對路徑的 artifact validation rule 會以該次 run directory 為基準解析。每一次 retry 都有獨立的 stdout／stderr log，避免後一次 attempt 覆蓋先前的診斷資訊。
 
 ---
 
@@ -421,26 +441,71 @@ artifacts/
   "metadata": {
     "test_case_id": "power_idle_test",
     "test_case_name": "Power Idle Test",
-    "device": {
-      "serial": "ABC123",
-      "product": "pixel",
-      "build": "build_12345"
-    },
-    "start_time": "2026-07-22T22:30:00",
-    "end_time": "2026-07-22T22:32:05"
+    "test_case_description": "Measure device power consumption during idle state.",
+    "device_serial": "ABC123",
+    "device_product": "pixel",
+    "device_build": "build_12345",
+    "runner_version": "1.5.0",
+    "started_at": "2026-07-22T22:30:00+00:00",
+    "finished_at": "2026-07-22T22:32:05+00:00"
   },
-  "status": "FAILED",
-  "duration_seconds": 125.0,
-  "steps": [
+  "summary": {
+    "status": "PASSED",
+    "configured_steps": 1,
+    "executed_steps": 1,
+    "passed_steps": 1,
+    "failed_steps": 0,
+    "skipped_steps": 0,
+    "configured_artifact_rules": 1,
+    "passed_artifact_rules": 1,
+    "failed_artifact_rules": 0,
+    "duration_seconds": 2.1
+  },
+  "step_results": [
     {
       "stage": "scenario",
       "name": "run_idle_scenario",
-      "command": "python3 scripts/run_idle_scenario.py",
-      "success": false,
-      "exit_code": 1,
-      "duration_seconds": 120.0
+      "command": "printf \"timestamp,power\\n1,110\\n\" > result.csv\n",
+      "attempts": 2,
+      "success": true,
+      "attempt_results": [
+        {
+          "attempt": 1,
+          "success": false,
+          "exit_code": 1,
+          "duration_seconds": 0.5,
+          "stdout": "",
+          "stderr": "temporary failure\n",
+          "stdout_log_path": ".../attempt_1.stdout.log",
+          "stderr_log_path": ".../attempt_1.stderr.log",
+          "error": ""
+        },
+        {
+          "attempt": 2,
+          "success": true,
+          "exit_code": 0,
+          "duration_seconds": 0.5,
+          "stdout": "completed\n",
+          "stderr": "",
+          "stdout_log_path": ".../attempt_2.stdout.log",
+          "stderr_log_path": ".../attempt_2.stderr.log",
+          "error": ""
+        }
+      ],
+      "duration_seconds": 2.0
     }
-  ]
+  ],
+  "artifact_validation_results": [
+    {
+      "name": "check_result_exists",
+      "type": "exists",
+      "path": "artifacts/power_idle_test_20260722_223000/result.csv",
+      "passed": true,
+      "message": "Artifact exists.",
+      "actual_size_bytes": null
+    }
+  ],
+  "artifact_dir": "artifacts/power_idle_test_20260722_223000"
 }
 ```
 
@@ -455,13 +520,20 @@ Report schema 會隨專案版本逐步擴充。
 | v1.0    | Basic YAML Runner            | Completed   |
 | v1.1    | Naming and Model Refactoring | Completed   |
 | v1.2    | Artifact Management          | Completed   |
-| v1.3    | Test Lifecycle               | In Progress |
-| v1.4    | Artifact Validation          | Planned     |
-| v1.5    | Retry Policy                 | Planned     |
+| v1.3    | Test Lifecycle               | Completed   |
+| v1.3.5  | Command Output Pipeline      | Completed   |
+| v1.4    | Artifact Validation          | Completed   |
+| v1.4.1  | Validation Improvements      | Completed   |
+| v1.5    | Retry Policy                 | Completed   |
 | v1.6    | Timeout and Cancellation     | Planned     |
 | v1.7    | Recorder Lifecycle           | Planned     |
 | v1.8    | Hook and Teardown Guarantees | Planned     |
 | v1.9    | Execution Summary            | Planned     |
+| v1.10   | Job Model                    | Planned     |
+| v1.11   | Batch Runner                 | Planned     |
+| v1.12   | Multi-Process Execution      | Planned     |
+| v1.13   | Concurrency Limit            | Planned     |
+| v1.14   | Resource / Device Lock       | Planned     |
 | v2.0    | Controller and Worker        | Future      |
 
 完整版本規劃請參考：
@@ -601,7 +673,7 @@ docs/update-roadmap
 * Example YAML 可以執行
 * Error handling 已確認
 * Artifacts 可以被保存
-* `report.json` 格式已確認
+* `result.json` 格式已確認
 * README 或 docs 已更新
 * `CHANGELOG.md` 已更新
 * 對應 GitHub Issues 已關閉
@@ -612,16 +684,21 @@ docs/update-roadmap
 
 ## Current Development Focus
 
-目前優先事項：
+目前已完成：
 
-1. 完成 v1.3 Test Lifecycle
-2. 補上歷史版本 Git tags
-3. 完善 README 與 architecture 文件
-4. 建立 CHANGELOG
-5. 建立 GitHub Project 與 Milestones
-6. 開始 v1.4 Artifact Validation
-7. 逐步完成 Retry、Timeout 與 Recorder Lifecycle
-8. 在單機 lifecycle 穩定後進入 Controller／Worker
+1. v1.3 Test Lifecycle
+2. v1.3.5 Command Execution & Log Pipeline
+3. v1.4／v1.4.1 Artifact Validation
+4. v1.5 Retry Policy 與 per-attempt logs
+
+接下來的優先事項：
+
+1. v1.6 Timeout and Cancellation
+2. v1.7 Recorder Lifecycle
+3. v1.8 Hook and Teardown Guarantees
+4. v1.9 Execution Summary
+5. Job、batch、concurrency 與 device lock
+6. 單機 execution model 穩定後進入 Controller／Worker
 
 目前不優先處理：
 
@@ -679,7 +756,7 @@ Device Validation Platform
 
 ## Documentation
 
-* [Architecture](docs/architecture.md)
+* [Architecture v1.5.0](docs/architecture_v1.5.0.md)
 * [Roadmap](docs/roadmap.md)
 * [Changelog](CHANGELOG.md)
 

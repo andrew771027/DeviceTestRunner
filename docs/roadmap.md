@@ -225,7 +225,7 @@ global_teardown
 
 ### Status
 
-In Progress
+Completed
 
 ---
 
@@ -238,27 +238,33 @@ In Progress
 ### Core Features
 
 * ArtifactValidator
-* ValidationResult
-* ValidationRule abstraction
-* FileExistsRule
-* MinimumFileSizeRule
-* Optional file extension validation
-* Required artifact configuration
+* ArtifactValidationResult
+* YAML-based validation rules
+* File existence validation
+* Minimum and maximum file size validation
+* File extension validation
+* Non-empty directory validation
+* CSV columns and row count validation
+* JSON path and expected value validation
 * Validation result aggregation
 * Validation failure 影響最終 run status
-* Validation results 寫入 report.json
+* Validation results 寫入 result.json
 
 ### Example Validation Rules
 
 ```yaml
-artifact_validation:
-  rules:
-    - type: file_exists
-      path: recorder/power.csv
+artifact:
+  output_dir: artifacts
+  validation:
+    rules:
+      - name: check_power_file
+        type: exists
+        path: recorder/power.csv
 
-    - type: minimum_file_size
-      path: recorder/power.csv
-      minimum_bytes: 1024
+      - name: check_power_file_size
+        type: file_size
+        path: recorder/power.csv
+        min_size_bytes: 1024
 ```
 
 ### Expected Report
@@ -269,12 +275,14 @@ artifact_validation:
     "status": "FAILED",
     "results": [
       {
-        "rule": "file_exists",
+        "name": "check_power_file",
+        "type": "exists",
         "path": "recorder/power.csv",
         "passed": true
       },
       {
-        "rule": "minimum_file_size",
+        "name": "check_power_file_size",
+        "type": "file_size",
         "path": "recorder/power.csv",
         "passed": false,
         "message": "File size is below minimum requirement"
@@ -294,7 +302,7 @@ artifact_validation:
 
 ### Status
 
-Planned
+Completed
 
 ---
 
@@ -309,12 +317,12 @@ Planned
 * RetryPolicy
 * maximum attempts
 * retry delay
-* retryable exit codes
-* retryable error types
-* attempt number 寫入 StepResult
+* attempt history 寫入 StepResult
 * 每次 attempt 的 stdout／stderr
 * final attempt result aggregation
-* retry metadata 寫入 report.json
+* retry metadata 寫入 result.json
+* retry configuration validation
+* 未提供 retry config 時預設只執行一次
 
 ### Example Configuration
 
@@ -322,12 +330,11 @@ Planned
 retry:
   max_attempts: 3
   delay_seconds: 5
-  retry_on_exit_codes:
-    - 1
-    - 124
 ```
 
-### Error Classification
+目前所有失敗的 command attempt 都使用相同 retry policy。依 exit code 或 error category 決定是否重試，將在後續版本擴充。
+
+### Future Error Classification
 
 初期可區分：
 
@@ -349,7 +356,7 @@ retry:
 
 ### Status
 
-Planned
+Completed
 
 ---
 
@@ -558,6 +565,46 @@ First Failure:
 * observability
 * diagnostics
 * exit code design
+
+### Status
+
+Planned
+
+---
+
+## v1.10 — Job Model
+
+### Status
+
+Planned
+
+---
+
+## v1.11 — Batch Runner
+
+### Status
+
+Planned
+
+---
+
+## v1.12 — Multi-Process Execution
+
+### Status
+
+Planned
+
+---
+
+## v1.13 — Concurrency Limit
+
+### Status
+
+Planned
+
+---
+
+## v1.14 — Resource / Device Lock
 
 ### Status
 
@@ -954,7 +1001,7 @@ Done
 * unit tests 通過
 * integration tests 通過
 * example YAML 可執行
-* report.json 格式已確認
+* result.json 格式已確認
 * error handling 已覆蓋
 * README 或 docs 已更新
 * CHANGELOG.md 已更新
@@ -967,17 +1014,15 @@ Done
 
 # 9. Current Priorities
 
-目前開發優先順序：
+目前已完成 v1.5.0，接下來的開發優先順序：
 
 ```text
-1. 完成 v1.3 Test Lifecycle
-2. 補齊 v1.0～v1.3 Git tags
-3. 建立 README.md
-4. 建立 CHANGELOG.md
-5. 建立 GitHub Project
-6. 建立 v1.4 Milestone
-7. 實作 Artifact Validation
-8. 逐步進入 Retry、Timeout 與 Recorder Lifecycle
+1. v1.6 Timeout and Cancellation
+2. v1.7 Recorder Lifecycle
+3. v1.8 Hook and Teardown Guarantees
+4. v1.9 Execution Summary
+5. v1.10～v1.14 Job、batch、multi-process、concurrency 與 device lock
+6. 單機 execution model 穩定後進入 v2.0 Controller／Worker
 ```
 
 近期不優先處理：

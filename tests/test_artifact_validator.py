@@ -25,7 +25,9 @@ def test_exists_rule_passes_when_file_exists(tmp_path: Path):
 
 
 def test_exists_rule_fails_when_file_missing(tmp_path: Path):
-    rule = ArtifactValidationRule(name="missing_file.txt", type="exists", path="missing_file.txt")
+    rule = ArtifactValidationRule(
+        name="missing_file.txt", type="exists", path="missing_file.txt"
+    )
 
     result = ArtifactValidator().validate(rule=rule, base_dir=tmp_path)
 
@@ -239,7 +241,9 @@ def test_directory_not_empty_fails_for_file(tmp_path: Path):
     target = tmp_path / "test_file"
     target.write_text("Hello World!", encoding="utf-8")
 
-    rule = ArtifactValidationRule(name="test_file", type="directory_not_empty", path="test_file")
+    rule = ArtifactValidationRule(
+        name="test_file", type="directory_not_empty", path="test_file"
+    )
 
     result = ArtifactValidator().validate(rule=rule, base_dir=tmp_path)
 
@@ -248,7 +252,9 @@ def test_directory_not_empty_fails_for_file(tmp_path: Path):
 
 
 def test_unsupported_validation_type_fails(tmp_path: Path):
-    rule = ArtifactValidationRule(name="unknown_rule", type="unsupported_type", path="output.txt")
+    rule = ArtifactValidationRule(
+        name="unknown_rule", type="unsupported_type", path="output.txt"
+    )
 
     result = ArtifactValidator().validate(rule=rule, base_dir=tmp_path)
 
@@ -285,7 +291,9 @@ def test_validate_all_returns_all_results(tmp_path: Path):
 def test_csv_content(tmp_path: Path):
 
     target = tmp_path / "test_csv_file.csv"
-    target.write_text("timestamp,power,voltage\n" "1,100,4.2\n" "2,120,4.1\n", encoding="utf-8")
+    target.write_text(
+        "timestamp,power,voltage\n" "1,100,4.2\n" "2,120,4.1\n", encoding="utf-8"
+    )
 
     rule = ArtifactValidationRule(
         name="csv_content",
@@ -367,7 +375,10 @@ def test_csv_content_fails_when_raw_too_few(tmp_path: Path):
     assert result.passed is False
     assert result.name == "csv_content"
     assert result.type == "csv_content"
-    assert result.message == f"CSV contains 1 data rows, fewer than minimum {rule.min_rows}"
+    assert (
+        result.message
+        == f"CSV contains 1 data rows, fewer than minimum {rule.min_rows}"
+    )
 
 
 def test_csv_content_fails_when_only_header(tmp_path: Path):
@@ -391,7 +402,10 @@ def test_csv_content_fails_when_only_header(tmp_path: Path):
     assert result.passed is False
     assert result.name == "csv_content"
     assert result.type == "csv_content"
-    assert result.message == f"CSV contains 0 data rows, fewer than minimum {rule.min_rows}"
+    assert (
+        result.message
+        == f"CSV contains 0 data rows, fewer than minimum {rule.min_rows}"
+    )
 
 
 def test_csv_content_fails_when_file_missing(tmp_path: Path):

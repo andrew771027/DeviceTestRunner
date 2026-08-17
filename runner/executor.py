@@ -28,7 +28,9 @@ class SubprocessExecutor:
     ) -> StepAttemptResult:
 
         if log_writer is None:
-            log_writer = self._create_default_log_writer(stage=stage, step_name=step.name)
+            log_writer = self._create_default_log_writer(
+                stage=stage, step_name=step.name
+            )
 
         environment = os.environ.copy()
 

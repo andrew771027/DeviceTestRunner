@@ -113,7 +113,8 @@ def test_config_contains_all_section(config: RunnerConfig):
     assert config.test_case.id == "power_001"
     assert config.test_case.name == "test all section"
     assert (
-        config.test_case.description == "This is the test case to test all sections are well config"
+        config.test_case.description
+        == "This is the test case to test all sections are well config"
     )
 
     assert config.device.serial == "emulator-5566"
@@ -123,7 +124,10 @@ def test_config_contains_all_section(config: RunnerConfig):
     assert len(config.lifecycle.global_setup.steps) == 1
     assert config.lifecycle.global_setup.steps[0].name == "clear_process"
     assert config.lifecycle.global_setup.steps[0].type == "command"
-    assert config.lifecycle.global_setup.steps[0].command == "bash scripts/clear_process.sh"
+    assert (
+        config.lifecycle.global_setup.steps[0].command
+        == "bash scripts/clear_process.sh"
+    )
     assert config.lifecycle.global_setup.steps[0].timeout_second == 10
 
     assert len(config.lifecycle.setup.steps) == 1
@@ -141,13 +145,17 @@ def test_config_contains_all_section(config: RunnerConfig):
     assert len(config.lifecycle.teardown.steps) == 1
     assert config.lifecycle.teardown.steps[0].name == "teardown_device"
     assert config.lifecycle.teardown.steps[0].type == "command"
-    assert config.lifecycle.teardown.steps[0].command == "bash scripts/teardown_script.sh"
+    assert (
+        config.lifecycle.teardown.steps[0].command == "bash scripts/teardown_script.sh"
+    )
     assert config.lifecycle.teardown.steps[0].timeout_second == 10
 
     assert len(config.lifecycle.global_teardown.steps) == 1
     assert config.lifecycle.global_teardown.steps[0].name == "cleanup"
     assert config.lifecycle.global_teardown.steps[0].type == "command"
-    assert config.lifecycle.global_teardown.steps[0].command == "bash scripts/cleanup.sh"
+    assert (
+        config.lifecycle.global_teardown.steps[0].command == "bash scripts/cleanup.sh"
+    )
     assert config.lifecycle.global_teardown.steps[0].timeout_second == 10
 
     assert hasattr(config.artifact, "output_dir")

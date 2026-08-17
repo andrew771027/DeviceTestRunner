@@ -83,7 +83,9 @@ class StepLogWriter:
     def stderr(self) -> str:
         return "".join(self._stderr_lines)
 
-    def _print_console(self, stream_name: str, text: str, output_stream: TextIO) -> None:
+    def _print_console(
+        self, stream_name: str, text: str, output_stream: TextIO
+    ) -> None:
         prefix = f"[{self.stage}]" f"[{self.step_name}]" f"[{stream_name}] "
 
         print(
@@ -137,7 +139,9 @@ class ArtifactManager:
             show_console=show_console,
         )
 
-    def save_step_stdout(self, run_dir: Path, stage: str, step_name: str, stdout: str) -> Path:
+    def save_step_stdout(
+        self, run_dir: Path, stage: str, step_name: str, stdout: str
+    ) -> Path:
         stdout_path, _ = self._build_step_log_paths(
             run_dir=run_dir, stage=stage, step_name=step_name
         )
@@ -145,7 +149,9 @@ class ArtifactManager:
         stdout_path.write_text(stdout, encoding="utf-8")
         return stdout_path
 
-    def save_step_stderr(self, run_dir: Path, stage: str, step_name: str, stderr: str) -> Path:
+    def save_step_stderr(
+        self, run_dir: Path, stage: str, step_name: str, stderr: str
+    ) -> Path:
         _, stderr_path = self._build_step_log_paths(
             run_dir=run_dir, stage=stage, step_name=step_name
         )

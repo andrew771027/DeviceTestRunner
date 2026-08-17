@@ -381,11 +381,16 @@ def test_runner_terminate_when_step_failed(tmp_path, failed_step_name):
     assert result.step_results[0].attempt_results[-1].stderr == ""
     assert result.step_results[1].attempt_results[-1].stderr == ""
     assert result.step_results[2].attempt_results[-1].stderr == ""
-    assert result.step_results[3].attempt_results[-1].stderr == f"{failed_step_name} failed"
+    assert (
+        result.step_results[3].attempt_results[-1].stderr
+        == f"{failed_step_name} failed"
+    )
     assert result.step_results[4].attempt_results[-1].stderr == ""
     assert result.step_results[5].attempt_results[-1].stderr == ""
 
-    failed_step_result = next(step for step in result.step_results if step.name == failed_step_name)
+    failed_step_result = next(
+        step for step in result.step_results if step.name == failed_step_name
+    )
     assert failed_step_result.stage == "scenario"
     assert failed_step_result.name == failed_step_name
     assert Path(failed_step_result.attempt_results[-1].stdout_log_path).exists()
@@ -435,7 +440,10 @@ def test_global_setup_failure_only_run_global_teardown(tmp_path, failed_step_nam
 
     assert result.step_results[0].attempt_results[-1].exit_code == 1
 
-    assert result.step_results[0].attempt_results[-1].stderr == f"{failed_step_name} failed"
+    assert (
+        result.step_results[0].attempt_results[-1].stderr
+        == f"{failed_step_name} failed"
+    )
 
 
 @pytest.mark.test_lifecycle
@@ -478,10 +486,15 @@ def test_setup_failure_only_run_global_teardown(tmp_path, failed_step_name):
     assert result.step_results[2].attempt_results[-1].exit_code == 0
 
     assert result.step_results[0].attempt_results[-1].stderr == ""
-    assert result.step_results[1].attempt_results[-1].stderr == f"{failed_step_name} failed"
+    assert (
+        result.step_results[1].attempt_results[-1].stderr
+        == f"{failed_step_name} failed"
+    )
     assert result.step_results[2].attempt_results[-1].stderr == ""
 
-    failed_step_result = next(step for step in result.step_results if step.name == failed_step_name)
+    failed_step_result = next(
+        step for step in result.step_results if step.name == failed_step_name
+    )
     assert failed_step_result.stage == "setup"
     assert failed_step_result.name == failed_step_name
     assert Path(failed_step_result.attempt_results[-1].stdout_log_path).exists()
@@ -539,7 +552,9 @@ def test_runner_fails_when_artifacts_invalid(tmp_path: Path):
     assert result.summary.failed_artifact_rules == 1
 
     failed_validation = next(
-        validation for validation in result.artifact_validation_results if not validation.passed
+        validation
+        for validation in result.artifact_validation_results
+        if not validation.passed
     )
 
     assert failed_validation.name == "test_file_size"

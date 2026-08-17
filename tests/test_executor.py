@@ -31,7 +31,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent
         ]
     ),
 )
-def test_subprocess_executor_return_success(tmp_path, test_case_id, step, stage, attempt):
+def test_subprocess_executor_return_success(
+    tmp_path, test_case_id, step, stage, attempt
+):
     executor = SubprocessExecutor(project_directory=PROJECT_ROOT)
 
     artifact_manager = ArtifactManager(tmp_path)

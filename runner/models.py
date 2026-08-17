@@ -85,7 +85,9 @@ class ArtifactValidationConfig:
 @dataclass(frozen=True)
 class ArtifactConfig:
     output_dir: str
-    validation: ArtifactValidationConfig = field(default_factory=ArtifactValidationConfig)
+    validation: ArtifactValidationConfig = field(
+        default_factory=ArtifactValidationConfig
+    )
 
 
 @dataclass(frozen=True)
@@ -108,6 +110,7 @@ class ArtifactValidationResult:
 
     actual_size_bytes: Optional[int] = None
 
+
 @dataclass(frozen=True)
 class StepAttemptResult:
     attempt: int
@@ -127,7 +130,9 @@ class StepAttemptResult:
     error: str = ""
 
     # v1.5.1
-    artifact_validation_results: list[ArtifactValidationResult] = field(default_factory=list)
+    artifact_validation_results: list[ArtifactValidationResult] = field(
+        default_factory=list
+    )
 
     @property
     def passed(self) -> bool:
@@ -181,7 +186,9 @@ class RunResult:
     summary: ExecutionSummary
     step_results: List[StepResult]
     artifact_dir: str | None = None
-    artifact_validation_results: List[ArtifactValidationResult] = field(default_factory=list)
+    artifact_validation_results: List[ArtifactValidationResult] = field(
+        default_factory=list
+    )
 
     @property
     def passed(self) -> bool:

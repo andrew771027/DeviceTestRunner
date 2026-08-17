@@ -292,7 +292,8 @@ def test_artifact_retry_defaults_to_false(tmp_path: Path):
                     - timestamp
                     - power
                   min_rows: 10
-""", encoding="utf-8"
+""",
+        encoding="utf-8",
     )
 
     config = ConfigLoader().load(config_file)
@@ -413,6 +414,7 @@ def test_load_retry_config(tmp_path: Path):
     assert config.retry.max_attempts == 3
     assert config.retry.delay_seconds == 3
 
+
 def test_load_artifact_aware_retry_rule(tmp_path: Path):
     config_file = tmp_path / "config.yaml"
     config_file.write_text(
@@ -456,7 +458,8 @@ def test_load_artifact_aware_retry_rule(tmp_path: Path):
                     - timestamp
                     - power
                   min_rows: 10
-""", encoding="utf-8"
+""",
+        encoding="utf-8",
     )
 
     config = ConfigLoader().load(config_file)
@@ -466,6 +469,7 @@ def test_load_artifact_aware_retry_rule(tmp_path: Path):
     assert rule.retry_on_failure is True
     assert rule.required_columns == ["timestamp", "power"]
     assert rule.min_rows == 10
+
 
 def test_retry_config_uses_default_values(tmp_path: Path):
     config_file = tmp_path / "config.yaml"
@@ -570,4 +574,3 @@ def test_retry_delay_seconds_must_be_positive(tmp_path: Path):
 
     with pytest.raises(ValueError, match=("retry.delay_seconds must be >= 0")):
         ConfigLoader().load(config_file)
-

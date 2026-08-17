@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 from typing import Any, Callable, List
 
-from runner.models import (ArtifactValidationResult, ArtifactValidationRule)
+from runner.models import ArtifactValidationResult, ArtifactValidationRule
 
 
 class ArtifactValidator:
@@ -30,7 +30,9 @@ class ArtifactValidator:
         self, rule: ArtifactValidationRule, base_dir: str | Path
     ) -> ArtifactValidationResult:
         resolved_base_dir = Path(base_dir)
-        resolved_path = self._resolve_path(base_dir=resolved_base_dir, configured_path=rule.path)
+        resolved_path = self._resolve_path(
+            base_dir=resolved_base_dir, configured_path=rule.path
+        )
 
         handler = self._handlers.get(rule.type)
 
@@ -67,7 +69,9 @@ class ArtifactValidator:
         return resolved_base_dir / path
 
     @staticmethod
-    def _validate_exists(rule: ArtifactValidationRule, path: Path) -> ArtifactValidationResult:
+    def _validate_exists(
+        rule: ArtifactValidationRule, path: Path
+    ) -> ArtifactValidationResult:
         passed = path.exists()
 
         if passed:
@@ -84,7 +88,9 @@ class ArtifactValidator:
         )
 
     @staticmethod
-    def _validate_file_size(rule: ArtifactValidationRule, path: Path) -> ArtifactValidationResult:
+    def _validate_file_size(
+        rule: ArtifactValidationRule, path: Path
+    ) -> ArtifactValidationResult:
         if not path.exists():
             return ArtifactValidationResult(
                 name=rule.name,
@@ -228,7 +234,9 @@ class ArtifactValidator:
         )
 
     @staticmethod
-    def _validate_csv_content(rule: ArtifactValidationRule, path: Path) -> ArtifactValidationResult:
+    def _validate_csv_content(
+        rule: ArtifactValidationRule, path: Path
+    ) -> ArtifactValidationResult:
         if not path.exists():
             return ArtifactValidationResult(
                 name=rule.name,
@@ -263,7 +271,9 @@ class ArtifactValidator:
                 actual_columns = {column.strip() for column in reader.fieldnames}
 
                 missing_columns = [
-                    column for column in rule.required_columns if column not in actual_columns
+                    column
+                    for column in rule.required_columns
+                    if column not in actual_columns
                 ]
 
                 if missing_columns:
@@ -341,7 +351,9 @@ class ArtifactValidator:
         missing_paths = []
 
         for json_path in rule.required_json_paths:
-            exists, _ = ArtifactValidator._get_json_path_value(data=data, json_path=json_path)
+            exists, _ = ArtifactValidator._get_json_path_value(
+                data=data, json_path=json_path
+            )
 
             if not exists:
                 missing_paths.append(json_path)

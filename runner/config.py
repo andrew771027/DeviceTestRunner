@@ -70,7 +70,9 @@ class ConfigLoader:
 
         device = raw["device"]
 
-        return DeviceInfo(serial=device["serial"], product=device["product"], build=device["build"])
+        return DeviceInfo(
+            serial=device["serial"], product=device["product"], build=device["build"]
+        )
 
     @staticmethod
     def _load_steps(raw: dict[str, Any]) -> LifecycleSteps:

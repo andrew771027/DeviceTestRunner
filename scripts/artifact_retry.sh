@@ -25,7 +25,7 @@ if [ "$COUNT" -eq 1 ]; then
     exit 0
 fi
 
-fi [ "$COUNT" -eq 2 ]; then
+if [ "$COUNT" -eq 2 ]; then
     echo "Generating insufficient rows"
     printf \
     "timestamp, power\n1,100\n" \

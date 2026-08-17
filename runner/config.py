@@ -99,6 +99,8 @@ class ConfigLoader:
                     name=rule["name"],
                     type=rule["type"],
                     path=rule["path"],
+                    after_step=rule.get("after_step"),
+                    retry_on_failure=rule.get("retry_on_failure", False),
                     min_size_bytes=rule.get("min_size_bytes"),
                     max_size_bytes=rule.get("max_size_bytes"),
                     allowed_extensions=rule.get("allowed_extensions", []),

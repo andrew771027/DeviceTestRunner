@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 from typing import Any, Callable, List
 
-from runner.models import ArtifactValidationResult, ArtifactValidationRule
+from runner.models import (ArtifactValidationResult, ArtifactValidationRule)
 
 
 class ArtifactValidator:

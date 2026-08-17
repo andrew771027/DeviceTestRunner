@@ -8,6 +8,7 @@ from runner.artifact_validator import ArtifactValidator
 from runner.executor import SubprocessExecutor
 from runner.models import (
     ArtifactValidationResult,
+    ArtifactValidationRule, 
     ExecutionSummary,
     LifecycleSteps,
     RetryConfig,
@@ -22,7 +23,7 @@ from runner.retry import RetryPolicy
 
 
 class DeviceTestRunner:
-    VERSION = "1.5.0"
+    VERSION = "1.5.1"
 
     def __init__(
         self,
@@ -51,7 +52,7 @@ class DeviceTestRunner:
         global_setup_success = self._run_stage(
             stage="global_setup",
             steps=config.lifecycle.global_setup.steps,
-            retry_config=config.retry,
+            config=config,
             run_dir=run_dir,
             artifact_manager=self.artifact_manager,
             step_results=step_results,
@@ -63,7 +64,7 @@ class DeviceTestRunner:
             setup_success = self._run_stage(
                 stage="setup",
                 steps=config.lifecycle.setup.steps,
-                retry_config=config.retry,
+                config=config,
                 run_dir=run_dir,
                 artifact_manager=self.artifact_manager,
                 step_results=step_results,
@@ -75,7 +76,7 @@ class DeviceTestRunner:
                 self._run_stage(
                     stage="scenario",
                     steps=config.lifecycle.scenario.steps,
-                    retry_config=config.retry,
+                    config=config,
                     run_dir=run_dir,
                     artifact_manager=self.artifact_manager,
                     step_results=step_results,
@@ -85,7 +86,7 @@ class DeviceTestRunner:
                 self._run_stage(
                     stage="teardown",
                     steps=config.lifecycle.teardown.steps,
-                    retry_config=config.retry,
+                    config=config,
                     run_dir=run_dir,
                     artifact_manager=self.artifact_manager,
                     step_results=step_results,
@@ -95,7 +96,7 @@ class DeviceTestRunner:
             self._run_stage(
                 stage="global_teardown",
                 steps=config.lifecycle.global_teardown.steps,
-                retry_config=config.retry,
+                config=config,
                 run_dir=run_dir,
                 artifact_manager=self.artifact_manager,
                 step_results=step_results,
@@ -128,7 +129,7 @@ class DeviceTestRunner:
         self,
         stage: str,
         steps: List[LifecycleSteps],
-        retry_config: RetryConfig,
+        config: RunnerConfig,
         run_dir: Path,
         artifact_manager: ArtifactManager,
         step_results: List[StepResult],
@@ -136,7 +137,7 @@ class DeviceTestRunner:
     ) -> bool:
 
         stage_success = True
-        retry_policy = RetryPolicy(retry_config)
+        retry_policy = RetryPolicy(config=config.retry)
 
         for step in steps:
 
@@ -144,9 +145,11 @@ class DeviceTestRunner:
 
             step_started_at = time.perf_counter()
 
-            final_success = False
+            step_success = False
 
-            for attempt in range(1, retry_config.max_attempts + 1):
+            retry_rules = self._get_retry_rules_for_step(step_name=step.name, config=config)
+
+            for attempt in range(1, config.retry.max_attempts + 1):
 
                 log_writer = artifact_manager.create_step_log_writer(
                     run_dir=run_dir,
@@ -157,7 +160,7 @@ class DeviceTestRunner:
                 )
 
                 with log_writer:
-                    attempt_result = self.executor.execute(
+                    process_result = self.executor.execute(
                         step=step,
                         stage=stage,
                         attempt=attempt,
@@ -165,14 +168,34 @@ class DeviceTestRunner:
                         working_directory=run_dir,
                     )
 
+                artifact_results: list[ArtifactValidationResult] = []
+
+                if process_result and retry_rules:
+                    artifact_results = self.artifact_validator.validate_all(rules=retry_rules, base_dir=run_dir)
+
+                attempt_success = process_result.success and all(result.passed for result in artifact_results)
+
+                attempt_result = StepAttemptResult(
+                    attempt=attempt,
+                    success=attempt_success,
+                    exit_code=process_result.exit_code,
+                    duration_seconds=process_result.duration_seconds,
+                    stdout=process_result.stdout,
+                    stderr=process_result.stderr,
+                    stdout_log_path=process_result.stdout_log_path,
+                    stderr_log_path=process_result.stderr_log_path,
+                    error=process_result.error,
+                    artifact_validation_results=artifact_results,
+                )
+
                 attempt_results.append(attempt_result)
 
-                if attempt_result.success:
-                    final_success = True
+                if attempt_success:
+                    step_success = True
                     break
 
                 should_retry = retry_policy.should_retry(
-                    attempt=attempt, success=attempt_result.success
+                    attempt=attempt, process_success=attempt_result.success
                 )
 
                 if not should_retry:
@@ -187,7 +210,7 @@ class DeviceTestRunner:
                 stage=stage,
                 name=step.name,
                 command=step.command,
-                success=final_success,
+                success=step_success,
                 attempts=len(attempt_results),
                 attempt_results=attempt_results,
                 duration_seconds=step_duration_seconds,
@@ -298,3 +321,13 @@ class DeviceTestRunner:
             return "FAILED"
 
         return "PASSED"
+
+    @staticmethod
+    def _get_retry_rules_for_step(
+        step_name: str,
+        config: RunnerConfig,
+    ) -> list[ArtifactValidationRule]:
+
+        return [
+            rule for rule in config.artifact.validation.rules if rule.after_step == step_name and rule.retry_on_failure is True
+        ]

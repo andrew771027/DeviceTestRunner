@@ -56,6 +56,10 @@ class ArtifactValidationRule:
     type: str
     path: str
 
+    # v1.5.1
+    after_step: Optional[str] = None
+    retry_on_failure: bool = False
+
     # file_size
     max_size_bytes: Optional[int] = None
     min_size_bytes: Optional[int] = None
@@ -95,6 +99,16 @@ class RunnerConfig:
 
 
 @dataclass(frozen=True)
+class ArtifactValidationResult:
+    name: str
+    type: str
+    path: str
+    passed: bool
+    message: str
+
+    actual_size_bytes: Optional[int] = None
+
+@dataclass(frozen=True)
 class StepAttemptResult:
     attempt: int
     success: bool
@@ -112,6 +126,9 @@ class StepAttemptResult:
     stderr_log_path: str
     error: str = ""
 
+    # v1.5.1
+    artifact_validation_results: list[ArtifactValidationResult] = field(default_factory=list)
+
     @property
     def passed(self) -> bool:
         return self.exit_code == 0
@@ -126,17 +143,6 @@ class StepResult:
     success: bool
     attempt_results: list[StepAttemptResult]
     duration_seconds: float
-
-
-@dataclass(frozen=True)
-class ArtifactValidationResult:
-    name: str
-    type: str
-    path: str
-    passed: bool
-    message: str
-
-    actual_size_bytes: Optional[int] = None
 
 
 @dataclass(frozen=True)

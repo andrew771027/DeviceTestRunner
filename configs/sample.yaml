@@ -45,6 +45,12 @@ lifecycle:
         type: command
         command: bash "$DEVICE_TEST_RUNNER_ROOT/scripts/unstable.sh"
         timeout_second: 10
+      - name: run_retry_command
+        type: command
+        command: >
+          bash
+          "$DEVICE_TEST_RUNNER_ROOT/scripts/artifact_retry.sh"
+        timeout_second: 5
   teardown:
     steps:
       - name: collect_artifact
@@ -106,3 +112,15 @@ artifact:
         expected_json_values:
           status: PASSED
           metrics.sample_count: 2
+      - name: test_retry_mechanism
+        type: csv_content
+        path: results/retry.csv
+
+        after_step: run_retry_command
+        retry_on_failure: true
+
+        required_columns:
+          - timestamp
+          - power
+
+        min_rows: 2

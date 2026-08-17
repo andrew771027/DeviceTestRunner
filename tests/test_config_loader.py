@@ -251,6 +251,57 @@ def test_artifact_validation_is_optional(tmp_path: Path):
     assert config.artifact.validation.rules == []
 
 
+def test_artifact_retry_defaults_to_false(tmp_path: Path):
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        """
+    test_case:
+        id: retry_001
+        name: Retry Test
+        description: retry
+    device:
+        serial: fake_serial
+        product: fake_pixel
+        build: fake_build
+    retry: 
+        max_attempts: 3
+        delay_seconds: 1
+    lifecycle:
+        global_setup:
+            steps: []
+        setup:
+            steps:
+            - name: run_power_test
+              type: command
+              command: echo test
+              timeout_second: 5
+        scenario:
+            steps: []
+        teardown:
+            steps: []
+        global_teardown:
+            steps: []
+    artifact:
+        output_dir: artifacts
+        validation:
+            rules:
+                - name: csv_content
+                  type: csv_content
+                  path: results/power.csv
+                  required_columns:
+                    - timestamp
+                    - power
+                  min_rows: 10
+""", encoding="utf-8"
+    )
+
+    config = ConfigLoader().load(config_file)
+    rule = config.artifact.validation.rules[0]
+
+    assert rule.after_step is None
+    assert rule.retry_on_failure is False
+
+
 def test_load_csv_and_json_validation_rules(tmp_path: Path):
     config_file = tmp_path / "config.yaml"
     config_file.write_text(
@@ -362,6 +413,59 @@ def test_load_retry_config(tmp_path: Path):
     assert config.retry.max_attempts == 3
     assert config.retry.delay_seconds == 3
 
+def test_load_artifact_aware_retry_rule(tmp_path: Path):
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        """
+    test_case:
+        id: retry_001
+        name: Retry Test
+        description: retry
+    device:
+        serial: fake_serial
+        product: fake_pixel
+        build: fake_build
+    retry: 
+        max_attempts: 3
+        delay_seconds: 1
+    lifecycle:
+        global_setup:
+            steps: []
+        setup:
+            steps:
+            - name: run_power_test
+              type: command
+              command: echo test
+              timeout_second: 5
+        scenario:
+            steps: []
+        teardown:
+            steps: []
+        global_teardown:
+            steps: []
+    artifact:
+        output_dir: artifacts
+        validation:
+            rules:
+                - name: csv_content
+                  type: csv_content
+                  path: results/power.csv
+                  after_step: run_power_test
+                  retry_on_failure: true
+                  required_columns:
+                    - timestamp
+                    - power
+                  min_rows: 10
+""", encoding="utf-8"
+    )
+
+    config = ConfigLoader().load(config_file)
+    rule = config.artifact.validation.rules[0]
+
+    assert rule.after_step == "run_power_test"
+    assert rule.retry_on_failure is True
+    assert rule.required_columns == ["timestamp", "power"]
+    assert rule.min_rows == 10
 
 def test_retry_config_uses_default_values(tmp_path: Path):
     config_file = tmp_path / "config.yaml"
@@ -466,3 +570,4 @@ def test_retry_delay_seconds_must_be_positive(tmp_path: Path):
 
     with pytest.raises(ValueError, match=("retry.delay_seconds must be >= 0")):
         ConfigLoader().load(config_file)
+

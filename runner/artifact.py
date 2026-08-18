@@ -1,8 +1,11 @@
 import re
+import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, TextIO
+
+from runner.models import ArtifactValidationRule
 
 
 class StepLogWriter:
@@ -83,9 +86,7 @@ class StepLogWriter:
     def stderr(self) -> str:
         return "".join(self._stderr_lines)
 
-    def _print_console(
-        self, stream_name: str, text: str, output_stream: TextIO
-    ) -> None:
+    def _print_console(self, stream_name: str, text: str, output_stream: TextIO) -> None:
         prefix = f"[{self.stage}]" f"[{self.step_name}]" f"[{stream_name}] "
 
         print(
@@ -139,9 +140,7 @@ class ArtifactManager:
             show_console=show_console,
         )
 
-    def save_step_stdout(
-        self, run_dir: Path, stage: str, step_name: str, stdout: str
-    ) -> Path:
+    def save_step_stdout(self, run_dir: Path, stage: str, step_name: str, stdout: str) -> Path:
         stdout_path, _ = self._build_step_log_paths(
             run_dir=run_dir, stage=stage, step_name=step_name
         )
@@ -149,15 +148,29 @@ class ArtifactManager:
         stdout_path.write_text(stdout, encoding="utf-8")
         return stdout_path
 
-    def save_step_stderr(
-        self, run_dir: Path, stage: str, step_name: str, stderr: str
-    ) -> Path:
+    def save_step_stderr(self, run_dir: Path, stage: str, step_name: str, stderr: str) -> Path:
         _, stderr_path = self._build_step_log_paths(
             run_dir=run_dir, stage=stage, step_name=step_name
         )
         stderr_path.parent.mkdir(parents=True, exist_ok=True)
         stderr_path.write_text(stderr, encoding="utf-8")
         return stderr_path
+
+    def cleanup_validation_targets(
+        self, run_dir: Path, rules: list[ArtifactValidationRule]
+    ) -> None:
+        for rule in rules:
+            path = Path(rule.path)
+
+            if not path.is_absolute():
+                path = run_dir / path
+            if not path.exists():
+                continue
+
+            if path.is_dir():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
 
     def _build_step_log_paths(
         self, run_dir: Path, stage: str, step_name: str, attempt: int

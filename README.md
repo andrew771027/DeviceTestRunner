@@ -2,7 +2,7 @@
 
 Device Test Runner 是一個針對 **Device Validation Domain** 設計的測試流程執行器。
 
-它負責載入測試設定、執行測試生命週期、控制外部 commands 或 scripts、保存並驗證執行 artifacts，以及依照 policy 重試失敗步驟。後續將延伸至 timeout、recorder lifecycle，以及 controller／worker 架構。
+它負責載入測試設定、執行測試生命週期、控制外部 commands 或 scripts、保存並驗證執行 artifacts，以及依照 policy 重試 command 或 artifact validation 失敗的步驟。後續將延伸至 timeout、recorder lifecycle，以及 controller／worker 架構。
 
 Device Test Runner 的定位不是取代既有的硬體測試腳本，而是在既有工具之上提供一層統一的 **orchestration layer**。
 
@@ -36,7 +36,7 @@ Device Test Runner 將這些既有工具組合成一致的測試生命週期，�
 * Cleanup
 * Execution summary
 
-目前已完成 lifecycle orchestration、artifact management、artifact validation 與 retry policy；timeout、recorder lifecycle 和 distributed execution 仍在規劃中。
+目前 v1.5.1 已完成 lifecycle orchestration、artifact management、artifact validation、retry policy 與 artifact-aware retry；timeout、recorder lifecycle 和 distributed execution 仍在規劃中。
 
 ---
 
@@ -128,7 +128,7 @@ RunResult / result.json
 
 詳細架構說明請參考：
 
-* [Architecture v1.5.0](docs/architecture_v1.5.0.md)
+* [Architecture v1.5.0](docs/architecture/architecture_v1.5.0.md)
 * [Roadmap](docs/roadmap.md)
 
 ---
@@ -274,11 +274,15 @@ artifact:
       - name: check_result_content
         type: csv_content
         path: result.csv
+        after_step: run_idle_scenario
+        retry_on_failure: true
         required_columns:
           - timestamp
           - power
         min_rows: 1
 ```
+
+`after_step` 將 validation rule 綁定到指定 step；當 `retry_on_failure: true` 時，runner 會在該 step 每次 command 成功後立即驗證 artifact。command 或綁定的 artifact rule 任一失敗，都會依全域 `retry.max_attempts` 與 `retry.delay_seconds` 重試。未設定 `retry_on_failure` 的規則不會觸發 step retry，仍會在 lifecycle 結束後進行 final validation，並可使最終 run status 成為 `FAILED`。
 
 ---
 
@@ -445,7 +449,7 @@ artifacts/
     "device_serial": "ABC123",
     "device_product": "pixel",
     "device_build": "build_12345",
-    "runner_version": "1.5.0",
+    "runner_version": "1.5.1",
     "started_at": "2026-07-22T22:30:00+00:00",
     "finished_at": "2026-07-22T22:32:05+00:00"
   },
@@ -478,7 +482,17 @@ artifacts/
           "stderr": "temporary failure\n",
           "stdout_log_path": ".../attempt_1.stdout.log",
           "stderr_log_path": ".../attempt_1.stderr.log",
-          "error": ""
+          "error": "",
+          "artifact_validation_results": [
+            {
+              "name": "check_result_content",
+              "type": "csv_content",
+              "path": ".../result.csv",
+              "passed": false,
+              "message": "Required CSV column is missing.",
+              "actual_size_bytes": null
+            }
+          ]
         },
         {
           "attempt": 2,
@@ -489,7 +503,17 @@ artifacts/
           "stderr": "",
           "stdout_log_path": ".../attempt_2.stdout.log",
           "stderr_log_path": ".../attempt_2.stderr.log",
-          "error": ""
+          "error": "",
+          "artifact_validation_results": [
+            {
+              "name": "check_result_content",
+              "type": "csv_content",
+              "path": ".../result.csv",
+              "passed": true,
+              "message": "CSV content is valid.",
+              "actual_size_bytes": null
+            }
+          ]
         }
       ],
       "duration_seconds": 2.0
@@ -525,6 +549,7 @@ Report schema 會隨專案版本逐步擴充。
 | v1.4    | Artifact Validation          | Completed   |
 | v1.4.1  | Validation Improvements      | Completed   |
 | v1.5    | Retry Policy                 | Completed   |
+| v1.5.1  | Artifact-Aware Retry          | Completed   |
 | v1.6    | Timeout and Cancellation     | Planned     |
 | v1.7    | Recorder Lifecycle           | Planned     |
 | v1.8    | Hook and Teardown Guarantees | Planned     |
@@ -600,6 +625,7 @@ MAJOR.MINOR.PATCH
 v1.4.0
 v1.4.1
 v1.5.0
+v1.5.1
 v2.0.0
 ```
 
@@ -614,6 +640,7 @@ v2.0.0
 * `v1.4.0`：加入 Artifact Validation
 * `v1.4.1`：修正 file size validation
 * `v1.5.0`：加入 Retry Policy
+* `v1.5.1`：加入 step-scoped Artifact-Aware Retry
 * `v2.0.0`：加入 Controller／Worker architecture
 
 ---
@@ -690,6 +717,7 @@ docs/update-roadmap
 2. v1.3.5 Command Execution & Log Pipeline
 3. v1.4／v1.4.1 Artifact Validation
 4. v1.5 Retry Policy 與 per-attempt logs
+5. v1.5.1 Artifact-Aware Retry 與 per-attempt validation results
 
 接下來的優先事項：
 
@@ -756,7 +784,7 @@ Device Validation Platform
 
 ## Documentation
 
-* [Architecture v1.5.0](docs/architecture_v1.5.0.md)
+* [Architecture v1.5.0](docs/architecture/architecture_v1.5.0.md)
 * [Roadmap](docs/roadmap.md)
 * [Changelog](CHANGELOG.md)
 

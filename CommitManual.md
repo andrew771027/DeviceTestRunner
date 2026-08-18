@@ -7,5 +7,6 @@
 - [ ] Architecture
 - [ ] Change Log
 - [ ] Definition Of Done
-- [ ] Test Matrix (Acceptance Criteria)
+- [ ] Test Matrix
+- [ ] Acceptance Criteria
 - [ ] Tag

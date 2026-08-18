@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [1.5.1]
+
+### Added
+
+- Artifact-aware retry rules with `after_step` and `retry_on_failure`
+- Per-attempt artifact validation results in `StepAttemptResult` and `result.json`
+- Unit and integration coverage for retryable, non-retryable, and exhausted artifact validation failures
+
+### Changed
+
+- A step attempt now succeeds only when both the command and its retry-enabled artifact rules pass
+- Artifact retry rules are filtered by their associated step; rules without retry opt-in remain part of final validation only
+- Runner and generated report metadata now identify version `1.5.1`
+
 ## [1.5.0]
 
 ### Added

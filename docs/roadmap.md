@@ -360,6 +360,50 @@ Completed
 
 ---
 
+## v1.5.1 — Artifact-Aware Retry
+
+### Goal
+
+讓 artifact validation 成為 step attempt 成功條件的一部分，使 command 成功但輸出 artifact 尚未就緒或內容無效時，仍可依 retry policy 重試該步驟。
+
+### Core Features
+
+* `after_step` 將 artifact validation rule 綁定到指定 step
+* `retry_on_failure` 明確控制 artifact failure 是否觸發 retry
+* 每次 attempt 在 command 成功後立即執行該 step 的 retry-enabled rules
+* command 與綁定的 artifact rules 全部通過，attempt 才算成功
+* 每次 attempt 的 validation results 寫入 `StepAttemptResult` 與 `result.json`
+* 非 retry-enabled rules 保留在 lifecycle 結束後的 final validation
+* artifact retry exhausted 時停止後續 scenario steps，並維持 teardown guarantees
+
+### Example Configuration
+
+```yaml
+retry:
+  max_attempts: 3
+  delay_seconds: 1
+
+artifact:
+  output_dir: artifacts
+  validation:
+    rules:
+      - name: validate_power_csv
+        type: csv_content
+        path: results/power.csv
+        after_step: run_power_test
+        retry_on_failure: true
+        required_columns:
+          - timestamp
+          - power
+        min_rows: 2
+```
+
+### Status
+
+Completed
+
+---
+
 ## v1.6 — Timeout and Cancellation
 
 ### Goal
@@ -901,6 +945,7 @@ Example:
 v1.4.0
 v1.4.1
 v1.5.0
+v1.5.1
 v2.0.0
 ```
 
@@ -924,6 +969,7 @@ Example:
 ```text
 v1.4 artifact validation
 v1.5 retry policy
+v1.5.1 artifact-aware retry
 ```
 
 ## PATCH
@@ -1014,7 +1060,7 @@ Done
 
 # 9. Current Priorities
 
-目前已完成 v1.5.0，接下來的開發優先順序：
+目前已完成 v1.5.1，接下來的開發優先順序：
 
 ```text
 1. v1.6 Timeout and Cancellation

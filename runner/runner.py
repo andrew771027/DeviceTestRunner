@@ -44,9 +44,7 @@ class DeviceTestRunner:
         started_counter = time.perf_counter()
         artifact_results: List[ArtifactValidationResult] = []
 
-        run_dir = self.artifact_manager.create_run_directory(
-            test_case_id=config.test_case.id
-        )
+        run_dir = self.artifact_manager.create_run_directory(test_case_id=config.test_case.id)
 
         step_results: list[StepResult] = []
 
@@ -148,9 +146,7 @@ class DeviceTestRunner:
 
             step_success = False
 
-            retry_rules = self._get_retry_rules_for_step(
-                step_name=step.name, config=config
-            )
+            retry_rules = self._get_retry_rules_for_step(step_name=step.name, config=config)
 
             for attempt in range(1, config.retry.max_attempts + 1):
 
@@ -202,7 +198,9 @@ class DeviceTestRunner:
                     break
 
                 should_retry = retry_policy.should_retry(
-                    attempt=attempt, process_success=attempt_result.success, artifact_results=artifact_results
+                    attempt=attempt,
+                    process_success=attempt_result.success,
+                    artifact_results=artifact_results,
                 )
 
                 if not should_retry:
@@ -317,9 +315,7 @@ class DeviceTestRunner:
         )
 
     @staticmethod
-    def _calculate_status(
-        failed_steps: int, skipped_steps: int, failed_artifact_rules: int
-    ) -> str:
+    def _calculate_status(failed_steps: int, skipped_steps: int, failed_artifact_rules: int) -> str:
         if failed_steps > 0:
             return "FAILED"
 

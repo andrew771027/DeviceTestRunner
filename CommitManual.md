@@ -1,5 +1,6 @@
-# CommitManual
+# Commit Manual
 
+- [ ] Version
 - [ ] Source code
 - [ ] Test Code
 - [ ] Readme

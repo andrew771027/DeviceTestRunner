@@ -202,7 +202,7 @@ class DeviceTestRunner:
                     break
 
                 should_retry = retry_policy.should_retry(
-                    attempt=attempt, process_success=attempt_result.success
+                    attempt=attempt, process_success=attempt_result.success, artifact_results=artifact_results
                 )
 
                 if not should_retry:

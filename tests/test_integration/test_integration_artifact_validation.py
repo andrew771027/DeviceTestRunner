@@ -315,7 +315,7 @@ def test_csv_and_json_content_validation(tmp_path: Path):
         (Path(result.artifact_dir) / "result.json").read_text(encoding="utf-8")
     )
 
-    assert saved_report["metadata"]["runner_version"] == "1.5.0"
+    assert saved_report["metadata"]["runner_version"] == "1.5.1"
     assert saved_report["summary"]["status"] == "PASSED"
 
 

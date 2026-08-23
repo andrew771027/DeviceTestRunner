@@ -1,5 +1,17 @@
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, List, Optional
+
+
+class FailureType(str, Enum):
+    NONE = "none"
+
+    TIMEOUT = "tiimeout"
+    DEVICE_OFFLINE = "device_offline"
+    PROCESS_ERROR = "process_error"
+
+    ARTIFACT_MISSING = "artifact_missing"
+    ARTIFACT_INVALID = "artifact_invalid"
 
 
 @dataclass(frozen=True)
@@ -85,9 +97,7 @@ class ArtifactValidationConfig:
 @dataclass(frozen=True)
 class ArtifactConfig:
     output_dir: str
-    validation: ArtifactValidationConfig = field(
-        default_factory=ArtifactValidationConfig
-    )
+    validation: ArtifactValidationConfig = field(default_factory=ArtifactValidationConfig)
 
 
 @dataclass(frozen=True)
@@ -108,6 +118,8 @@ class ArtifactValidationResult:
     passed: bool
     message: str
 
+    failure_type: FailureType
+
     actual_size_bytes: Optional[int] = None
 
 
@@ -115,6 +127,7 @@ class ArtifactValidationResult:
 class StepAttemptResult:
     attempt: int
     success: bool
+    failure_type: FailureType
     exit_code: Optional[int]
     duration_seconds: float
 
@@ -130,9 +143,7 @@ class StepAttemptResult:
     error: str = ""
 
     # v1.5.1
-    artifact_validation_results: list[ArtifactValidationResult] = field(
-        default_factory=list
-    )
+    artifact_validation_results: list[ArtifactValidationResult] = field(default_factory=list)
 
     @property
     def passed(self) -> bool:
@@ -186,9 +197,7 @@ class RunResult:
     summary: ExecutionSummary
     step_results: List[StepResult]
     artifact_dir: str | None = None
-    artifact_validation_results: List[ArtifactValidationResult] = field(
-        default_factory=list
-    )
+    artifact_validation_results: List[ArtifactValidationResult] = field(default_factory=list)
 
     @property
     def passed(self) -> bool:

@@ -6,10 +6,12 @@ from typing import List
 from runner.artifact import ArtifactManager
 from runner.artifact_validator import ArtifactValidator
 from runner.executor import SubprocessExecutor
+from runner.failure import FailureClassifier
 from runner.models import (
     ArtifactValidationResult,
     ArtifactValidationRule,
     ExecutionSummary,
+    FailureType,
     LifecycleSteps,
     RunMetadata,
     RunnerConfig,
@@ -22,19 +24,21 @@ from runner.retry import RetryPolicy
 
 
 class DeviceTestRunner:
-    VERSION = "1.5.1"
+    VERSION = "1.5.2"
 
     def __init__(
         self,
         executor: SubprocessExecutor,
         artifact_manager: ArtifactManager,
         artifact_validator: ArtifactValidator,
+        failure_classifier: FailureClassifier,
         reporter: JsonReporter,
         show_console_output: bool = True,
     ):
         self.executor = executor
         self.artifact_manager = artifact_manager
         self.artifact_validator = artifact_validator
+        self.failure_classifier = failure_classifier
         self.reporter = reporter
 
         self.show_console_output = show_console_output
@@ -92,19 +96,20 @@ class DeviceTestRunner:
                     stop_on_failure=False,
                 )
 
-            self._run_stage(
-                stage="global_teardown",
-                steps=config.lifecycle.global_teardown.steps,
-                config=config,
-                run_dir=run_dir,
-                artifact_manager=self.artifact_manager,
-                step_results=step_results,
-                stop_on_failure=False,
-            )
+        self._run_stage(
+            stage="global_teardown",
+            steps=config.lifecycle.global_teardown.steps,
+            config=config,
+            run_dir=run_dir,
+            artifact_manager=self.artifact_manager,
+            step_results=step_results,
+            stop_on_failure=False,
+        )
 
-            artifact_results = self.artifact_validator.validate_all(
-                rules=config.artifact.validation.rules, base_dir=run_dir
-            )
+        # 最終 Run-level Artifact Validation
+        artifact_results = self.artifact_validator.validate_all(
+            rules=config.artifact.validation.rules, base_dir=run_dir
+        )
 
         finished_at = datetime.now(timezone.utc)
 
@@ -169,18 +174,43 @@ class DeviceTestRunner:
 
                 artifact_results: list[ArtifactValidationResult] = []
 
-                if process_result and retry_rules:
+                # 只有 process 成功時，
+                # artifact validation 才有意義。
+                if process_result.success and retry_rules:
                     artifact_results = self.artifact_validator.validate_all(
                         rules=retry_rules, base_dir=run_dir
                     )
 
-                attempt_success = process_result.success and all(
-                    result.passed for result in artifact_results
+                artifact_failure_type = self.failure_classifier.classify_artifact_failure(
+                    artifact_results=artifact_results
                 )
+
+                #
+                # Failure priority:
+                #
+                # Process Failure
+                #     >
+                # Artifact Failure
+                #     >
+                # NONE
+                #
+                if not process_result.success:
+                    final_failure_type = process_result.failure_type
+                elif artifact_failure_type != FailureType.NONE:
+                    final_failure_type = artifact_failure_type
+                else:
+                    final_failure_type = FailureType.NONE
+
+                attempt_success = final_failure_type == FailureType.NONE
+
+                # attempt_success = process_result.success and all(
+                # result.passed for result in artifact_results
+                # )
 
                 attempt_result = StepAttemptResult(
                     attempt=attempt,
                     success=attempt_success,
+                    failure_type=(final_failure_type),
                     exit_code=process_result.exit_code,
                     duration_seconds=process_result.duration_seconds,
                     stdout=process_result.stdout,
@@ -199,8 +229,7 @@ class DeviceTestRunner:
 
                 should_retry = retry_policy.should_retry(
                     attempt=attempt,
-                    process_success=attempt_result.success,
-                    artifact_results=artifact_results,
+                    failure_type=(final_failure_type),
                 )
 
                 if not should_retry:

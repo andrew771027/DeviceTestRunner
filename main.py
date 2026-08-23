@@ -6,6 +6,7 @@ from runner.artifact import ArtifactManager
 from runner.artifact_validator import ArtifactValidator
 from runner.config import ConfigLoader
 from runner.executor import SubprocessExecutor
+from runner.failure import FailureClassifier
 from runner.reporter import JsonReporter
 from runner.runner import DeviceTestRunner
 
@@ -25,10 +26,15 @@ def main():
 
         config = ConfigLoader().load(args.config)
 
+        failure_classifier = FailureClassifier()
+
         runner = DeviceTestRunner(
-            executor=SubprocessExecutor(project_directory=PROJECT_ROOT),
+            executor=SubprocessExecutor(
+                project_directory=PROJECT_ROOT, failure_classifier=failure_classifier
+            ),
             artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
             artifact_validator=ArtifactValidator(),
+            failure_classifier=failure_classifier,
             reporter=JsonReporter(),
         )
 

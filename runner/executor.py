@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TextIO
 
 from runner.artifact import StepLogWriter
+from runner.failure import FailureClassifier
 from runner.models import LifecycleStepContent, StepAttemptResult
 
 
@@ -15,8 +16,10 @@ class SubprocessExecutor:
     def __init__(
         self,
         project_directory: str | Path,
+        failure_classifier: FailureClassifier,
     ):
         self.project_directory = Path(project_directory).resolve()
+        self.failure_classifier = failure_classifier
 
     def execute(
         self,
@@ -28,9 +31,7 @@ class SubprocessExecutor:
     ) -> StepAttemptResult:
 
         if log_writer is None:
-            log_writer = self._create_default_log_writer(
-                stage=stage, step_name=step.name
-            )
+            log_writer = self._create_default_log_writer(stage=stage, step_name=step.name)
 
         environment = os.environ.copy()
 
@@ -91,9 +92,17 @@ class SubprocessExecutor:
             duration_seconds = time.perf_counter() - start_time
             success = not time_out and exit_code == 0
 
+            failure_type = self.failure_classifier.classify_process_failure(
+                process_success=success,
+                time_out=time_out,
+                stderr=log_writer.stderr,
+                error=error_message,
+            )
+
             return StepAttemptResult(
                 attempt=attempt,
                 success=success,
+                failure_type=failure_type,
                 exit_code=exit_code,
                 duration_seconds=duration_seconds,
                 stdout=log_writer.stdout,
@@ -109,9 +118,17 @@ class SubprocessExecutor:
 
             log_writer.write_stderr(f"{error_message}\n")
 
+            failure_type = self.failure_classifier.classify_process_failure(
+                process_success=False,
+                time_out=False,
+                stderr=log_writer.stderr,
+                error=error_message,
+            )
+
             return StepAttemptResult(
                 attempt=attempt,
                 success=False,
+                failure_type=failure_type,
                 exit_code=None,
                 duration_seconds=duration_seconds,
                 stdout=log_writer.stdout,
@@ -127,12 +144,20 @@ class SubprocessExecutor:
 
             log_writer.write_stderr(f"{error_message}\n")
 
+            failure_type = self.failure_classifier.classify_process_failure(
+                process_success=False,
+                time_out=False,
+                stderr=log_writer.stderr,
+                error=error_message,
+            )
+
             if process is not None:
                 self._stop_process(process)
 
             return StepAttemptResult(
                 attempt=attempt,
                 success=False,
+                failure_type=failure_type,
                 exit_code=process.returncode if process is not None else None,
                 duration_seconds=duration_seconds,
                 stdout=log_writer.stdout,

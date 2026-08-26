@@ -36,7 +36,7 @@ Device Test Runner 將這些既有工具組合成一致的測試生命週期，�
 * Cleanup
 * Execution summary
 
-目前 v1.5.1 已完成 lifecycle orchestration、artifact management、artifact validation、retry policy 與 artifact-aware retry；timeout、recorder lifecycle 和 distributed execution 仍在規劃中。
+目前 v1.5.2 已完成 lifecycle orchestration、artifact management、artifact validation、artifact-aware retry 與 failure classification。Runner 可區分 timeout、device offline、process error、artifact missing 與 artifact invalid；更完整的 cancellation guarantees、recorder lifecycle 和 distributed execution 仍在規劃中。
 
 ---
 
@@ -128,7 +128,9 @@ RunResult / result.json
 
 詳細架構說明請參考：
 
-* [Architecture v1.5.0](docs/architecture/architecture_v1.5.0.md)
+* [Architecture v1.5.2](docs/architecture/architecture_v1.5.2.md)
+* [Test Matrix v1.5.2](docs/test_matrix/test_matrix_v1.5.2.md)
+* [Acceptance Criteria v1.5.2](docs/acceptance_criteria/acceptance_criteria_v1.5.2.md)
 * [Roadmap](docs/roadmap.md)
 
 ---
@@ -186,7 +188,10 @@ DeviceTestRunner/
 ├── configs/
 │   └── sample.yaml
 ├── docs/
-│   ├── architecture_v1.5.0.md
+│   ├── architecture/
+│   ├── acceptance_criteria/
+│   ├── definition_of_done/
+│   ├── test_matrix/
 │   └── roadmap.md
 ├── runner/
 │   ├── artifact.py
@@ -432,7 +437,7 @@ artifacts/
 * stdout and stderr artifact paths
 * Validation results
 * Retry information
-* Failure summary
+* Per-attempt failure type and failure summary
 
 相對路徑的 artifact validation rule 會以該次 run directory 為基準解析。每一次 retry 都有獨立的 stdout／stderr log，避免後一次 attempt 覆蓋先前的診斷資訊。
 
@@ -449,7 +454,7 @@ artifacts/
     "device_serial": "ABC123",
     "device_product": "pixel",
     "device_build": "build_12345",
-    "runner_version": "1.5.1",
+    "runner_version": "1.5.2",
     "started_at": "2026-07-22T22:30:00+00:00",
     "finished_at": "2026-07-22T22:32:05+00:00"
   },
@@ -476,6 +481,7 @@ artifacts/
         {
           "attempt": 1,
           "success": false,
+          "failure_type": "process_error",
           "exit_code": 1,
           "duration_seconds": 0.5,
           "stdout": "",
@@ -489,6 +495,7 @@ artifacts/
               "type": "csv_content",
               "path": ".../result.csv",
               "passed": false,
+              "failure_type": "artifact_invalid",
               "message": "Required CSV column is missing.",
               "actual_size_bytes": null
             }
@@ -497,6 +504,7 @@ artifacts/
         {
           "attempt": 2,
           "success": true,
+          "failure_type": "none",
           "exit_code": 0,
           "duration_seconds": 0.5,
           "stdout": "completed\n",
@@ -510,6 +518,7 @@ artifacts/
               "type": "csv_content",
               "path": ".../result.csv",
               "passed": true,
+              "failure_type": "none",
               "message": "CSV content is valid.",
               "actual_size_bytes": null
             }
@@ -525,6 +534,7 @@ artifacts/
       "type": "exists",
       "path": "artifacts/power_idle_test_20260722_223000/result.csv",
       "passed": true,
+      "failure_type": "none",
       "message": "Artifact exists.",
       "actual_size_bytes": null
     }
@@ -550,6 +560,7 @@ Report schema 會隨專案版本逐步擴充。
 | v1.4.1  | Validation Improvements      | Completed   |
 | v1.5    | Retry Policy                 | Completed   |
 | v1.5.1  | Artifact-Aware Retry          | Completed   |
+| v1.5.2  | Failure Classification        | Completed   |
 | v1.6    | Timeout and Cancellation     | Planned     |
 | v1.7    | Recorder Lifecycle           | Planned     |
 | v1.8    | Hook and Teardown Guarantees | Planned     |
@@ -626,6 +637,7 @@ v1.4.0
 v1.4.1
 v1.5.0
 v1.5.1
+v1.5.2
 v2.0.0
 ```
 
@@ -641,6 +653,7 @@ v2.0.0
 * `v1.4.1`：修正 file size validation
 * `v1.5.0`：加入 Retry Policy
 * `v1.5.1`：加入 step-scoped Artifact-Aware Retry
+* `v1.5.2`：加入可追蹤且可驅動 retry decision 的 Failure Classification
 * `v2.0.0`：加入 Controller／Worker architecture
 
 ---
@@ -718,6 +731,7 @@ docs/update-roadmap
 3. v1.4／v1.4.1 Artifact Validation
 4. v1.5 Retry Policy 與 per-attempt logs
 5. v1.5.1 Artifact-Aware Retry 與 per-attempt validation results
+6. v1.5.2 Failure Classification 與 failure-aware retry decision
 
 接下來的優先事項：
 
@@ -784,7 +798,10 @@ Device Validation Platform
 
 ## Documentation
 
-* [Architecture v1.5.0](docs/architecture/architecture_v1.5.0.md)
+* [Architecture v1.5.2](docs/architecture/architecture_v1.5.2.md)
+* [Definition of Done v1.5.2](docs/definition_of_done/definition_of_done_v1.5.2.md)
+* [Test Matrix v1.5.2](docs/test_matrix/test_matrix_v1.5.2.md)
+* [Acceptance Criteria v1.5.2](docs/acceptance_criteria/acceptance_criteria_v1.5.2.md)
 * [Roadmap](docs/roadmap.md)
 * [Changelog](CHANGELOG.md)
 

@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [1.5.2]
+
+### Added
+
+- Unified `FailureType` categories for timeout, device offline, process error, missing artifact, and invalid artifact
+- `FailureClassifier` for process and artifact outcomes
+- Per-attempt failure classification in `StepAttemptResult` and `result.json`
+- Unit and integration coverage for failure priority and real subprocess classification
+- Given／When／Then descriptions for every test case
+
+### Changed
+
+- Retry decisions now use failure type instead of a success boolean
+- Process failures take priority over artifact failures; missing artifacts take priority over invalid artifacts
+- Executor, validator, runner, retry policy, and report metadata identify the v1.5.2 failure-classification contract
+
 ## [1.5.1]
 
 ### Added

@@ -404,6 +404,28 @@ Completed
 
 ---
 
+## v1.5.2 — Failure Classification
+
+### Goal
+
+將 process 與 artifact failure 轉換為一致、可報告且可供 retry policy 使用的 failure type，提升 device test failure triage 的速度與可追蹤性。
+
+### Core Features
+
+* `FailureClassifier`
+* `NONE`、`TIMEOUT`、`DEVICE_OFFLINE`、`PROCESS_ERROR`、`ARTIFACT_MISSING`、`ARTIFACT_INVALID`
+* timeout 與常見 device-offline 訊息分類
+* process failure 與 artifact failure priority
+* failure-type-aware retry decision
+* per-attempt failure type 寫入 `StepAttemptResult` 與 `result.json`
+* real subprocess integration coverage
+
+### Status
+
+Completed
+
+---
+
 ## v1.6 — Timeout and Cancellation
 
 ### Goal
@@ -946,6 +968,7 @@ v1.4.0
 v1.4.1
 v1.5.0
 v1.5.1
+v1.5.2
 v2.0.0
 ```
 
@@ -970,6 +993,7 @@ Example:
 v1.4 artifact validation
 v1.5 retry policy
 v1.5.1 artifact-aware retry
+v1.5.2 failure classification
 ```
 
 ## PATCH
@@ -981,6 +1005,7 @@ Example:
 ```text
 v1.4.1 fix file size validation
 v1.4.2 fix report serialization
+v1.5.2 add failure classification and diagnostics
 ```
 
 ---
@@ -1060,7 +1085,7 @@ Done
 
 # 9. Current Priorities
 
-目前已完成 v1.5.1，接下來的開發優先順序：
+目前已完成 v1.5.2，接下來的開發優先順序：
 
 ```text
 1. v1.6 Timeout and Cancellation

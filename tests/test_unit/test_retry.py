@@ -10,12 +10,24 @@ def mock_artifact_result(passed: bool) -> ArtifactValidationResult:
 
 
 def test_retry_policy_does_not_retry_success():
+    """Acceptance scenario.
+
+    Given an attempt has a failure outcome and a configured retry limit.
+    When the retry policy decides whether another attempt is allowed.
+    Then retry policy does not retry success.
+    """
     policy = RetryPolicy(RetryConfig(max_attempts=3, delay_seconds=0))
 
     assert policy.should_retry(attempt=1, failure_type=FailureType.NONE) is False
 
 
 def test_retry_policy_retries_failure_before_max_attempts():
+    """Acceptance scenario.
+
+    Given an attempt has a failure outcome and a configured retry limit.
+    When the retry policy decides whether another attempt is allowed.
+    Then retry policy retries failure before max attempts.
+    """
     policy = RetryPolicy(RetryConfig(max_attempts=3, delay_seconds=0))
 
     assert policy.should_retry(attempt=1, failure_type=FailureType.NONE) is False
@@ -23,12 +35,24 @@ def test_retry_policy_retries_failure_before_max_attempts():
 
 
 def test_retry_policy_stops_at_max_attempts():
+    """Acceptance scenario.
+
+    Given an attempt has a failure outcome and a configured retry limit.
+    When the retry policy decides whether another attempt is allowed.
+    Then retry policy stops at max attempts.
+    """
     policy = RetryPolicy(RetryConfig(max_attempts=3, delay_seconds=0))
 
     assert policy.should_retry(attempt=3, failure_type=FailureType.NONE) is False
 
 
 def test_no_retry_when_process_and_artifact_passes():
+    """Acceptance scenario.
+
+    Given an attempt has a failure outcome and a configured retry limit.
+    When the retry policy decides whether another attempt is allowed.
+    Then a fully successful attempt completes without consuming another attempt.
+    """
     policy = RetryPolicy(RetryConfig(max_attempts=3, delay_seconds=0))
 
     should_retry = policy.should_retry(
@@ -39,6 +63,12 @@ def test_no_retry_when_process_and_artifact_passes():
 
 
 def test_retry_when_process_fails():
+    """Acceptance scenario.
+
+    Given an attempt has a failure outcome and a configured retry limit.
+    When the retry policy decides whether another attempt is allowed.
+    Then retry when process fails.
+    """
     policy = RetryPolicy(RetryConfig(max_attempts=3))
 
     should_retry = policy.should_retry(
@@ -49,6 +79,12 @@ def test_retry_when_process_fails():
 
 
 def test_retry_when_process_passes_but_artifact_fails():
+    """Acceptance scenario.
+
+    Given an attempt has a failure outcome and a configured retry limit.
+    When the retry policy decides whether another attempt is allowed.
+    Then artifact rejection can trigger a retry even when the command itself succeeds.
+    """
     policy = RetryPolicy(RetryConfig(max_attempts=3))
 
     should_retry = policy.should_retry(
@@ -60,6 +96,12 @@ def test_retry_when_process_passes_but_artifact_fails():
 
 
 def test_no_retry_after_max_attempts():
+    """Acceptance scenario.
+
+    Given an attempt has a failure outcome and a configured retry limit.
+    When the retry policy decides whether another attempt is allowed.
+    Then no retry after max attempts.
+    """
     policy = RetryPolicy(RetryConfig(max_attempts=3))
 
     should_retry = policy.should_retry(
@@ -70,6 +112,12 @@ def test_no_retry_after_max_attempts():
 
 
 def test_retry_timeout():
+    """Acceptance scenario.
+
+    Given an attempt has a failure outcome and a configured retry limit.
+    When the retry policy decides whether another attempt is allowed.
+    Then retry timeout.
+    """
     policy = RetryPolicy(RetryConfig(max_attempts=3))
 
     should_retry = policy.should_retry(
@@ -81,6 +129,12 @@ def test_retry_timeout():
 
 
 def test_retry_device_offline():
+    """Acceptance scenario.
+
+    Given an attempt has a failure outcome and a configured retry limit.
+    When the retry policy decides whether another attempt is allowed.
+    Then retry device offline.
+    """
     policy = RetryPolicy(RetryConfig(max_attempts=3))
 
     should_retry = policy.should_retry(attempt=1, failure_type=FailureType.DEVICE_OFFLINE)
@@ -89,6 +143,12 @@ def test_retry_device_offline():
 
 
 def test_retry_process_error():
+    """Acceptance scenario.
+
+    Given an attempt has a failure outcome and a configured retry limit.
+    When the retry policy decides whether another attempt is allowed.
+    Then retry process error.
+    """
     policy = RetryPolicy(RetryConfig(max_attempts=3))
 
     should_retry = policy.should_retry(attempt=1, failure_type=FailureType.PROCESS_ERROR)
@@ -97,6 +157,12 @@ def test_retry_process_error():
 
 
 def test_retry_artifact_missing():
+    """Acceptance scenario.
+
+    Given an attempt has a failure outcome and a configured retry limit.
+    When the retry policy decides whether another attempt is allowed.
+    Then retry artifact missing.
+    """
     policy = RetryPolicy(RetryConfig(max_attempts=3))
 
     should_retry = policy.should_retry(attempt=1, failure_type=FailureType.ARTIFACT_MISSING)
@@ -105,6 +171,12 @@ def test_retry_artifact_missing():
 
 
 def test_retry_artifact_invalid():
+    """Acceptance scenario.
+
+    Given an attempt has a failure outcome and a configured retry limit.
+    When the retry policy decides whether another attempt is allowed.
+    Then retry artifact invalid.
+    """
     policy = RetryPolicy(RetryConfig(max_attempts=3))
 
     should_retry = policy.should_retry(attempt=1, failure_type=FailureType.ARTIFACT_INVALID)
@@ -113,6 +185,12 @@ def test_retry_artifact_invalid():
 
 
 def test_failure_not_retried_after_max_attempts():
+    """Acceptance scenario.
+
+    Given an attempt has a failure outcome and a configured retry limit.
+    When the retry policy decides whether another attempt is allowed.
+    Then failure not retried after max attempts.
+    """
     policy = RetryPolicy(RetryConfig(max_attempts=3))
 
     should_retry = policy.should_retry(attempt=3, failure_type=FailureType.TIMEOUT)

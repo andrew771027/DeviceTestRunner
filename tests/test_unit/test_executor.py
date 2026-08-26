@@ -33,6 +33,12 @@ PROJECT_ROOT = Path(__file__).resolve().parent
     ),
 )
 def test_subprocess_executor_return_success(tmp_path, test_case_id, step, stage, attempt):
+    """Acceptance scenario.
+
+    Given a test step is configured for subprocess execution.
+    When the subprocess executor runs the step and captures its outcome.
+    Then a zero exit code is reported as a successful step with captured output and timing.
+    """
     executor = SubprocessExecutor(
         project_directory=PROJECT_ROOT, failure_classifier=FailureClassifier()
     )
@@ -87,6 +93,12 @@ def test_subprocess_executor_return_success(tmp_path, test_case_id, step, stage,
     ],
 )
 def test_subprocess_executor_failure(tmp_path, test_case_id, step, stage, attempt):
+    """Acceptance scenario.
+
+    Given a test step is configured for subprocess execution.
+    When the subprocess executor runs the step and captures its outcome.
+    Then a non-zero exit code is retained and reported as a process failure.
+    """
     executor = SubprocessExecutor(
         project_directory=PROJECT_ROOT, failure_classifier=FailureClassifier()
     )
@@ -143,6 +155,12 @@ def test_subprocess_executor_failure(tmp_path, test_case_id, step, stage, attemp
 def test_subprocess_executor_passes_timeout_to_subprocess(
     tmp_path, monkeypatch, tase_case_id, step, stage, attempt
 ):
+    """Acceptance scenario.
+
+    Given a test step is configured for subprocess execution.
+    When the subprocess executor runs the step and captures its outcome.
+    Then subprocess executor passes timeout to subprocess.
+    """
     mocked_process = Mock()
 
     mocked_process.stdout = StringIO("Hello World\n")
@@ -223,6 +241,12 @@ def test_subprocess_executor_passes_timeout_to_subprocess(
 def test_subprocess_executor_raised_timeout_error(
     tmp_path, monkeypatch, test_case_id, step, stage, attempt
 ):
+    """Acceptance scenario.
+
+    Given a test step is configured for subprocess execution.
+    When the subprocess executor runs the step and captures its outcome.
+    Then subprocess executor raised timeout error.
+    """
 
     mocked_process = Mock()
 

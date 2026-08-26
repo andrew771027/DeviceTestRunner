@@ -359,6 +359,12 @@ def mock_retry_config(tmp_path: Path) -> RunnerConfig:
 
 @pytest.mark.test_lifecycle
 def test_runner_executes_all_stages_and_all_steps_success(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a device-test lifecycle and its retry or artifact rules are configured.
+    When the test runner executes the lifecycle.
+    Then runner executes all stages and all steps success.
+    """
     config = mock_config(tmp_path)
     executor = MockExecutor()
     runner = DeviceTestRunner(
@@ -412,6 +418,12 @@ def test_runner_executes_all_stages_and_all_steps_success(tmp_path: Path):
     argvalues=["scenario_2"],
 )
 def test_runner_terminate_when_step_failed(tmp_path, failed_step_name):
+    """Acceptance scenario.
+
+    Given a device-test lifecycle and its retry or artifact rules are configured.
+    When the test runner executes the lifecycle.
+    Then runner terminate when step failed.
+    """
     config = mock_config(tmp_path)
     executor = MockExecutor(failed_step_name=failed_step_name)
     runner = DeviceTestRunner(
@@ -495,6 +507,12 @@ def test_runner_terminate_when_step_failed(tmp_path, failed_step_name):
 @pytest.mark.test_lifecycle
 @pytest.mark.parametrize(argnames="failed_step_name", argvalues=["global_setup"])
 def test_global_setup_failure_only_run_global_teardown(tmp_path, failed_step_name):
+    """Acceptance scenario.
+
+    Given a device-test lifecycle and its retry or artifact rules are configured.
+    When the test runner executes the lifecycle.
+    Then global setup failure only run global teardown.
+    """
     config = mock_config(tmp_path)
     executor = MockExecutor(failed_step_name=failed_step_name)
     runner = DeviceTestRunner(
@@ -548,6 +566,12 @@ def test_global_setup_failure_only_run_global_teardown(tmp_path, failed_step_nam
 def test_setup_failure_skips_scenario_but_runs_teardown_and_global_teardown(
     tmp_path, failed_step_name
 ):
+    """Acceptance scenario.
+
+    Given a device-test lifecycle and its retry or artifact rules are configured.
+    When the test runner executes the lifecycle.
+    Then setup failure skips scenario but runs teardown and global teardown.
+    """
     config = mock_config(tmp_path)
     executor = MockExecutor(failed_step_name=failed_step_name)
     runner = DeviceTestRunner(
@@ -614,6 +638,12 @@ def test_setup_failure_skips_scenario_but_runs_teardown_and_global_teardown(
 
 @pytest.mark.artifact
 def test_runner_passes_when_artifacts_are_valid(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a device-test lifecycle and its retry or artifact rules are configured.
+    When the test runner executes the lifecycle.
+    Then runner is accepted when artifacts are valid.
+    """
     config = mock_config(tmp_path)
     executor = MockExecutor()
     runner = DeviceTestRunner(
@@ -636,6 +666,12 @@ def test_runner_passes_when_artifacts_are_valid(tmp_path: Path):
 
 @pytest.mark.artifact
 def test_runner_fails_when_artifacts_invalid(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a device-test lifecycle and its retry or artifact rules are configured.
+    When the test runner executes the lifecycle.
+    Then runner is rejected when artifacts invalid, with a diagnostic failure result.
+    """
     config = mock_config(tmp_path, min_size_bytes=10_000)
     executor = MockExecutor()
     runner = DeviceTestRunner(
@@ -666,6 +702,12 @@ def test_runner_fails_when_artifacts_invalid(tmp_path: Path):
 
 @pytest.mark.artifact
 def test_runner_passes_without_validation_rules(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a device-test lifecycle and its retry or artifact rules are configured.
+    When the test runner executes the lifecycle.
+    Then runner passes without validation rules.
+    """
 
     config = RunnerConfig(
         test_case=DeviceTestCase(
@@ -724,6 +766,12 @@ def test_runner_passes_without_validation_rules(tmp_path: Path):
 
 @pytest.mark.retry
 def test_step_passes_after_retry(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a device-test lifecycle and its retry or artifact rules are configured.
+    When the test runner executes the lifecycle.
+    Then step passes after retry.
+    """
     config = mock_retry_config(tmp_path)
     executor = MockFailedOnceExecutor()
     runner = DeviceTestRunner(
@@ -747,6 +795,12 @@ def test_step_passes_after_retry(tmp_path: Path):
 
 @pytest.mark.retry
 def test_step_fails_after_max_attempts(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a device-test lifecycle and its retry or artifact rules are configured.
+    When the test runner executes the lifecycle.
+    Then step fails after max attempts.
+    """
     config = mock_retry_config(tmp_path)
     executor = MockAlwaysFailExecutor()
     runner = DeviceTestRunner(
@@ -770,6 +824,12 @@ def test_step_fails_after_max_attempts(tmp_path: Path):
 
 @pytest.mark.retry
 def test_successful_step_is_not_retried(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a device-test lifecycle and its retry or artifact rules are configured.
+    When the test runner executes the lifecycle.
+    Then successful step is not retried.
+    """
 
     config = mock_retry_config(tmp_path)
     executor = MockAlwaysPassExecutor()
@@ -788,6 +848,12 @@ def test_successful_step_is_not_retried(tmp_path: Path):
 
 @pytest.mark.retry
 def test_retry_creates_separate_log_files(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a device-test lifecycle and its retry or artifact rules are configured.
+    When the test runner executes the lifecycle.
+    Then retry creates separate log files.
+    """
 
     config = mock_retry_config(tmp_path)
     executor = MockFailedOnceExecutor()
@@ -814,6 +880,12 @@ def test_retry_creates_separate_log_files(tmp_path: Path):
 
 @pytest.mark.retry
 def test_retry_waits_between_attempts(tmp_path, monkeypatch):
+    """Acceptance scenario.
+
+    Given a device-test lifecycle and its retry or artifact rules are configured.
+    When the test runner executes the lifecycle.
+    Then retry waits between attempts.
+    """
 
     sleep_calls = []
 
@@ -840,6 +912,12 @@ def test_retry_waits_between_attempts(tmp_path, monkeypatch):
 @pytest.mark.artifact
 @pytest.mark.retry
 def test_artifact_failure_triggers_retry(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a device-test lifecycle and its retry or artifact rules are configured.
+    When the test runner executes the lifecycle.
+    Then artifact failure triggers retry.
+    """
 
     config = RunnerConfig(
         test_case=DeviceTestCase(
@@ -951,6 +1029,12 @@ def test_artifact_failure_triggers_retry(tmp_path: Path):
 @pytest.mark.artifact
 @pytest.mark.retry
 def test_artifact_failure_exhausts_retry(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a device-test lifecycle and its retry or artifact rules are configured.
+    When the test runner executes the lifecycle.
+    Then artifact failure exhausts retry.
+    """
     config = RunnerConfig(
         test_case=DeviceTestCase(
             id="power_001",
@@ -1046,6 +1130,12 @@ def test_artifact_failure_exhausts_retry(tmp_path: Path):
 @pytest.mark.artifact
 @pytest.mark.retry
 def test_non_retryable_artifact_failure_doew_not_retry(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a device-test lifecycle and its retry or artifact rules are configured.
+    When the test runner executes the lifecycle.
+    Then non retryable artifact failure does not retry.
+    """
 
     config = RunnerConfig(
         test_case=DeviceTestCase(
@@ -1146,6 +1236,12 @@ def test_non_retryable_artifact_failure_doew_not_retry(tmp_path: Path):
 @pytest.mark.artifact
 @pytest.mark.retry
 def test_retry_rules_are_filteredby_step(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a device-test lifecycle and its retry or artifact rules are configured.
+    When the test runner executes the lifecycle.
+    Then retry rules are filtered by step.
+    """
 
     config = RunnerConfig(
         test_case=DeviceTestCase(
@@ -1207,6 +1303,12 @@ def test_retry_rules_are_filteredby_step(tmp_path: Path):
 
 
 def test_artifact_missing_retries(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a device-test lifecycle and its retry or artifact rules are configured.
+    When the test runner executes the lifecycle.
+    Then artifact missing causes another attempt while retry capacity remains.
+    """
 
     config = RunnerConfig(
         test_case=DeviceTestCase(

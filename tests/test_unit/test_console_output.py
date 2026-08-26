@@ -12,6 +12,12 @@ from runner.artifact import ArtifactManager
 def test_writer_displays_stdout_on_console(
     tmp_path: Path, capsys, test_case_id, stage, step_name, attempt
 ):
+    """Acceptance scenario.
+
+    Given a running test step emits process output.
+    When the step log writer handles the output stream.
+    Then writer displays stdout on console.
+    """
 
     artifact_manager = ArtifactManager(output_dir=tmp_path)
 
@@ -44,6 +50,12 @@ def test_writer_displays_stdout_on_console(
 def test_writer_displays_stderr_on_console(
     tmp_path: Path, capsys, test_case_id, stage, step_name, attempt
 ):
+    """Acceptance scenario.
+
+    Given a running test step emits process output.
+    When the step log writer handles the output stream.
+    Then writer displays stderr on console.
+    """
 
     artifact_manager = ArtifactManager(output_dir=tmp_path)
 

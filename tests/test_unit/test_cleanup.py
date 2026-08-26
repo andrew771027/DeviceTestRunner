@@ -5,6 +5,12 @@ from runner.models import ArtifactValidationRule
 
 
 def test_cleanup_retry_artifact(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a previous attempt left retryable artifacts in the run directory.
+    When retry cleanup is performed before the next attempt.
+    Then the stale retry artifact file is removed while unrelated run data remains intact.
+    """
     run_dir = tmp_path / "run"
     run_dir.mkdir()
 
@@ -32,6 +38,12 @@ def test_cleanup_retry_artifact(tmp_path: Path):
 
 
 def test_cleanup_retry_artifact_directory(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a previous attempt left retryable artifacts in the run directory.
+    When retry cleanup is performed before the next attempt.
+    Then the stale retry artifact directory is removed recursively before another attempt.
+    """
 
     run_dir = tmp_path / "run"
     run_dir.mkdir()

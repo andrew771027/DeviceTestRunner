@@ -12,6 +12,12 @@ from runner.artifact import ArtifactManager
 def test_save_log_writer_step_stdout_and_stderr(
     tmp_path: Path, test_case_id: str, stage: str, step_name: str, attempt: int
 ):
+    """Acceptance scenario.
+
+    Given a test run has an identified stage, step, and attempt.
+    When the step log writer records process output.
+    Then stdout and stderr are persisted under the correct test, stage, step, and attempt.
+    """
     artifact_manager = ArtifactManager(output_dir=tmp_path)
 
     run_dir = artifact_manager.create_run_directory(test_case_id=test_case_id)
@@ -60,6 +66,12 @@ def test_save_log_writer_step_stdout_and_stderr(
 def test_step_log_writer_creates_stage_dictionary(
     tmp_path: Path, test_case_id: str, stage: str, step_name: str, attempt: 1
 ):
+    """Acceptance scenario.
+
+    Given a test run has an identified stage, step, and attempt.
+    When the step log writer records process output.
+    Then the log structure creates the requested stage entry without losing step identity.
+    """
     artifact_manager = ArtifactManager(output_dir=tmp_path)
 
     run_dir = artifact_manager.create_run_directory(test_case_id=test_case_id)
@@ -87,6 +99,12 @@ def test_step_log_writer_creates_stage_dictionary(
 def test_step_log_writer_flushes_immediately(
     tmp_path, test_case_id, stage, step_name, attempt
 ):
+    """Acceptance scenario.
+
+    Given a test run has an identified stage, step, and attempt.
+    When the step log writer records process output.
+    Then new output is immediately visible to readers without waiting for close.
+    """
 
     artifact_manager = ArtifactManager(output_dir=tmp_path)
 

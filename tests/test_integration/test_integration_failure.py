@@ -7,6 +7,12 @@ from runner.models import FailureType, LifecycleStepContent
 
 
 def test_executor_classifies_timeout(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a real subprocess exhibits a known device-test failure mode.
+    When the executor runs it and classifies the observed failure.
+    Then executor classifies timeout.
+    """
     artifat_manager = ArtifactManager(output_dir=tmp_path)
 
     run_dir = artifat_manager.create_run_directory("timeout_test")
@@ -40,6 +46,12 @@ def test_executor_classifies_timeout(tmp_path: Path):
 
 
 def test_executor_classifies_device_offline(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a real subprocess exhibits a known device-test failure mode.
+    When the executor runs it and classifies the observed failure.
+    Then executor classifies device offline.
+    """
     artifact_manager = ArtifactManager(output_dir=tmp_path)
 
     run_dir = artifact_manager.create_run_directory("offline_test")
@@ -78,6 +90,12 @@ def test_executor_classifies_device_offline(tmp_path: Path):
 
 
 def test_executor_classifies_process_error(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a real subprocess exhibits a known device-test failure mode.
+    When the executor runs it and classifies the observed failure.
+    Then executor classifies process error.
+    """
     artifact_manager = ArtifactManager(output_dir=tmp_path)
 
     run_dir = artifact_manager.create_run_directory("process_test")

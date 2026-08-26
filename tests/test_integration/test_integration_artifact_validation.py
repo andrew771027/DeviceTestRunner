@@ -13,6 +13,12 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 
 
 def test_command_creates_and_validates_artifact(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a real command and artifact acceptance rules are defined in YAML.
+    When the runner executes the command and validates its produced artifacts.
+    Then the run passes and reports the command-created artifact as valid.
+    """
     output_dir = tmp_path / "artifacts"
     config_path = tmp_path / "config.yaml"
 
@@ -107,6 +113,12 @@ def test_command_creates_and_validates_artifact(tmp_path: Path):
 
 
 def test_run_fails_when_command_does_not_create_artifact(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a real command and artifact acceptance rules are defined in YAML.
+    When the runner executes the command and validates its produced artifacts.
+    Then run is rejected when command does not create artifact, with a diagnostic failure result.
+    """
     output_dir = tmp_path / "artifacts"
     config_path = tmp_path / "config.yaml"
 
@@ -174,6 +186,12 @@ def test_run_fails_when_command_does_not_create_artifact(tmp_path: Path):
 
 
 def test_command_runs_inside_run_directory(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a real command and artifact acceptance rules are defined in YAML.
+    When the runner executes the command and validates its produced artifacts.
+    Then command runs inside run directory.
+    """
     output_dir = tmp_path / "artifacts"
     config_path = tmp_path / "config.yaml"
 
@@ -235,6 +253,12 @@ def test_command_runs_inside_run_directory(tmp_path: Path):
 
 
 def test_csv_and_json_content_validation(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a real command and artifact acceptance rules are defined in YAML.
+    When the runner executes the command and validates its produced artifacts.
+    Then both CSV and JSON artifacts must satisfy their content contracts for the run to pass.
+    """
     output_dir = tmp_path / "artifacts"
     config_file = tmp_path / "config.yaml"
 
@@ -334,6 +358,12 @@ def test_csv_and_json_content_validation(tmp_path: Path):
 
 
 def test_run_fails_when_csv_content_invalid(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a real command and artifact acceptance rules are defined in YAML.
+    When the runner executes the command and validates its produced artifacts.
+    Then run is rejected when CSV content invalid, with a diagnostic failure result.
+    """
     output_dir = tmp_path / "artifact"
     config_file = tmp_path / "config.yaml"
 
@@ -411,6 +441,12 @@ def test_run_fails_when_csv_content_invalid(tmp_path: Path):
 
 
 def test_run_fails_when_json_status_invalid(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a real command and artifact acceptance rules are defined in YAML.
+    When the runner executes the command and validates its produced artifacts.
+    Then run is rejected when JSON status invalid, with a diagnostic failure result.
+    """
     output_dir = tmp_path / "artifact"
     config_file = tmp_path / "config.yaml"
 

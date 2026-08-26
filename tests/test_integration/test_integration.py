@@ -13,6 +13,12 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 
 
 def test_yaml_to_result_json(tmp_path):
+    """Acceptance scenario.
+
+    Given a complete YAML-defined device-test workflow is available.
+    When the workflow is executed through the real runner boundary.
+    Then the end-to-end run produces a result JSON matching the YAML workflow and observed command outputs.
+    """
     config_file = tmp_path / "intergration.yaml"
     config_file.write_text(
         """
@@ -148,6 +154,12 @@ artifact:
 
 
 def test_integration_stops_after_failed_step(tmp_path):
+    """Acceptance scenario.
+
+    Given a complete YAML-defined device-test workflow is available.
+    When the workflow is executed through the real runner boundary.
+    Then integration stops after failed step.
+    """
 
     config_file = tmp_path / "intergration.yaml"
     config_file.write_text(
@@ -285,6 +297,12 @@ artifact:
 
 
 def test_integration_steps_succeeds_after_party(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a complete YAML-defined device-test workflow is available.
+    When the workflow is executed through the real runner boundary.
+    Then a transient subprocess failure is retried and the later successful attempt completes the workflow.
+    """
     output_dir = tmp_path / "artifacts"
     config_file = tmp_path / "config.yaml"
 
@@ -366,6 +384,12 @@ def test_integration_steps_succeeds_after_party(tmp_path: Path):
 
 
 def test_real_subprocess_fails_after_retry_exhausted(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a complete YAML-defined device-test workflow is available.
+    When the workflow is executed through the real runner boundary.
+    Then real subprocess fails after retry exhausted.
+    """
     output_dir = tmp_path / "artifacts"
     config_file = tmp_path / "config.yaml"
     config_file.write_text(

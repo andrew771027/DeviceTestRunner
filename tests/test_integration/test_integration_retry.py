@@ -12,6 +12,12 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 
 
 def test_real_artifact_aware_retry(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a real command initially produces an unacceptable artifact and retry is enabled.
+    When the runner validates the artifact and performs the configured retry flow.
+    Then the invalid first artifact triggers one retry and the corrected artifact allows the run to pass.
+    """
     output_dir = tmp_path / "artifacts"
 
     config_file = tmp_path / "config.yaml"

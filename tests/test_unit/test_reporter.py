@@ -138,6 +138,12 @@ def test_save_result_json(
     step_results: List[StepResult],
     artifact_validation_results: List[ArtifactValidationResult],
 ):
+    """Acceptance scenario.
+
+    Given a completed run contains metadata, summaries, steps, and artifact results.
+    When the reporter serializes the run result.
+    Then the generated JSON preserves metadata, summary counts, step results, and artifact validation results.
+    """
 
     run_result = RunResult(
         metadata=metadata,

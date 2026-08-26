@@ -110,6 +110,12 @@ from runner.models import (
     ],
 )
 def test_config_contains_all_section(config: RunnerConfig):
+    """Acceptance scenario.
+
+    Given runner model data is constructed from test configuration or execution results.
+    When the model exposes its derived state.
+    Then every configured lifecycle section and test-case field is represented by the runner model.
+    """
 
     assert config.test_case.id == "power_001"
     assert config.test_case.name == "test all section"
@@ -195,6 +201,12 @@ def test_config_contains_all_section(config: RunnerConfig):
     ],
 )
 def test_step_result_passed_when_exit_code_is_zero(result):
+    """Acceptance scenario.
+
+    Given runner model data is constructed from test configuration or execution results.
+    When the model exposes its derived state.
+    Then step result passed when exit code is zero.
+    """
     assert result.success is True
 
 
@@ -226,4 +238,10 @@ def test_step_result_passed_when_exit_code_is_zero(result):
     ],
 )
 def test_step_result_failed_when_exit_code_is_not_zero(result):
+    """Acceptance scenario.
+
+    Given runner model data is constructed from test configuration or execution results.
+    When the model exposes its derived state.
+    Then step result failed when exit code is not zero.
+    """
     assert result.success is False

@@ -2,6 +2,12 @@ import yaml
 
 
 def test_config_yaml_contract(tmp_path):
+    """Acceptance scenario.
+
+    Given a YAML file follows the public device-test configuration contract.
+    When the configuration is parsed and normalized.
+    Then all supported lifecycle, artifact, and retry fields remain compatible with the YAML contract.
+    """
     config_file = tmp_path / "contract.yaml"
     config_file.write_text(
         """

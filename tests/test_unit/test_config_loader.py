@@ -15,6 +15,12 @@ from runner.models import (
 
 
 def test_config_loader_loads_device_test_config(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a device-test YAML configuration defines the requested options.
+    When the runner configuration is loaded.
+    Then config loader loads device test config.
+    """
     config_file = tmp_path / "sample.yaml"
     config_file.write_text(
         """
@@ -125,6 +131,12 @@ def test_config_loader_loads_device_test_config(tmp_path: Path):
 
 
 def test_load_artifact_validation_config(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a device-test YAML configuration defines the requested options.
+    When the runner configuration is loaded.
+    Then load artifact validation config.
+    """
     config_file = tmp_path / "config.yaml"
     config_file.write_text(
         """
@@ -192,6 +204,12 @@ def test_load_artifact_validation_config(tmp_path: Path):
 
 
 def test_artifact_validation_is_optional(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a device-test YAML configuration defines the requested options.
+    When the runner configuration is loaded.
+    Then artifact validation is optional.
+    """
     config_file = tmp_path / "config.yaml"
     config_file.write_text(
         """
@@ -252,6 +270,12 @@ def test_artifact_validation_is_optional(tmp_path: Path):
 
 
 def test_artifact_retry_defaults_to_false(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a device-test YAML configuration defines the requested options.
+    When the runner configuration is loaded.
+    Then artifact retry defaults to false.
+    """
     config_file = tmp_path / "config.yaml"
     config_file.write_text(
         """
@@ -263,7 +287,7 @@ def test_artifact_retry_defaults_to_false(tmp_path: Path):
         serial: fake_serial
         product: fake_pixel
         build: fake_build
-    retry: 
+    retry:
         max_attempts: 3
         delay_seconds: 1
     lifecycle:
@@ -304,6 +328,12 @@ def test_artifact_retry_defaults_to_false(tmp_path: Path):
 
 
 def test_load_csv_and_json_validation_rules(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a device-test YAML configuration defines the requested options.
+    When the runner configuration is loaded.
+    Then load CSV and JSON validation rules.
+    """
     config_file = tmp_path / "config.yaml"
     config_file.write_text(
         """
@@ -377,6 +407,12 @@ def test_load_csv_and_json_validation_rules(tmp_path: Path):
 
 
 def test_load_retry_config(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a device-test YAML configuration defines the requested options.
+    When the runner configuration is loaded.
+    Then load retry config.
+    """
     config_file = tmp_path / "config.yaml"
     config_file.write_text(
         """
@@ -416,6 +452,12 @@ def test_load_retry_config(tmp_path: Path):
 
 
 def test_load_artifact_aware_retry_rule(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a device-test YAML configuration defines the requested options.
+    When the runner configuration is loaded.
+    Then load artifact aware retry rule.
+    """
     config_file = tmp_path / "config.yaml"
     config_file.write_text(
         """
@@ -427,7 +469,7 @@ def test_load_artifact_aware_retry_rule(tmp_path: Path):
         serial: fake_serial
         product: fake_pixel
         build: fake_build
-    retry: 
+    retry:
         max_attempts: 3
         delay_seconds: 1
     lifecycle:
@@ -472,6 +514,12 @@ def test_load_artifact_aware_retry_rule(tmp_path: Path):
 
 
 def test_retry_config_uses_default_values(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a device-test YAML configuration defines the requested options.
+    When the runner configuration is loaded.
+    Then retry config uses default values.
+    """
     config_file = tmp_path / "config.yaml"
     config_file.write_text(
         """
@@ -507,6 +555,12 @@ def test_retry_config_uses_default_values(tmp_path: Path):
 
 
 def test_retry_max_attempts_must_be_positive(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a device-test YAML configuration defines the requested options.
+    When the runner configuration is loaded.
+    Then retry max attempts must be positive.
+    """
     config_file = tmp_path / "config.yaml"
     config_file.write_text(
         """
@@ -542,6 +596,12 @@ def test_retry_max_attempts_must_be_positive(tmp_path: Path):
 
 
 def test_retry_delay_seconds_must_be_positive(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a device-test YAML configuration defines the requested options.
+    When the runner configuration is loaded.
+    Then retry delay seconds must be positive.
+    """
     config_file = tmp_path / "config.yaml"
     config_file.write_text(
         """

@@ -27,7 +27,7 @@
             "args": [
                 "tests/test_unit/test_runner.py",
                 "-k",
-                "test_global_setup_failure_only_run_global_teardown"
+                "test_artifact_missing_retries"
 
             ]
         }

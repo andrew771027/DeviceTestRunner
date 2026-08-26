@@ -4,6 +4,7 @@ from runner.artifact import ArtifactManager
 from runner.artifact_validator import ArtifactValidator
 from runner.config import ConfigLoader
 from runner.executor import SubprocessExecutor
+from runner.failure import FailureClassifier
 from runner.reporter import JsonReporter
 from runner.runner import DeviceTestRunner
 
@@ -87,9 +88,13 @@ def test_real_artifact_aware_retry(tmp_path: Path):
 
     config = ConfigLoader().load(config_file)
     runner = DeviceTestRunner(
-        executor=SubprocessExecutor(project_directory=PROJECT_ROOT),
+        executor=SubprocessExecutor(
+            project_directory=PROJECT_ROOT,
+            failure_classifier=FailureClassifier(),
+        ),
         artifact_manager=ArtifactManager(output_dir=output_dir),
         artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
         reporter=JsonReporter(),
         show_console_output=False,
     )
@@ -105,7 +110,7 @@ def test_real_artifact_aware_retry(tmp_path: Path):
     first_attempt = scenario_result.attempt_results[0]
 
     assert first_attempt.exit_code == 0
-    assert first_attempt.success == False
+    assert first_attempt.success is False
     assert first_attempt.artifact_validation_results[0].passed is False
 
     # attempt 2:
@@ -113,7 +118,7 @@ def test_real_artifact_aware_retry(tmp_path: Path):
     second_attempt = scenario_result.attempt_results[1]
 
     assert second_attempt.exit_code == 0
-    assert second_attempt.success == True
+    assert second_attempt.success is True
     assert second_attempt.artifact_validation_results[0].passed is True
 
     assert result.summary.status == "PASSED"

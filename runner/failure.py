@@ -16,7 +16,7 @@ class FailureClassifier:
         self,
         *,
         process_success: bool,
-        time_out: bool,
+        timed_out: bool,
         stderr: str,
         error: str,
     ) -> FailureType:
@@ -24,7 +24,7 @@ class FailureClassifier:
         if process_success:
             return FailureType.NONE
 
-        if time_out:
+        if timed_out:
             return FailureType.TIMEOUT
 
         combined_message = f"{stderr}\n{error}".lower()

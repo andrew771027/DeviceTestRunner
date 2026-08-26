@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 from runner.artifact_validator import ArtifactValidator
-from runner.models import ArtifactValidationRule
+from runner.models import ArtifactValidationRule, FailureType
 
 
 def test_exists_rule_passes_when_file_exists(tmp_path: Path):
@@ -22,12 +22,11 @@ def test_exists_rule_passes_when_file_exists(tmp_path: Path):
     assert result.type == "exists"
     assert result.path == str(target)
     assert result.message == "Artifact exists."
+    assert result.failure_type == FailureType.NONE
 
 
 def test_exists_rule_fails_when_file_missing(tmp_path: Path):
-    rule = ArtifactValidationRule(
-        name="missing_file.txt", type="exists", path="missing_file.txt"
-    )
+    rule = ArtifactValidationRule(name="missing_file.txt", type="exists", path="missing_file.txt")
 
     result = ArtifactValidator().validate(rule=rule, base_dir=tmp_path)
 
@@ -35,6 +34,7 @@ def test_exists_rule_fails_when_file_missing(tmp_path: Path):
     assert result.name == "missing_file.txt"
     assert result.type == "exists"
     assert result.message == "Artifact does not exist."
+    assert result.failure_type == FailureType.ARTIFACT_MISSING
 
 
 def test_file_size_rule_passes_within_range(tmp_path: Path):
@@ -56,6 +56,7 @@ def test_file_size_rule_passes_within_range(tmp_path: Path):
     assert result.type == "file_size"
     assert result.path == str(target)
     assert result.actual_size_bytes == 10
+    assert result.failure_type == FailureType.NONE
 
 
 def test_file_size_rule_fails_below_minimum(tmp_path: Path):
@@ -81,6 +82,7 @@ def test_file_size_rule_fails_below_minimum(tmp_path: Path):
         result.message
         == f"File size {result.actual_size_bytes} bytes is smaller than the minimum required size of {rule.min_size_bytes} bytes."
     )
+    assert result.failure_type == FailureType.ARTIFACT_INVALID
 
 
 def test_file_size_rule_fails_above_maximum(tmp_path: Path):
@@ -106,6 +108,7 @@ def test_file_size_rule_fails_above_maximum(tmp_path: Path):
         result.message
         == f"File size {result.actual_size_bytes} bytes exceeds the maximum allowed size of {rule.max_size_bytes} bytes."
     )
+    assert result.failure_type == FailureType.ARTIFACT_INVALID
 
 
 def test_file_size_rule_fails_when_missing(tmp_path: Path):
@@ -122,6 +125,7 @@ def test_file_size_rule_fails_when_missing(tmp_path: Path):
     assert result.name == "test_file.txt"
     assert result.type == "file_size"
     assert result.message == "File doesn't exist."
+    assert result.failure_type == FailureType.ARTIFACT_MISSING
 
 
 def test_file_size_rule_fails_for_directory(tmp_path: Path):
@@ -140,6 +144,7 @@ def test_file_size_rule_fails_for_directory(tmp_path: Path):
 
     assert result.passed is False
     assert result.message == "Artifact is not a file."
+    assert result.failure_type == FailureType.ARTIFACT_INVALID
 
 
 def test_file_extension_rule_passes(tmp_path: Path):
@@ -160,6 +165,7 @@ def test_file_extension_rule_passes(tmp_path: Path):
     assert result.type == "file_extension"
     assert result.path == str(target)
     assert result.message == f"File extension '{target.suffix}' is allowed."
+    assert result.failure_type == FailureType.NONE
 
 
 def test_file_extension_rule_fails(tmp_path: Path):
@@ -183,6 +189,7 @@ def test_file_extension_rule_fails(tmp_path: Path):
         result.message
         == f"File extension '{target.suffix}' is not allowed entensions {sorted(rule.allowed_extensions)}."
     )
+    assert result.failure_type == FailureType.ARTIFACT_INVALID
 
 
 def test_file_extension_rule_requires_extensions(tmp_path: Path):
@@ -200,6 +207,7 @@ def test_file_extension_rule_requires_extensions(tmp_path: Path):
 
     assert result.passed is False
     assert result.message == "allowed_extensions cannot be empty."
+    assert result.failure_type == FailureType.ARTIFACT_INVALID
 
 
 def test_directory_not_empty_passes(tmp_path: Path):
@@ -218,6 +226,7 @@ def test_directory_not_empty_passes(tmp_path: Path):
     assert result.type == "directory_not_empty"
     assert result.path == str(directory)
     assert result.message == "Directory is not empty."
+    assert result.failure_type == FailureType.NONE
 
 
 def test_directory_not_empty_fails_when_empty(tmp_path: Path):
@@ -235,26 +244,24 @@ def test_directory_not_empty_fails_when_empty(tmp_path: Path):
     assert result.type == "directory_not_empty"
     assert result.path == str(directory)
     assert result.message == "Directory is empty."
+    assert result.failure_type == FailureType.ARTIFACT_MISSING
 
 
 def test_directory_not_empty_fails_for_file(tmp_path: Path):
     target = tmp_path / "test_file"
     target.write_text("Hello World!", encoding="utf-8")
 
-    rule = ArtifactValidationRule(
-        name="test_file", type="directory_not_empty", path="test_file"
-    )
+    rule = ArtifactValidationRule(name="test_file", type="directory_not_empty", path="test_file")
 
     result = ArtifactValidator().validate(rule=rule, base_dir=tmp_path)
 
     assert result.passed is False
     assert result.message == "Artifact is not a directory."
+    assert result.failure_type == FailureType.ARTIFACT_INVALID
 
 
 def test_unsupported_validation_type_fails(tmp_path: Path):
-    rule = ArtifactValidationRule(
-        name="unknown_rule", type="unsupported_type", path="output.txt"
-    )
+    rule = ArtifactValidationRule(name="unknown_rule", type="unsupported_type", path="output.txt")
 
     result = ArtifactValidator().validate(rule=rule, base_dir=tmp_path)
 
@@ -262,6 +269,7 @@ def test_unsupported_validation_type_fails(tmp_path: Path):
     assert result.name == "unknown_rule"
     assert result.type == "unsupported_type"
     assert result.message == f"Unknown validation type: {rule.type}."
+    assert result.failure_type == FailureType.ARTIFACT_INVALID
 
 
 def test_validate_all_returns_all_results(tmp_path: Path):
@@ -286,14 +294,14 @@ def test_validate_all_returns_all_results(tmp_path: Path):
     assert len(results) == 2
     assert results[0].passed is True
     assert results[1].passed is False
+    assert results[0].failure_type == FailureType.NONE
+    assert results[1].failure_type == FailureType.ARTIFACT_MISSING
 
 
 def test_csv_content(tmp_path: Path):
 
     target = tmp_path / "test_csv_file.csv"
-    target.write_text(
-        "timestamp,power,voltage\n" "1,100,4.2\n" "2,120,4.1\n", encoding="utf-8"
-    )
+    target.write_text("timestamp,power,voltage\n" "1,100,4.2\n" "2,120,4.1\n", encoding="utf-8")
 
     rule = ArtifactValidationRule(
         name="csv_content",
@@ -309,6 +317,7 @@ def test_csv_content(tmp_path: Path):
     assert result.name == "csv_content"
     assert result.type == "csv_content"
     assert "CSV content is valid" in result.message
+    assert result.failure_type == FailureType.NONE
 
 
 def test_csv_content_fails_when_header_missing(tmp_path: Path):
@@ -331,6 +340,7 @@ def test_csv_content_fails_when_header_missing(tmp_path: Path):
 
     assert result.passed is False
     assert result.message == ("CSV header is missing.")
+    assert result.failure_type == FailureType.ARTIFACT_INVALID
 
 
 def test_csv_content_fails_when_column_missing(tmp_path: Path):
@@ -352,6 +362,7 @@ def test_csv_content_fails_when_column_missing(tmp_path: Path):
     assert result.name == "csv_content"
     assert result.type == "csv_content"
     assert result.message == "CSV missing requred columns: ['power']"
+    assert result.failure_type == FailureType.ARTIFACT_INVALID
 
 
 def test_csv_content_fails_when_raw_too_few(tmp_path: Path):
@@ -375,10 +386,8 @@ def test_csv_content_fails_when_raw_too_few(tmp_path: Path):
     assert result.passed is False
     assert result.name == "csv_content"
     assert result.type == "csv_content"
-    assert (
-        result.message
-        == f"CSV contains 1 data rows, fewer than minimum {rule.min_rows}"
-    )
+    assert result.message == f"CSV contains 1 data rows, fewer than minimum {rule.min_rows}"
+    assert result.failure_type == FailureType.ARTIFACT_INVALID
 
 
 def test_csv_content_fails_when_only_header(tmp_path: Path):
@@ -402,10 +411,8 @@ def test_csv_content_fails_when_only_header(tmp_path: Path):
     assert result.passed is False
     assert result.name == "csv_content"
     assert result.type == "csv_content"
-    assert (
-        result.message
-        == f"CSV contains 0 data rows, fewer than minimum {rule.min_rows}"
-    )
+    assert result.message == f"CSV contains 0 data rows, fewer than minimum {rule.min_rows}"
+    assert result.failure_type == FailureType.ARTIFACT_INVALID
 
 
 def test_csv_content_fails_when_file_missing(tmp_path: Path):
@@ -424,6 +431,7 @@ def test_csv_content_fails_when_file_missing(tmp_path: Path):
     assert result.name == "csv_content"
     assert result.type == "csv_content"
     assert result.message == "CSV file does not exists."
+    assert result.failure_type == FailureType.ARTIFACT_MISSING
 
 
 def test_csv_content_fails_when_encoding_not_utf8(tmp_path: Path):
@@ -441,6 +449,7 @@ def test_csv_content_fails_when_encoding_not_utf8(tmp_path: Path):
 
     assert result.passed is False
     assert "Unable to parse CSV" in (result.message)
+    assert result.failure_type == FailureType.ARTIFACT_INVALID
 
 
 def test_csv_content_fails_when_path_is_directory(
@@ -462,6 +471,7 @@ def test_csv_content_fails_when_path_is_directory(
 
     assert result.passed is False
     assert result.message == ("Artifact is not a file.")
+    assert result.failure_type == FailureType.ARTIFACT_INVALID
 
 
 def test_json_content(tmp_path: Path):
@@ -492,6 +502,7 @@ def test_json_content(tmp_path: Path):
 
     assert result.passed is True
     assert result.message == "JSON content is valid."
+    assert result.failure_type == FailureType.NONE
 
 
 def test_json_content_fails_when_path_missing(tmp_path: Path):
@@ -522,6 +533,7 @@ def test_json_content_fails_when_path_missing(tmp_path: Path):
 
     assert result.passed is False
     assert result.message == "JSON missing required paths: ['metrics.average_power']"
+    assert result.failure_type == FailureType.ARTIFACT_INVALID
 
 
 def test_json_content_fails_when_file_missing(
@@ -543,6 +555,7 @@ def test_json_content_fails_when_file_missing(
 
     assert result.passed is False
     assert result.message == ("JSON file does not exists.")
+    assert result.failure_type == FailureType.ARTIFACT_MISSING
 
 
 def test_json_content_fails_when_value_mismatch(tmp_path: Path):
@@ -568,6 +581,7 @@ def test_json_content_fails_when_value_mismatch(tmp_path: Path):
         result.message
         == "JSON value validation failed: [\"status: expected 'PASSED', actual 'FAILED'\"]"
     )
+    assert result.failure_type == FailureType.ARTIFACT_INVALID
 
 
 def test_json_content_fails_when_json_invalid(tmp_path: Path):
@@ -582,6 +596,7 @@ def test_json_content_fails_when_json_invalid(tmp_path: Path):
 
     assert result.passed is False
     assert "Unable to parse JSON" in result.message
+    assert result.failure_type == FailureType.ARTIFACT_INVALID
 
 
 def test_json_expected_value_fails_when_path_missing(
@@ -614,6 +629,7 @@ def test_json_expected_value_fails_when_path_missing(
 
     assert result.passed is False
     assert "path does not exist" in (result.message)
+    assert result.failure_type == FailureType.ARTIFACT_INVALID
 
 
 def test_json_number_string_type_mismatch(
@@ -645,6 +661,7 @@ def test_json_number_string_type_mismatch(
     )
 
     assert result.passed is False
+    assert result.failure_type == FailureType.ARTIFACT_INVALID
 
 
 def test_json_content_expected_boolean_matches(
@@ -677,6 +694,7 @@ def test_json_content_expected_boolean_matches(
 
     assert result.passed is True
     assert result.message == ("JSON content is valid.")
+    assert result.failure_type == FailureType.NONE
 
 
 def test_get_json_path_value_returns_nested_value():
@@ -699,3 +717,48 @@ def test_get_json_path_value_returns_false_when_missing():
 
     assert exists is False
     assert value is None
+
+
+def test_directory_missing_is_artifact_missing(tmp_path: Path):
+    rule = ArtifactValidationRule(
+        name="recorder",
+        type="directory_not_empty",
+        path="recorder",
+    )
+
+    result = ArtifactValidator().validate(
+        rule=rule,
+        base_dir=tmp_path,
+    )
+
+    assert result.passed is False
+
+    assert result.failure_type == FailureType.ARTIFACT_MISSING
+
+
+def test_non_empty_directory_passes(
+    tmp_path: Path,
+):
+    directory = tmp_path / "recorder"
+
+    directory.mkdir()
+
+    (directory / "power.csv").write_text(
+        "power",
+        encoding="utf-8",
+    )
+
+    rule = ArtifactValidationRule(
+        name="recorder",
+        type="directory_not_empty",
+        path="recorder",
+    )
+
+    result = ArtifactValidator().validate(
+        rule=rule,
+        base_dir=tmp_path,
+    )
+
+    assert result.passed is True
+
+    assert result.failure_type == FailureType.NONE

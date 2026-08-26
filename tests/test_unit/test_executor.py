@@ -8,6 +8,7 @@ import pytest
 
 from runner.artifact import ArtifactManager
 from runner.executor import SubprocessExecutor
+from runner.failure import FailureClassifier
 from runner.models import LifecycleStepContent
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -31,10 +32,10 @@ PROJECT_ROOT = Path(__file__).resolve().parent
         ]
     ),
 )
-def test_subprocess_executor_return_success(
-    tmp_path, test_case_id, step, stage, attempt
-):
-    executor = SubprocessExecutor(project_directory=PROJECT_ROOT)
+def test_subprocess_executor_return_success(tmp_path, test_case_id, step, stage, attempt):
+    executor = SubprocessExecutor(
+        project_directory=PROJECT_ROOT, failure_classifier=FailureClassifier()
+    )
 
     artifact_manager = ArtifactManager(tmp_path)
 
@@ -86,7 +87,9 @@ def test_subprocess_executor_return_success(
     ],
 )
 def test_subprocess_executor_failure(tmp_path, test_case_id, step, stage, attempt):
-    executor = SubprocessExecutor(project_directory=PROJECT_ROOT)
+    executor = SubprocessExecutor(
+        project_directory=PROJECT_ROOT, failure_classifier=FailureClassifier()
+    )
 
     artifact_manager = ArtifactManager(tmp_path)
 
@@ -151,7 +154,9 @@ def test_subprocess_executor_passes_timeout_to_subprocess(
 
     monkeypatch.setattr("runner.executor.subprocess.Popen", mocked_popen)
 
-    executor = SubprocessExecutor(project_directory=PROJECT_ROOT)
+    executor = SubprocessExecutor(
+        project_directory=PROJECT_ROOT, failure_classifier=FailureClassifier()
+    )
 
     artifact_manager = ArtifactManager(tmp_path)
 
@@ -249,7 +254,9 @@ def test_subprocess_executor_raised_timeout_error(
         show_console=False,
     )
 
-    executor = SubprocessExecutor(project_directory=PROJECT_ROOT)
+    executor = SubprocessExecutor(
+        project_directory=PROJECT_ROOT, failure_classifier=FailureClassifier()
+    )
 
     with log_writer:
         result = executor.execute(

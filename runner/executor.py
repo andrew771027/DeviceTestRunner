@@ -42,7 +42,7 @@ class SubprocessExecutor:
         start_time = time.perf_counter()
         process: subprocess.Popen[str] | None = None
         error_message: str | None = None
-        time_out: bool = False
+        timed_out: bool = False
 
         try:
             process = subprocess.Popen(
@@ -81,7 +81,7 @@ class SubprocessExecutor:
             try:
                 process.wait(timeout=step.timeout_second)
             except subprocess.TimeoutExpired:
-                time_out = True
+                timed_out = True
                 error_message = f"Timeout after {step.timeout_second} seconds"
                 self._stop_process(process)
 
@@ -90,11 +90,11 @@ class SubprocessExecutor:
 
             exit_code = process.returncode
             duration_seconds = time.perf_counter() - start_time
-            success = not time_out and exit_code == 0
+            success = not timed_out and exit_code == 0
 
             failure_type = self.failure_classifier.classify_process_failure(
                 process_success=success,
-                time_out=time_out,
+                timed_out=timed_out,
                 stderr=log_writer.stderr,
                 error=error_message,
             )
@@ -120,7 +120,7 @@ class SubprocessExecutor:
 
             failure_type = self.failure_classifier.classify_process_failure(
                 process_success=False,
-                time_out=False,
+                timed_out=False,
                 stderr=log_writer.stderr,
                 error=error_message,
             )
@@ -146,7 +146,7 @@ class SubprocessExecutor:
 
             failure_type = self.failure_classifier.classify_process_failure(
                 process_success=False,
-                time_out=False,
+                timed_out=False,
                 stderr=log_writer.stderr,
                 error=error_message,
             )

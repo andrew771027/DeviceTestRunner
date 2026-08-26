@@ -5,6 +5,7 @@ import pytest
 
 from runner.artifact import ArtifactManager, StepLogWriter
 from runner.artifact_validator import ArtifactValidator
+from runner.failure import FailureClassifier
 from runner.models import (
     ArtifactConfig,
     ArtifactValidationConfig,
@@ -12,6 +13,7 @@ from runner.models import (
     ArtifactValidationRule,
     DeviceInfo,
     DeviceTestCase,
+    FailureType,
     LifecycleConfig,
     LifecycleStepContent,
     LifecycleSteps,
@@ -69,6 +71,7 @@ class MockExecutor:
         return StepAttemptResult(
             attempt=attempt,
             success=success,
+            failure_type=FailureType.NONE if success else FailureType.PROCESS_ERROR,
             exit_code=0 if success else 1,
             duration_seconds=0.01,
             stdout=stdout,
@@ -104,6 +107,7 @@ class MockFailedOnceExecutor:
         return StepAttemptResult(
             attempt=attempt,
             success=success,
+            failure_type=FailureType.NONE if success else FailureType.PROCESS_ERROR,
             exit_code=(0 if success else 1),
             duration_seconds=0.01,
             stdout=log_writer.stdout,
@@ -133,6 +137,7 @@ class MockAlwaysFailExecutor:
         return StepAttemptResult(
             attempt=attempt,
             success=False,
+            failure_type=FailureType.PROCESS_ERROR,
             exit_code=1,
             duration_seconds=0.01,
             stdout=log_writer.stdout,
@@ -162,6 +167,7 @@ class MockAlwaysPassExecutor:
         return StepAttemptResult(
             attempt=attempt,
             success=True,
+            failure_type=FailureType.NONE,
             exit_code=0,
             duration_seconds=0.01,
             stdout=log_writer.stdout,
@@ -190,6 +196,7 @@ class MockFailedOnceArtifactValidator:
                 type="csv_content",
                 path="mock_csv.csv",
                 passed=passed,
+                failure_type=(FailureType.NONE if passed else FailureType.ARTIFACT_INVALID),
                 message=("valid" if passed else "invalid"),
             )
         ]
@@ -203,7 +210,44 @@ class MockAlwaysFailArtifactValidator:
                 type="csv_content",
                 path="mock.csv",
                 passed=False,
+                failure_type=FailureType.ARTIFACT_INVALID,
                 message="invalid artifact",
+            )
+        ]
+
+
+class MockMissingThenPassValidator:
+    def __init__(self):
+        self.failed_once = False
+
+    def validate_all(self, rules, base_dir):
+
+        if not self.failed_once:
+            self.failed_once = True
+            passed = False
+        else:
+            passed = True
+
+        if passed is False:
+            return [
+                ArtifactValidationResult(
+                    name="power",
+                    type="exists",
+                    path="power.csv",
+                    passed=False,
+                    failure_type=(FailureType.ARTIFACT_MISSING),
+                    message="missing",
+                )
+            ]
+
+        return [
+            ArtifactValidationResult(
+                name="power",
+                type="exists",
+                path="power.csv",
+                passed=True,
+                failure_type=(FailureType.NONE),
+                message="valid",
             )
         ]
 
@@ -321,6 +365,7 @@ def test_runner_executes_all_stages_and_all_steps_success(tmp_path: Path):
         executor=executor,
         artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
         reporter=JsonReporter(),
     )
     result = runner.run(config)
@@ -373,6 +418,7 @@ def test_runner_terminate_when_step_failed(tmp_path, failed_step_name):
         executor=executor,
         artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
         reporter=JsonReporter(),
     )
     result = runner.run(config)
@@ -455,6 +501,7 @@ def test_global_setup_failure_only_run_global_teardown(tmp_path, failed_step_nam
         executor=executor,
         artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
         reporter=JsonReporter(),
     )
     result = runner.run(config)
@@ -462,21 +509,24 @@ def test_global_setup_failure_only_run_global_teardown(tmp_path, failed_step_nam
     assert result.metadata.test_case_name == "power_001"
     assert result_passed(result) is False
 
-    assert len(result.step_results) == 1
+    assert len(result.step_results) == 2
 
     assert result.summary.configured_steps == 6
-    assert result.summary.executed_steps == 1
-    assert result.summary.passed_steps == 0
+    assert result.summary.executed_steps == 2
+    assert result.summary.passed_steps == 1
     assert result.summary.failed_steps == 1
-    assert result.summary.skipped_steps == 5
+    assert result.summary.skipped_steps == 4
 
     assert executor.executed_attempts == [
         ("global_setup", 1),
         ("global_setup", 2),
         ("global_setup", 3),
+        ("global_teardown", 1),
     ]
 
-    assert [step.name for step in result.step_results if step.success is True] == []
+    assert [step.name for step in result.step_results if step.success is True] == [
+        "global_teardown"
+    ]
 
     assert [step.name for step in result.step_results if step.success is False] == [
         failed_step_name,
@@ -484,20 +534,27 @@ def test_global_setup_failure_only_run_global_teardown(tmp_path, failed_step_nam
 
     assert result.summary.status == "FAILED"
 
+    # global setup
     assert result.step_results[0].attempt_results[-1].exit_code == 1
+    # global teardown
+    assert result.step_results[1].attempt_results[-1].exit_code == 0
 
     assert result.step_results[0].attempt_results[-1].stderr == f"{failed_step_name} failed"
+    assert result.step_results[1].attempt_results[-1].stderr == ""
 
 
 @pytest.mark.test_lifecycle
 @pytest.mark.parametrize(argnames="failed_step_name", argvalues=["setup"])
-def test_setup_failure_only_run_global_teardown(tmp_path, failed_step_name):
+def test_setup_failure_skips_scenario_but_runs_teardown_and_global_teardown(
+    tmp_path, failed_step_name
+):
     config = mock_config(tmp_path)
     executor = MockExecutor(failed_step_name=failed_step_name)
     runner = DeviceTestRunner(
         executor=executor,
         artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
         reporter=JsonReporter(),
     )
     result = runner.run(config)
@@ -505,16 +562,17 @@ def test_setup_failure_only_run_global_teardown(tmp_path, failed_step_name):
     assert result.metadata.test_case_name == "power_001"
     assert result_passed(result) is False
 
-    assert len(result.step_results) == 3
+    assert len(result.step_results) == 4
 
     assert result.summary.configured_steps == 6
-    assert result.summary.executed_steps == 3
-    assert result.summary.passed_steps == 2
+    assert result.summary.executed_steps == 4
+    assert result.summary.passed_steps == 3
     assert result.summary.failed_steps == 1
-    assert result.summary.skipped_steps == 3
+    assert result.summary.skipped_steps == 2
 
     assert [step.name for step in result.step_results if step.success is True] == [
         "global_setup",
+        "teardown",
         "global_teardown",
     ]
 
@@ -524,13 +582,19 @@ def test_setup_failure_only_run_global_teardown(tmp_path, failed_step_name):
 
     assert result.summary.status == "FAILED"
 
+    # global setup
     assert result.step_results[0].attempt_results[-1].exit_code == 0
+    # setup
     assert result.step_results[1].attempt_results[-1].exit_code == 1
+    # teardown
     assert result.step_results[2].attempt_results[-1].exit_code == 0
+    # global_teardown
+    assert result.step_results[3].attempt_results[-1].exit_code == 0
 
     assert result.step_results[0].attempt_results[-1].stderr == ""
     assert result.step_results[1].attempt_results[-1].stderr == f"{failed_step_name} failed"
     assert result.step_results[2].attempt_results[-1].stderr == ""
+    assert result.step_results[3].attempt_results[-1].stderr == ""
 
     failed_step_result = next(step for step in result.step_results if step.name == failed_step_name)
     assert failed_step_result.stage == "setup"
@@ -544,6 +608,7 @@ def test_setup_failure_only_run_global_teardown(tmp_path, failed_step_name):
     executed_names = [name for name, _ in runner.executor.executed_attempts]
     assert "global_setup" in (executed_names)
     assert "setup" in (executed_names)
+    assert "teardown" in (executed_names)
     assert "global_teardown" in (executed_names)
 
 
@@ -555,6 +620,7 @@ def test_runner_passes_when_artifacts_are_valid(tmp_path: Path):
         executor=executor,
         artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
         reporter=JsonReporter(),
         show_console_output=False,
     )
@@ -576,6 +642,7 @@ def test_runner_fails_when_artifacts_invalid(tmp_path: Path):
         executor=executor,
         artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
         reporter=JsonReporter(),
         show_console_output=False,
     )
@@ -637,6 +704,7 @@ def test_runner_passes_without_validation_rules(tmp_path: Path):
         executor=executor,
         artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
         reporter=JsonReporter(),
         show_console_output=False,
     )
@@ -662,6 +730,7 @@ def test_step_passes_after_retry(tmp_path: Path):
         executor=executor,
         artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
         reporter=JsonReporter(),
     )
     result = runner.run(config)
@@ -684,6 +753,7 @@ def test_step_fails_after_max_attempts(tmp_path: Path):
         executor=executor,
         artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
         reporter=JsonReporter(),
     )
     result = runner.run(config)
@@ -707,6 +777,7 @@ def test_successful_step_is_not_retried(tmp_path: Path):
         executor=executor,
         artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
         reporter=JsonReporter(),
     )
     result = runner.run(config)
@@ -724,6 +795,7 @@ def test_retry_creates_separate_log_files(tmp_path: Path):
         executor=executor,
         artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
         reporter=JsonReporter(),
     )
     result = runner.run(config)
@@ -756,6 +828,7 @@ def test_retry_waits_between_attempts(tmp_path, monkeypatch):
         executor=executor,
         artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
         reporter=JsonReporter(),
     )
 
@@ -818,6 +891,7 @@ def test_artifact_failure_triggers_retry(tmp_path: Path):
         executor=executor,
         artifact_manager=ArtifactManager(output_dir=tmp_path),
         artifact_validator=validator,
+        failure_classifier=FailureClassifier(),
         reporter=JsonReporter(),
         show_console_output=False,
     )
@@ -924,6 +998,7 @@ def test_artifact_failure_exhausts_retry(tmp_path: Path):
         executor=MockAlwaysPassExecutor(),
         artifact_manager=ArtifactManager(tmp_path),
         artifact_validator=MockAlwaysFailArtifactValidator(),
+        failure_classifier=FailureClassifier(),
         reporter=JsonReporter(),
         show_console_output=False,
     )
@@ -947,7 +1022,7 @@ def test_artifact_failure_exhausts_retry(tmp_path: Path):
         step_result for step_result in result.step_results if step_result.name == "scenario_1"
     ][0]
     assert step_result.attempts == 3
-    assert step_result.success == False
+    assert step_result.success is False
     assert all(not attempt.success for attempt in step_result.attempt_results)
 
     # scenario.scenario_2
@@ -1019,6 +1094,7 @@ def test_non_retryable_artifact_failure_doew_not_retry(tmp_path: Path):
         executor=MockAlwaysPassExecutor(),
         artifact_manager=ArtifactManager(output_dir=tmp_path),
         artifact_validator=MockAlwaysFailArtifactValidator(),
+        failure_classifier=FailureClassifier(),
         reporter=JsonReporter(),
         show_console_output=False,
     )
@@ -1044,7 +1120,7 @@ def test_non_retryable_artifact_failure_doew_not_retry(tmp_path: Path):
     assert step_result.attempts == 1
 
     # step 本身是 True
-    assert step_result.success == True
+    assert step_result.success is True
 
     # scenario.scenario_2
     # skip
@@ -1128,3 +1204,73 @@ def test_retry_rules_are_filteredby_step(tmp_path: Path):
     rules = DeviceTestRunner._get_retry_rules_for_step(step_name="scenario_2", config=config)
     assert len(rules) == 1
     assert rules[0].name == "test_file_2_exist"
+
+
+def test_artifact_missing_retries(tmp_path: Path):
+
+    config = RunnerConfig(
+        test_case=DeviceTestCase(
+            id="power_001",
+            name="power_001",
+            description="Description",
+        ),
+        device=DeviceInfo(
+            serial="device_001",
+            product="pixel",
+            build="build_001",
+        ),
+        retry=RetryConfig(
+            max_attempts=3,
+            delay_seconds=1,
+        ),
+        lifecycle=LifecycleConfig(
+            global_setup=LifecycleSteps(steps=[mock_step("global_setup")]),
+            setup=LifecycleSteps(steps=[mock_step("setup")]),
+            scenario=LifecycleSteps(
+                steps=[
+                    mock_artifact_step("scenario_1", tmp_path / "test_file.txt"),
+                    mock_step("scenario_2"),
+                ]
+            ),
+            teardown=LifecycleSteps(steps=[mock_step("teardown")]),
+            global_teardown=LifecycleSteps(steps=[mock_step("global_teardown")]),
+        ),
+        artifact=ArtifactConfig(
+            output_dir=str(tmp_path),
+            validation=ArtifactValidationConfig(
+                rules=[
+                    ArtifactValidationRule(
+                        name="test_file_exist",
+                        type="exists",
+                        path=tmp_path / "test_file.txt",
+                        after_step="scenario_1",
+                        retry_on_failure=True,
+                    ),
+                ]
+            ),
+        ),
+    )
+
+    executor = MockAlwaysPassExecutor()
+
+    validator = MockMissingThenPassValidator()
+
+    runner = DeviceTestRunner(
+        executor=executor,
+        artifact_manager=(ArtifactManager(tmp_path)),
+        artifact_validator=validator,
+        failure_classifier=(FailureClassifier()),
+        reporter=JsonReporter(),
+        show_console_output=False,
+    )
+
+    result = runner.run(config)
+
+    # scenario_1
+    step_result = result.step_results[2]
+
+    assert step_result.attempts == 2
+
+    assert step_result.attempt_results[0].failure_type == FailureType.ARTIFACT_MISSING
+    assert step_result.attempt_results[1].failure_type == FailureType.NONE
+    assert step_result.success is True

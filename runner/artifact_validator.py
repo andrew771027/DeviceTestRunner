@@ -40,6 +40,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(resolved_path),
                 passed=False,
+                failure_type=FailureType.ARTIFACT_INVALID,
                 message=f"Unknown validation type: {rule.type}.",
             )
 
@@ -53,6 +54,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(resolved_path),
                 passed=False,
+                failure_type=FailureType.ARTIFACT_INVALID,
                 message=f"Error during validation: {error}",
             )
 
@@ -236,7 +238,7 @@ class ArtifactValidator:
             type=rule.type,
             path=str(path),
             passed=has_contents,
-            failure_type=FailureType.NONE if has_contents else FailureType.ARTIFACT_MISSING,
+            failure_type=(FailureType.NONE if has_contents else FailureType.ARTIFACT_MISSING),
             message=message,
         )
 
@@ -412,7 +414,7 @@ class ArtifactValidator:
             path=str(path),
             passed=True,
             failure_type=FailureType.NONE,
-            message=f"JSON content is valid.",
+            message="JSON content is valid.",
         )
 
     @staticmethod

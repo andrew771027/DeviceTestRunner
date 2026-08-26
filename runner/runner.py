@@ -86,15 +86,15 @@ class DeviceTestRunner:
                     stop_on_failure=True,
                 )
 
-                self._run_stage(
-                    stage="teardown",
-                    steps=config.lifecycle.teardown.steps,
-                    config=config,
-                    run_dir=run_dir,
-                    artifact_manager=self.artifact_manager,
-                    step_results=step_results,
-                    stop_on_failure=False,
-                )
+            self._run_stage(
+                stage="teardown",
+                steps=config.lifecycle.teardown.steps,
+                config=config,
+                run_dir=run_dir,
+                artifact_manager=self.artifact_manager,
+                step_results=step_results,
+                stop_on_failure=False,
+            )
 
         self._run_stage(
             stage="global_teardown",
@@ -234,6 +234,12 @@ class DeviceTestRunner:
 
                 if not should_retry:
                     break
+
+                if retry_rules:
+                    self.artifact_manager.cleanup_validation_targets(
+                        run_dir=run_dir,
+                        rules=retry_rules,
+                    )
 
                 if retry_policy.delay_seconds > 0:
                     time.sleep(retry_policy.delay_seconds)

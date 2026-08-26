@@ -9,4 +9,5 @@
 - [ ] Definition Of Done
 - [ ] Test Matrix
 - [ ] Acceptance Criteria
+- [ ] Test Case Description
 - [ ] Tag

@@ -21,45 +21,24 @@ def parse_args() -> argparse.Namespace:
 
 
 def main():
-    try:
-        args = parse_args()
 
-        config = ConfigLoader().load(args.config)
+    args = parse_args()
 
-        failure_classifier = FailureClassifier()
+    config = ConfigLoader().load(args.config)
+    failure_classifier = FailureClassifier()
+    runner = DeviceTestRunner(
+        executor=SubprocessExecutor(
+            project_directory=PROJECT_ROOT, failure_classifier=failure_classifier
+        ),
+        artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
+        artifact_validator=ArtifactValidator(),
+        failure_classifier=failure_classifier,
+        reporter=JsonReporter(),
+    )
 
-        runner = DeviceTestRunner(
-            executor=SubprocessExecutor(
-                project_directory=PROJECT_ROOT, failure_classifier=failure_classifier
-            ),
-            artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
-            artifact_validator=ArtifactValidator(),
-            failure_classifier=failure_classifier,
-            reporter=JsonReporter(),
-        )
+    result = runner.run(config=config)
 
-        result = runner.run(config=config)
-
-    except (OSError, KeyError, TypeError, ValueError) as e:
-        print(f"Runner Error: {e}", file=sys.stderr)
-        return 2
-
-    print("==== Device Test Runner v1.1 ====")
-    print(f"Test Case ID: {result.metadata.test_case_id}")
-    print(f"Test Case Name: {result.metadata.test_case_name}")
-    print(f"Status: {result.summary.status}")
-    print()
-
-    for step_result in result.step_results:
-        print(f"[Step] {step_result.name}")
-        print(f"  Success: {step_result.success}")
-        print(f"  Duration: {step_result.duration_seconds:.2f}s")
-
-        print()
-
-    if result.summary.status == "PASSED":
-        return 0
-    return 1
+    print(result.summary.status)
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ import pytest
 from runner.models import (
     ArtifactValidationResult,
     ExecutionSummary,
+    FailureType,
     RunMetadata,
     RunResult,
     StepAttemptResult,
@@ -55,6 +56,7 @@ from runner.reporter import JsonReporter
                             attempt=1,
                             success=True,
                             exit_code=0,
+                            failure_type=FailureType.NONE,
                             duration_seconds=5.0,
                             stdout="Setup 1 completed.",
                             stderr="",
@@ -75,6 +77,7 @@ from runner.reporter import JsonReporter
                             attempt=1,
                             success=True,
                             exit_code=0,
+                            failure_type=FailureType.NONE,
                             duration_seconds=10.0,
                             stdout="Test 1 completed.",
                             stderr="",
@@ -94,6 +97,7 @@ from runner.reporter import JsonReporter
                         StepAttemptResult(
                             attempt=1,
                             success=False,
+                            failure_type=FailureType.PROCESS_ERROR,
                             exit_code=1,
                             duration_seconds=15.0,
                             stdout="Test 2 failed.",
@@ -112,6 +116,7 @@ from runner.reporter import JsonReporter
                     path="results/test_file.txt",
                     passed=True,
                     message="File Exists",
+                    failure_type=FailureType.NONE,
                 ),
                 ArtifactValidationResult(
                     name="test_file_size",
@@ -120,6 +125,7 @@ from runner.reporter import JsonReporter
                     passed=False,
                     message="File size excede maxmium.",
                     actual_size_bytes=1,
+                    failure_type=FailureType.ARTIFACT_INVALID,
                 ),
             ],
         )

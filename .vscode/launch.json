@@ -25,9 +25,9 @@
             "module": "pytest",
             "console": "integratedTerminal",
             "args": [
-                "tests/test_integration.py",
+                "tests/test_unit/test_runner.py",
                 "-k",
-                "test_integration_stops_after_failed_step"
+                "test_global_setup_failure_only_run_global_teardown"
 
             ]
         }

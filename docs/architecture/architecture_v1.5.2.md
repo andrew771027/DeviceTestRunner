@@ -130,14 +130,26 @@ retry_policy.should_retry(
 
 這讓使用者可從 `result.json` 判斷失敗屬於執行環境、裝置連線、command 邏輯，或 artifact acceptance contract，並保留原始 log 進一步追查。
 
-## 7. Compatibility
+## 7. Lifecycle Cleanup Contract
+
+v1.5.2 同時強化 lifecycle 的 cleanup 保證。這是執行邏輯變更，不只是 failure classification 的內部重構：
+
+- `global_setup` 失敗：跳過 `setup`、`scenario` 與 `teardown`，仍執行 `global_teardown`。
+- `setup` 失敗：跳過 `scenario`，仍執行 `teardown` 與 `global_teardown`。
+- `scenario` 失敗：停止該 stage 的剩餘 steps，仍執行 `teardown` 與 `global_teardown`。
+- `teardown` 與 `global_teardown` 中的 step 失敗：記錄失敗，但不中斷同一 cleanup stage 的後續 steps。
+
+因此 `teardown` 以 `global_setup` 成功為前提，而 `global_teardown` 無條件進入執行。被跳過的 configured steps 會計入 `skipped_steps`，並使最終 run status 為 `FAILED`。
+
+## 8. Compatibility
 
 - YAML lifecycle 與 artifact rule schema 不因本版本改變。
 - 原有 `max_attempts`、`delay_seconds`、`after_step` 與 `retry_on_failure` 行為保留。
+- Lifecycle schema 不變，但 cleanup routing 已依上述契約變更；依賴「`global_setup` 失敗時不執行 `global_teardown`」或「`setup` 失敗時不執行 `teardown`」的使用者應調整 cleanup steps。
 - `result.json` 的 attempt 與 artifact validation objects 新增 failure classification，consumer 應容許新增欄位。
 - Runner metadata version 更新為 `1.5.2`。
 
-## 8. Out of Scope
+## 9. Out of Scope
 
 v1.5.2 不包含：
 

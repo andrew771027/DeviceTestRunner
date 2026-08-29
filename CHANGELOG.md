@@ -16,6 +16,8 @@
 
 - Retry decisions now use failure type instead of a success boolean
 - Process failures take priority over artifact failures; missing artifacts take priority over invalid artifacts
+- Test lifecycle cleanup guarantees were strengthened: `teardown` now runs after `setup` has started even when `setup` fails, while `global_teardown` always runs even when `global_setup` fails
+- Main lifecycle stages still fail fast: a failed `global_setup` skips `setup`, `scenario`, and `teardown`; a failed `setup` skips `scenario`; cleanup stages continue through all configured steps
 - Executor, validator, runner, retry policy, and report metadata identify the v1.5.2 failure-classification contract
 
 ## [1.5.1]

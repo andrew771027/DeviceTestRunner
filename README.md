@@ -161,6 +161,18 @@ global_teardown
 | `teardown`        | 清理單一 test case 產生的狀態  |
 | `global_teardown` | 整次測試執行完成後的最終清理        |
 
+階段失敗時，Runner 依下列規則路由：
+
+| 失敗位置 | 後續行為 |
+| --- | --- |
+| `global_setup` | 停止當前 stage，跳過 `setup`、`scenario` 與 `teardown`，仍執行 `global_teardown` |
+| `setup` | 停止當前 stage，跳過 `scenario`，仍執行 `teardown` 與 `global_teardown` |
+| `scenario` | 停止當前 stage 的剩餘 steps，仍執行 `teardown` 與 `global_teardown` |
+| `teardown` | 記錄失敗但繼續執行該 stage 的剩餘 steps，之後執行 `global_teardown` |
+| `global_teardown` | 記錄失敗但繼續執行該 stage 的剩餘 steps |
+
+`teardown` 以 `global_setup` 成功為前提；`global_teardown` 則是整次 run 的最後清理保證，不受前置 stage 成敗影響。任一 step 失敗或因路由規則被跳過時，最終 run status 為 `FAILED`。此 cleanup 行為自 v1.5.2 起生效。
+
 未來 recorder lifecycle 會與 scenario 協作：
 
 ```text

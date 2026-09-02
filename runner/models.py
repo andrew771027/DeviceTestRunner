@@ -60,6 +60,16 @@ class RetryConfig:
     max_attempts: int = 1
     delay_seconds: float = 0.0
 
+    retry_on: list[FailureType] = field(
+        default_factory=lambda: [
+            FailureType.TIMEOUT,
+            FailureType.DEVICE_OFFLINE,
+            FailureType.PROCESS_ERROR,
+            FailureType.ARTIFACT_MISSING,
+            FailureType.ARTIFACT_INVALID,
+        ]
+    )
+
 
 @dataclass(frozen=True)
 class ArtifactValidationRule:

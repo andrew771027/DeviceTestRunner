@@ -16,7 +16,16 @@ from runner.models import (
 )
 
 
+
 class ConfigLoader:
+
+    DEFAULT_RETRY_ON = [
+        FailureType.TIMEOUT,
+        FailureType.DEVICE_OFFLINE,
+        FailureType.PROCESS_ERROR,
+        FailureType.ARTIFACT_MISSING,
+        FailureType.ARTIFACT_INVALID,
+    ]
 
     def load(self, path: str) -> RunnerConfig:
         with open(path, "r") as f:
@@ -128,4 +137,31 @@ class ConfigLoader:
         if delay_seconds < 0:
             raise ValueError("retry.delay_seconds must be >= 0")
 
-        return RetryConfig(max_attempts=max_attempts, delay_seconds=delay_seconds)
+        raw_retry_on = retry.get("retry_on")
+
+        if retry_on is None:
+            retry_on = list(self.DEFAULT_RETRY_ON)
+        else:
+            retry_on = self._parse_retry_on(raw_retry_on)
+
+        return RetryConfig(max_attempts=max_attempts, 
+                           delay_seconds=delay_seconds, 
+                           retry_on=retry_on)
+
+    @staticmethod
+    def _parse_retry_on(values: list[str]) -> list[FailureType]:
+
+        retry_on: list[FailureType] = []
+
+        for value in values:
+            try:
+                failure_type = FailureType(value)
+            except ValueError:
+                raise ValueError(f"Unknown retry failure type: {value}")
+            
+            if failure_type == FailureType.NONE:
+                raise ValueError("retry_on cannnot contain 'none'")
+            
+            retry_on.append(failure_type)
+        
+        return retry_on

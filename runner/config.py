@@ -8,6 +8,7 @@ from runner.models import (
     ArtifactValidationRule,
     DeviceInfo,
     DeviceTestCase,
+    FailureType,
     LifecycleConfig,
     LifecycleStepContent,
     LifecycleSteps,
@@ -16,16 +17,7 @@ from runner.models import (
 )
 
 
-
 class ConfigLoader:
-
-    DEFAULT_RETRY_ON = [
-        FailureType.TIMEOUT,
-        FailureType.DEVICE_OFFLINE,
-        FailureType.PROCESS_ERROR,
-        FailureType.ARTIFACT_MISSING,
-        FailureType.ARTIFACT_INVALID,
-    ]
 
     def load(self, path: str) -> RunnerConfig:
         with open(path, "r") as f:
@@ -79,9 +71,7 @@ class ConfigLoader:
 
         device = raw["device"]
 
-        return DeviceInfo(
-            serial=device["serial"], product=device["product"], build=device["build"]
-        )
+        return DeviceInfo(serial=device["serial"], product=device["product"], build=device["build"])
 
     @staticmethod
     def _load_steps(raw: dict[str, Any]) -> LifecycleSteps:
@@ -137,13 +127,15 @@ class ConfigLoader:
         if delay_seconds < 0:
             raise ValueError("retry.delay_seconds must be >= 0")
 
-        retry_on = self._parse_retry_on(retry.get("retry_on", []))
+        retry_on = ConfigLoader._parse_retry_on(retry.get("retry_on", []))
 
-        return RetryConfig(max_attempts=max_attempts, delay_seconds=delay_seconds, retry_on=retry_on)
+        return RetryConfig(
+            max_attempts=max_attempts, delay_seconds=delay_seconds, retry_on=retry_on
+        )
 
     @staticmethod
-    def _parse_retry_on(self, values: list[str]) -> list[FailureType]:
-        
+    def _parse_retry_on(values: list[str]) -> list[FailureType]:
+
         retry_on: list[FailureType] = []
 
         for value in values:
@@ -154,14 +146,14 @@ class ConfigLoader:
 
             except ValueError:
 
-                raise ValueError(f"Unkonwn retry failure type: {value}")
-            
+                raise ValueError(f"Unkown retry failure type: {value}")
+
             if failure_type == FailureType.NONE:
 
                 raise ValueError("retry.retry_on cannot contain 'none")
-            
+
             if failure_type not in retry_on:
 
                 retry_on.append(failure_type)
-        
+
         return retry_on

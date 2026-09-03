@@ -40,6 +40,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(resolved_path),
                 passed=False,
+                required=rule.required,
                 failure_type=FailureType.ARTIFACT_INVALID,
                 message=f"Unknown validation type: {rule.type}.",
             )
@@ -54,6 +55,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(resolved_path),
                 passed=False,
+                required=rule.required,
                 failure_type=FailureType.ARTIFACT_INVALID,
                 message=f"Error during validation: {error}",
             )

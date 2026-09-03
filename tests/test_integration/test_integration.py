@@ -146,7 +146,7 @@ artifact:
 
     report = json.loads((run_dir / "result.json").read_text(encoding="utf-8"))
 
-    assert report["metadata"]["runner_version"] == "1.5.2"
+    assert report["metadata"]["runner_version"] == "1.5.3"
 
     assert report["summary"]["status"] == "PASSED"
 
@@ -289,7 +289,7 @@ artifact:
 
     report = json.loads((run_dir / "result.json").read_text(encoding="utf-8"))
 
-    assert report["metadata"]["runner_version"] == "1.5.2"
+    assert report["metadata"]["runner_version"] == "1.5.3"
 
     assert report["summary"]["status"] == "FAILED"
 
@@ -319,6 +319,8 @@ def test_integration_steps_succeeds_after_party(tmp_path: Path):
         retry:
           max_attempts: 3
           delay_seconds: 1
+          retry_on:
+            - process_error
         lifecycle:
           global_setup:
             steps: []
@@ -405,6 +407,8 @@ def test_real_subprocess_fails_after_retry_exhausted(tmp_path: Path):
         retry:
           max_attempts: 3
           delay_seconds: 1
+          retry_on:
+            - process_error
         lifecycle:
           global_setup:
             steps: []

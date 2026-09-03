@@ -81,6 +81,7 @@ def test_classifies_artifact_missing():
             type="exists",
             path="power.csv",
             passed=False,
+            required=True,
             failure_type=FailureType.ARTIFACT_MISSING,
             message="Artifact does not exists.",
         )
@@ -106,6 +107,7 @@ def test_classifies_artifact_invalid():
             type="csv_content",
             path="power.csv",
             passed=False,
+            required=True,
             failure_type=FailureType.ARTIFACT_INVALID,
             message="CSV missing columns",
         )
@@ -131,6 +133,7 @@ def test_artifact_missing_has_priority():
             type="json_content",
             path="result.json",
             passed=False,
+            required=True,
             failure_type=FailureType.ARTIFACT_INVALID,
             message="invalid",
         ),
@@ -139,6 +142,7 @@ def test_artifact_missing_has_priority():
             type="exists",
             path="power.csv",
             passed=False,
+            required=True,
             failure_type=FailureType.ARTIFACT_MISSING,
             message="missing",
         ),

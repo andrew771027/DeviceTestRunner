@@ -7,6 +7,7 @@ from runner.models import (
     ArtifactConfig,
     DeviceInfo,
     DeviceTestCase,
+    FailureType,
     LifecycleConfig,
     LifecycleStepContent,
     LifecycleSteps,
@@ -312,6 +313,7 @@ def test_artifact_retry_defaults_to_false(tmp_path: Path):
                 - name: csv_content
                   type: csv_content
                   path: results/power.csv
+                  required: False
                   required_columns:
                     - timestamp
                     - power
@@ -324,7 +326,7 @@ def test_artifact_retry_defaults_to_false(tmp_path: Path):
     rule = config.artifact.validation.rules[0]
 
     assert rule.after_step is None
-    assert rule.retry_on_failure is False
+    assert rule.required is False
 
 
 def test_load_csv_and_json_validation_rules(tmp_path: Path):
@@ -495,7 +497,7 @@ def test_load_artifact_aware_retry_rule(tmp_path: Path):
                   type: csv_content
                   path: results/power.csv
                   after_step: run_power_test
-                  retry_on_failure: true
+                  required: true
                   required_columns:
                     - timestamp
                     - power
@@ -508,7 +510,7 @@ def test_load_artifact_aware_retry_rule(tmp_path: Path):
     rule = config.artifact.validation.rules[0]
 
     assert rule.after_step == "run_power_test"
-    assert rule.retry_on_failure is True
+    assert rule.required is True
     assert rule.required_columns == ["timestamp", "power"]
     assert rule.min_rows == 10
 
@@ -638,33 +640,37 @@ def test_retry_delay_seconds_must_be_positive(tmp_path: Path):
 
 def test_artifact_required_defaults_to_true():
 
-    raw = {
-            "name": "test",
-            "type": "exists",
-            "path": "test.csv"
-        } 
+    raw = {"validation": {"rules": [{"name": "test", "type": "exists", "path": "test.csv"}]}}
 
-    rule = ConfigLoader()._load_artifact_validation(raw)
+    config = ConfigLoader._load_artifact_validation(raw)
 
-    assert rule.required is True
+    assert config.rules[0].required is True
+
 
 def test_load_optional_artifact():
 
     raw = {
-            "name": "debug_log",
-            "type": "exists",
-            "path": "debug.log",
-            "required": False
+        "validation": {
+            "rules": [
+                {
+                    "name": "debug_log",
+                    "type": "exists",
+                    "path": "debug.log",
+                    "required": False,
+                }
+            ]
         }
+    }
 
-    rule = ConfigLoader()._load_artifact_validation(raw)
+    config = ConfigLoader._load_artifact_validation(raw)
 
-    assert rule.required is False
+    assert config.rules[0].required is False
+
 
 def test_build_selective_retry_config():
 
     raw = {
-        "retry":{
+        "retry": {
             "max_attempts": 3,
             "delay_seconds": 2,
             "retry_on": [
@@ -675,26 +681,45 @@ def test_build_selective_retry_config():
         }
     }
 
-    config = ConfigLoader()._load_retry(raw)
+    config = ConfigLoader._load_retry(raw)
 
     assert config.max_attempts == 3
     assert config.delay_seconds == 2
 
-    assert config.retry_on == (
+    assert config.retry_on == [
         FailureType.TIMEOUT,
         FailureType.DEVICE_OFFLINE,
         FailureType.ARTIFACT_MISSING,
-    )
+    ]
+
 
 def test_retry_on_defaults_to_empty():
 
-    raw = {
-        "retry": {
-            "max_attempts": 3
-        }
-    }
+    raw = {"retry": {"max_attempts": 3}}
 
-    config = ConfigLoader()._load_retry(raw)
+    config = ConfigLoader._load_retry(raw)
 
     assert config.max_attempts == 3
-    assert config.retry_on = ()
+    assert config.retry_on == []
+
+
+def test_unknown_retry_failure_type_raises_value_error():
+    with pytest.raises(ValueError, match="retry failure type: unknown"):
+        ConfigLoader._parse_retry_on(["unknown"])
+
+
+def test_retry_on_rejects_none():
+    with pytest.raises(ValueError, match="cannot contain 'none"):
+        ConfigLoader._parse_retry_on(["none"])
+
+
+def test_duplicate_retry_on_values_are_removed():
+    retry_on = ConfigLoader._parse_retry_on(
+        ["timeout", "device_offline", "timeout", "artifact_missing"]
+    )
+
+    assert retry_on == [
+        FailureType.TIMEOUT,
+        FailureType.DEVICE_OFFLINE,
+        FailureType.ARTIFACT_MISSING,
+    ]

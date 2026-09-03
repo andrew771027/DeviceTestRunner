@@ -176,9 +176,9 @@ class DeviceTestRunner:
 
                 # 只有 process 成功時，
                 # artifact validation 才有意義。
-                if process_result.success and retry_rules:
+                if process_result.success and artifact_rules:
                     artifact_results = self.artifact_validator.validate_all(
-                        rules=retry_rules, base_dir=run_dir
+                        rules=artifact_rules, base_dir=run_dir
                     )
 
                 required_artifact_results = self._get_required_artifact_results(artifact_results)
@@ -236,7 +236,7 @@ class DeviceTestRunner:
 
                 if not should_retry:
                     break
-                
+
                 required_rules = [rule for rule in artifact_rules if rule.required]
 
                 if required_rules:
@@ -295,13 +295,13 @@ class DeviceTestRunner:
 
         passed_artifact_rules = sum(result.passed for result in artifact_results)
 
-        failed_artifact_rules = sum(not result.passed for result in artifact_results if not result.passed)
+        failed_artifact_rules = sum(
+            not result.passed for result in artifact_results if not result.passed
+        )
 
         failed_required_artifact_rules = sum(
-                                            1
-                                            for result in artifact_results
-                                            if (result.required and not result.passed)
-                                        )
+            1 for result in artifact_results if (result.required and not result.passed)
+        )
 
         status = self._calculate_status(
             failed_steps=failed_steps,
@@ -361,10 +361,10 @@ class DeviceTestRunner:
         )
 
     @staticmethod
-    def _calculate_status(failed_steps: int, 
-                          skipped_steps: int, 
-                          failed_required_artifact_rules: int) -> str:
-        
+    def _calculate_status(
+        failed_steps: int, skipped_steps: int, failed_required_artifact_rules: int
+    ) -> str:
+
         if failed_steps > 0:
             return "FAILED"
 
@@ -382,13 +382,11 @@ class DeviceTestRunner:
         config: RunnerConfig,
     ) -> List[ArtifactValidationRule]:
 
-        return [
-            rule
-            for rule in config.artifact.validation.rules
-            if rule.after_step == step_name is True
-        ]
+        return [rule for rule in config.artifact.validation.rules if rule.after_step == step_name]
 
     @staticmethod
-    def _get_required_artifact_results(artifact_results: List[ArtifactValidationResult]) -> List[ArtifactValidationResult]:
-        
+    def _get_required_artifact_results(
+        artifact_results: List[ArtifactValidationResult],
+    ) -> List[ArtifactValidationResult]:
+
         return [result for result in artifact_results if result.required]

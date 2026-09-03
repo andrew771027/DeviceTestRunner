@@ -6,7 +6,7 @@ from typing import Any, List, Optional
 class FailureType(str, Enum):
     NONE = "none"
 
-    TIMEOUT = "tiimeout"
+    TIMEOUT = "timeout"
     DEVICE_OFFLINE = "device_offline"
     PROCESS_ERROR = "process_error"
 
@@ -59,7 +59,6 @@ class LifecycleConfig:
 class RetryConfig:
     max_attempts: int = 1
     delay_seconds: float = 0.0
-    retry_on: tuple[FailureType, ...] = ()
 
     retry_on: list[FailureType] = field(
         default_factory=lambda: [

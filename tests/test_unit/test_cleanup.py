@@ -26,7 +26,7 @@ def test_cleanup_retry_artifact(tmp_path: Path):
             type="exists",
             path="results/power.csv",
             after_step="power_test",
-            retry_on_failure=True,
+            required=True,
         )
     ]
 
@@ -59,7 +59,7 @@ def test_cleanup_retry_artifact_directory(tmp_path: Path):
             type="directory_not_empty",
             path="recorder",
             after_step="record",
-            retry_on_failure=True,
+            required=True,
         )
     ]
 
@@ -68,3 +68,115 @@ def test_cleanup_retry_artifact_directory(tmp_path: Path):
     artifact_manager.cleanup_validation_targets(run_dir=run_dir, rules=rules)
 
     assert directory.exists() is False
+
+
+def test_cleanup_does_not_remove_optional_artifact(tmp_path: Path):
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    artifact = run_dir / "debug.log"
+    artifact.write_text("diagnostic data", encoding="utf-8")
+
+    rules = [
+        ArtifactValidationRule(
+            name="debug_log",
+            type="exists",
+            path="debug.log",
+            after_step="test",
+            required=False,
+        )
+    ]
+
+    ArtifactManager(output_dir=tmp_path).cleanup_validation_targets(run_dir=run_dir, rules=rules)
+
+    assert artifact.exists() is True
+
+
+def test_cleanup_does_not_remove_path_outside_run_directory(tmp_path: Path):
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    outside_artifact = tmp_path / "outside.csv"
+    outside_artifact.write_text("must remain", encoding="utf-8")
+
+    rules = [
+        ArtifactValidationRule(
+            name="outside",
+            type="exists",
+            path=outside_artifact,
+            after_step="test",
+            required=True,
+        )
+    ]
+
+    ArtifactManager(output_dir=tmp_path).cleanup_validation_targets(run_dir=run_dir, rules=rules)
+
+    assert outside_artifact.exists() is True
+
+
+def test_cleanup_removes_file_inside_run_directory(tmp_path: Path):
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+
+    artifact = run_dir / "result.csv"
+    artifact.write_text("old data", encoding="utf-8")
+
+    rules = [
+        ArtifactValidationRule(
+            name="result",
+            type="exists",
+            path=artifact,
+            after_step="test",
+            required=True,
+        )
+    ]
+
+    ArtifactManager(output_dir=tmp_path).cleanup_validation_targets(
+        run_dir=run_dir,
+        rules=rules,
+    )
+
+    assert artifact.exists() is False
+
+
+def test_cleanup_resolves_relative_path_under_run_directory(tmp_path: Path):
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+
+    artifact = run_dir / "result.csv"
+    artifact.write_text("old data", encoding="utf-8")
+
+    rules = [
+        ArtifactValidationRule(
+            name="result",
+            type="exists",
+            path=Path("result.csv"),
+            after_step="test",
+            required=True,
+        )
+    ]
+
+    ArtifactManager(output_dir=tmp_path).cleanup_validation_targets(
+        run_dir=run_dir,
+        rules=rules,
+    )
+
+    assert artifact.exists() is False
+
+
+def test_cleanup_ignores_missing_target(tmp_path: Path):
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+
+    rules = [
+        ArtifactValidationRule(
+            name="missing",
+            type="exists",
+            path=Path("missing.csv"),
+            after_step="test",
+            required=True,
+        )
+    ]
+
+    ArtifactManager(output_dir=tmp_path).cleanup_validation_targets(
+        run_dir=run_dir,
+        rules=rules,
+    )

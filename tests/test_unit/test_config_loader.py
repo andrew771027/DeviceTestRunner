@@ -635,103 +635,66 @@ def test_retry_delay_seconds_must_be_positive(tmp_path: Path):
     with pytest.raises(ValueError, match=("retry.delay_seconds must be >= 0")):
         ConfigLoader().load(config_file)
 
-def test_load_selective_retry_config(tmp_path: Path):
-    config_file = tmp_path / "config.yaml"
 
-    config_file.write_text(
-        """
-        test_case:
-            id： retry_001
-            name: Retry Test
-            description: selective_retry
-        device:
-            serial: fake_serial
-            product: fake_pixel
-            build: fake_build
-        retry:
-            max_attempts: 3
-            delay_seconds: 10
-            retry_on:
-                - timeout
-                - device_offline
-                - artifact_missing
-        lifecycle:
-            global_setup:
-                steps: []
-            setup:
-                steps: []
-            scenario:
-                steps: []
-            teardown:
-                steps: []
-            global_teardown:
-                steps: []
-        artifact:
-            output_dir: artifacts
-    """
-        ,encoding="utf-8"
-    )
+def test_artifact_required_defaults_to_true():
 
-    config = ConfigLoader().load(config_file)
-
-    assert config.retry.max_attempts == 3
-    assert config.retry.delay_seconds == 10
-    assert config.retry.retry_on == [
-        FailureType.TIMEOUT,
-        FailureType.DEVICE_OFFLINE,
-        FailureType.ARTIFACT_MISSING,
-    ]
-
-def test_unknown_retry_failure_type_failes(tmp_path: Path):
-    config_file = tmp_path / "config.yaml"
-
-    config_file.write_text(
-    """
-        test_case:
-            id: retry_001
-            name: Retry Test
-            description: invalid retry type
-        device:
-            serial: fake_serial
-            product: fake_pixel
-            build: fake_build
-        retry:
-            max_attempts: 3
-            retry_on:
-                - timeout
-                - banana_error
-        lifecycle:
-            global_setup:
-                steps: []
-            setup:
-                steps: []
-            scenario:
-                steps: []
-            teardown:
-                steps: []
-            global_teardown:
-                steps: []
-        artifact:
-            output_dir: artifacts
-    """, 
-    encoding="urf-8"
-    )
-
-    with pytest.raises(ValueError, match=("Unknown retry failure type: banana_error")):
-        ConfigLoader().load(config_file)
-    
-def test_retry_on_none_is_invalid(tmp_path: Path):
     raw = {
-        "retry": {
+            "name": "test",
+            "type": "exists",
+            "path": "test.csv"
+        } 
+
+    rule = ConfigLoader()._load_artifact_validation(raw)
+
+    assert rule.required is True
+
+def test_load_optional_artifact():
+
+    raw = {
+            "name": "debug_log",
+            "type": "exists",
+            "path": "debug.log",
+            "required": False
+        }
+
+    rule = ConfigLoader()._load_artifact_validation(raw)
+
+    assert rule.required is False
+
+def test_build_selective_retry_config():
+
+    raw = {
+        "retry":{
             "max_attempts": 3,
-            "retry_on":[
-                "none"
-            ]
+            "delay_seconds": 2,
+            "retry_on": [
+                "timeout",
+                "device_offline",
+                "artifact_missing",
+            ],
         }
     }
 
-    config_loder = ConfigLoader()
-    
-    with pytest.raises(ValueError, match=("retry_on cannot contain 'none'"))
+    config = ConfigLoader()._load_retry(raw)
 
-        config_loder._load_retry(raw)
+    assert config.max_attempts == 3
+    assert config.delay_seconds == 2
+
+    assert config.retry_on == (
+        FailureType.TIMEOUT,
+        FailureType.DEVICE_OFFLINE,
+        FailureType.ARTIFACT_MISSING,
+    )
+
+def test_retry_on_defaults_to_empty():
+
+    raw = {
+        "retry": {
+            "max_attempts": 3
+        }
+    }
+
+    config = ConfigLoader()._load_retry(raw)
+
+    assert config.max_attempts == 3
+    assert config.retry_on = ()

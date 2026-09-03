@@ -59,6 +59,7 @@ class LifecycleConfig:
 class RetryConfig:
     max_attempts: int = 1
     delay_seconds: float = 0.0
+    retry_on: tuple[FailureType, ...] = ()
 
     retry_on: list[FailureType] = field(
         default_factory=lambda: [
@@ -80,7 +81,8 @@ class ArtifactValidationRule:
 
     # v1.5.1
     after_step: Optional[str] = None
-    retry_on_failure: bool = False
+    # v1.5.3
+    required: bool = True
 
     # file_size
     max_size_bytes: Optional[int] = None
@@ -127,6 +129,8 @@ class ArtifactValidationResult:
     path: str
     passed: bool
     message: str
+    # v1.5.3
+    required: bool
 
     failure_type: FailureType
 
@@ -196,6 +200,7 @@ class ExecutionSummary:
     configured_artifact_rules: int
     passed_artifact_rules: int
     failed_artifact_rules: int
+    failed_required_artifact_rules: int
 
     duration_seconds: float
 

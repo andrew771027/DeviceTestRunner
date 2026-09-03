@@ -16,11 +16,7 @@ class RetryPolicy:
         if attempt >= self.config.max_attempts:
             return False
 
-        # Config-Driven Decision
-        if failure_type not in self.config.retry_on:
-            return False
-
-        return failure_type in self.RETRYABLE_FAILURES
+        return failure_type in self.config.retry_on
 
     @property
     def delay_seconds(self) -> float:

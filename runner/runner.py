@@ -24,7 +24,7 @@ from runner.retry import RetryPolicy
 
 
 class DeviceTestRunner:
-    VERSION = "1.5.2"
+    VERSION = "1.5.3"
 
     def __init__(
         self,
@@ -50,7 +50,7 @@ class DeviceTestRunner:
 
         run_dir = self.artifact_manager.create_run_directory(test_case_id=config.test_case.id)
 
-        step_results: list[StepResult] = []
+        step_results: List[StepResult] = []
 
         global_setup_success = self._run_stage(
             stage="global_setup",
@@ -145,13 +145,13 @@ class DeviceTestRunner:
 
         for step in steps:
 
-            attempt_results: list[StepAttemptResult] = []
+            attempt_results: List[StepAttemptResult] = []
+
+            artifact_rules = self._get_rules_for_step(step_name=step.name, config=config)
 
             step_started_at = time.perf_counter()
 
             step_success = False
-
-            retry_rules = self._get_retry_rules_for_step(step_name=step.name, config=config)
 
             for attempt in range(1, config.retry.max_attempts + 1):
 
@@ -172,7 +172,7 @@ class DeviceTestRunner:
                         working_directory=run_dir,
                     )
 
-                artifact_results: list[ArtifactValidationResult] = []
+                artifact_results: List[ArtifactValidationResult] = []
 
                 # 只有 process 成功時，
                 # artifact validation 才有意義。
@@ -181,8 +181,10 @@ class DeviceTestRunner:
                         rules=retry_rules, base_dir=run_dir
                     )
 
+                required_artifact_results = self._get_required_artifact_results(artifact_results)
+
                 artifact_failure_type = self.failure_classifier.classify_artifact_failure(
-                    artifact_results=artifact_results
+                    artifact_results=required_artifact_results
                 )
 
                 #
@@ -234,11 +236,13 @@ class DeviceTestRunner:
 
                 if not should_retry:
                     break
+                
+                required_rules = [rule for rule in artifact_rules if rule.required]
 
-                if retry_rules:
+                if required_rules:
                     self.artifact_manager.cleanup_validation_targets(
                         run_dir=run_dir,
-                        rules=retry_rules,
+                        rules=required_rules,
                     )
 
                 if retry_policy.delay_seconds > 0:
@@ -271,7 +275,7 @@ class DeviceTestRunner:
         config: RunnerConfig,
         run_dir: Path,
         step_results: List[StepResult],
-        artifact_results: list[ArtifactValidationResult],
+        artifact_results: List[ArtifactValidationResult],
         started_at: datetime,
         finished_at: datetime,
         duration_seconds: float,
@@ -291,12 +295,18 @@ class DeviceTestRunner:
 
         passed_artifact_rules = sum(result.passed for result in artifact_results)
 
-        failed_artifact_rules = sum(not result.passed for result in artifact_results)
+        failed_artifact_rules = sum(not result.passed for result in artifact_results if not result.passed)
+
+        failed_required_artifact_rules = sum(
+                                            1
+                                            for result in artifact_results
+                                            if (result.required and not result.passed)
+                                        )
 
         status = self._calculate_status(
             failed_steps=failed_steps,
             skipped_steps=skipped_steps,
-            failed_artifact_rules=failed_artifact_rules,
+            failed_required_artifact_rules=failed_required_artifact_rules,
         )
 
         metadata = RunMetadata(
@@ -321,6 +331,7 @@ class DeviceTestRunner:
             configured_artifact_rules=(configured_artifact_rules),
             passed_artifact_rules=(passed_artifact_rules),
             failed_artifact_rules=(failed_artifact_rules),
+            failed_required_artifact_rules=(failed_required_artifact_rules),
             duration_seconds=duration_seconds,
         )
 
@@ -350,26 +361,34 @@ class DeviceTestRunner:
         )
 
     @staticmethod
-    def _calculate_status(failed_steps: int, skipped_steps: int, failed_artifact_rules: int) -> str:
+    def _calculate_status(failed_steps: int, 
+                          skipped_steps: int, 
+                          failed_required_artifact_rules: int) -> str:
+        
         if failed_steps > 0:
             return "FAILED"
 
         if skipped_steps > 0:
             return "FAILED"
 
-        if failed_artifact_rules > 0:
+        if failed_required_artifact_rules > 0:
             return "FAILED"
 
         return "PASSED"
 
     @staticmethod
-    def _get_retry_rules_for_step(
+    def _get_rules_for_step(
         step_name: str,
         config: RunnerConfig,
-    ) -> list[ArtifactValidationRule]:
+    ) -> List[ArtifactValidationRule]:
 
         return [
             rule
             for rule in config.artifact.validation.rules
-            if rule.after_step == step_name and rule.retry_on_failure is True
+            if rule.after_step == step_name is True
         ]
+
+    @staticmethod
+    def _get_required_artifact_results(artifact_results: List[ArtifactValidationResult]) -> List[ArtifactValidationResult]:
+        
+        return [result for result in artifact_results if result.required]

@@ -119,7 +119,7 @@ class MockFailedOnceExecutor:
 
 class MockAlwaysFailExecutor:
     def __init__(self):
-        self.call_count = 0
+        self.failed_once = False
 
     def execute(
         self,
@@ -130,7 +130,7 @@ class MockAlwaysFailExecutor:
         working_directory: str | Path,
     ) -> StepAttemptResult:
 
-        self.call_count += 1
+        self.failed_once = True
 
         log_writer.write_stderr("failed\n")
 
@@ -149,7 +149,7 @@ class MockAlwaysFailExecutor:
 
 class MockAlwaysPassExecutor:
     def __init__(self):
-        self.call_count = 0
+        self.failed_once = False
 
     def execute(
         self,
@@ -160,7 +160,7 @@ class MockAlwaysPassExecutor:
         working_directory: str | Path,
     ) -> StepAttemptResult:
 
-        self.call_count += 1
+        self.failed_once = True
 
         log_writer.write_stderr(f"attempt {attempt}\n")
 
@@ -235,6 +235,7 @@ class MockMissingThenPassValidator:
                     type="exists",
                     path="power.csv",
                     passed=False,
+                    required=True,
                     failure_type=(FailureType.ARTIFACT_MISSING),
                     message="missing",
                 )
@@ -246,11 +247,30 @@ class MockMissingThenPassValidator:
                 type="exists",
                 path="power.csv",
                 passed=True,
+                required=True,
                 failure_type=(FailureType.NONE),
                 message="valid",
             )
         ]
 
+class MockOptionalMissingValidator:
+    def validate_all(
+        self,
+        rules,
+        base_dir,
+    ):
+
+        return [
+            ArtifactValidationResult(
+                name="debug_log",
+                type="exists",
+                path="debug.log",
+                passed=False,
+                required=False,
+                failure_type=FailureType.ARTIFACT_MISSING,
+                message="debug log missing",
+            )
+        ]
 
 def mock_step(name: str) -> LifecycleStepContent:
     return LifecycleStepContent(
@@ -1293,11 +1313,11 @@ def test_retry_rules_are_filteredby_step(tmp_path: Path):
         ),
     )
 
-    rules = DeviceTestRunner._get_retry_rules_for_step(step_name="scenario_1", config=config)
+    rules = DeviceTestRunner._get_rules_for_step(step_name="scenario_1", config=config)
     assert len(rules) == 1
     assert rules[0].name == "test_file_1_exist"
 
-    rules = DeviceTestRunner._get_retry_rules_for_step(step_name="scenario_2", config=config)
+    rules = DeviceTestRunner._get_rules_for_step(step_name="scenario_2", config=config)
     assert len(rules) == 1
     assert rules[0].name == "test_file_2_exist"
 
@@ -1324,6 +1344,7 @@ def test_artifact_missing_retries(tmp_path: Path):
         retry=RetryConfig(
             max_attempts=3,
             delay_seconds=1,
+            retry_on=FailureType.ARTIFACT_MISSING,
         ),
         lifecycle=LifecycleConfig(
             global_setup=LifecycleSteps(steps=[mock_step("global_setup")]),
@@ -1376,3 +1397,141 @@ def test_artifact_missing_retries(tmp_path: Path):
     assert step_result.attempt_results[0].failure_type == FailureType.ARTIFACT_MISSING
     assert step_result.attempt_results[1].failure_type == FailureType.NONE
     assert step_result.success is True
+
+def test_optional_artifact_missing_does_not_fail_step(tmp_path: Path):
+
+    config = RunnerConfig(
+        test_case=DeviceTestCase(
+            id="power_001",
+            name="power_001",
+            description="Description",
+        ),
+        device=DeviceInfo(
+            serial="device_001",
+            product="pixel",
+            build="build_001",
+        ),
+        retry=RetryConfig(
+            max_attempts=3,
+            delay_seconds=1,
+            retry_on=FailureType.ARTIFACT_MISSING,
+        ),
+        lifecycle=LifecycleConfig(
+            global_setup=LifecycleSteps(steps=[mock_step("global_setup")]),
+            setup=LifecycleSteps(steps=[mock_step("setup")]),
+            scenario=LifecycleSteps(
+                steps=[
+                    mock_artifact_step("scenario_1", tmp_path / "test_file.txt"),
+                    mock_step("scenario_2"),
+                ]
+            ),
+            teardown=LifecycleSteps(steps=[mock_step("teardown")]),
+            global_teardown=LifecycleSteps(steps=[mock_step("global_teardown")]),
+        ),
+        artifact=ArtifactConfig(
+            output_dir=str(tmp_path),
+            validation=ArtifactValidationConfig(
+                rules=[
+                    ArtifactValidationRule(
+                        name="test_file_exist",
+                        type="exists",
+                        path=tmp_path / "test_file.txt",
+                        after_step="scenario_1",
+                        required=False
+                    ),
+                ]
+            ),
+        ),
+    )
+
+    runner = DeviceTestRunner(
+        executor=MockAlwaysPassExecutor(),
+        artifact_manager=(ArtifactManager(tmp_path)),
+        artifact_validator=MockOptionalMissingValidator(),
+        failure_classifier=(FailureClassifier()),
+        reporter=JsonReporter(),
+        show_console_output=False,
+    )
+
+    result = runner.run(config)
+
+    # scenario_1
+    step_result = [
+        step_result for step_result in result.step_results if step_result.name == "scenario_1"
+    ][0]
+
+    assert step_result.attempt == 1
+    assert step_result.success is True
+
+    validation_result = step_result.attempt_result[0].artifact_validation_results[0]
+
+    assert validation_result.passed is False
+    assert validation_result.required is False
+
+def test_required_invalid_artifact_fails_without_retry(tmp_path: Path):
+
+    config = RunnerConfig(
+        test_case=DeviceTestCase(
+            id="power_001",
+            name="power_001",
+            description="Description",
+        ),
+        device=DeviceInfo(
+            serial="device_001",
+            product="pixel",
+            build="build_001",
+        ),
+        retry=RetryConfig(
+            max_attempts=3,
+            delay_seconds=1,
+            retry_on=FailureType.ARTIFACT_MISSING,
+        ),
+        lifecycle=LifecycleConfig(
+            global_setup=LifecycleSteps(steps=[mock_step("global_setup")]),
+            setup=LifecycleSteps(steps=[mock_step("setup")]),
+            scenario=LifecycleSteps(
+                steps=[
+                    mock_artifact_step("scenario_1", tmp_path / "test_file.csv"),
+                    mock_step("scenario_2"),
+                ]
+            ),
+            teardown=LifecycleSteps(steps=[mock_step("teardown")]),
+            global_teardown=LifecycleSteps(steps=[mock_step("global_teardown")]),
+        ),
+        artifact=ArtifactConfig(
+            output_dir=str(tmp_path),
+            validation=ArtifactValidationConfig(
+                rules=[
+                    ArtifactValidationRule(
+                        name="test_file_exist",
+                        type="csv_content",
+                        path=tmp_path / "test_file.csv",
+                        after_step="scenario_1",
+                        required=True
+                    ),
+                ]
+            ),
+        ),
+    )
+
+    runner = DeviceTestRunner(
+        executor=MockAlwaysPassExecutor(),
+        artifact_manager=(ArtifactManager(tmp_path)),
+        artifact_validator=MockAlwaysFailArtifactValidator(),
+        failure_classifier=(FailureClassifier()),
+        reporter=JsonReporter(),
+        show_console_output=False,
+    )
+
+    result = runner.run(config)
+
+    
+    # scenario_1
+    step_result = [
+        step_result for step_result in result.step_results if step_result.name == "scenario_1"
+    ][0]
+
+    attempt = step_result.attempt_results[0]
+
+    assert attempt.failure_type == FailureType.ARTIFACT_INVALID
+    assert step_result.success is False

@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+## [1.5.3]
+
+### Added
+
+- Selective retry configuration through `retry.retry_on`, supporting `timeout`, `device_offline`, `process_error`, `artifact_missing`, and `artifact_invalid`
+- Required／optional artifact semantics through the validation rule `required` field, which defaults to `true`
+- `required` metadata on artifact validation results and `failed_required_artifact_rules` in the execution summary
+- Retry cleanup safety coverage for optional artifacts, missing targets, relative paths, and paths outside the run directory
+- Unit and integration coverage for configured and unconfigured failure types, artifact criticality, cleanup boundaries, and v1.5.3 report metadata
+
+### Changed
+
+- Retry is now allowed only when the attempt failure type is explicitly listed in `retry.retry_on` and attempt capacity remains
+- YAML configurations that omit `retry_on` default to no retry; duplicate values are removed while preserving order, and unknown values or `none` are rejected
+- Optional artifact failures remain visible in validation results but do not fail the step or final run and do not trigger retry
+- Required artifact failures continue to affect attempt and run status, but only trigger retry when their failure type is configured
+- Retry cleanup removes only required validation targets resolved inside the current run directory
+- Runner and generated report metadata now identify version `1.5.3`
+- Full test suite expanded to 134 Given／When／Then-described tests
+
+### Removed
+
+- Artifact-level `retry_on_failure`; retry eligibility is now controlled centrally by `retry.retry_on`, while artifact criticality is controlled by `required`
+
 ## [1.5.2]
 
 ### Added

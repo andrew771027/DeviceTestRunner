@@ -1,3 +1,11 @@
+<p align="center">
+  <img
+    src="site/images/social-preview.jpg"
+    alt="Device Test Runner"
+    width="100%"
+  >
+</p>
+
 # Device Test Runner
 
 Device Test Runner 是一個針對 **Device Validation Domain** 設計的測試流程執行器。

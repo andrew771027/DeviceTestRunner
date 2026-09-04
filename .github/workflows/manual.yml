@@ -1,32 +1,151 @@
-# This is a basic workflow that is manually triggered
+name: Update release documentation with OpenAI Codex
 
-name: Manual workflow
-
-# Controls when the action will run. Workflow runs when manually triggered using the UI
-# or API.
 on:
   workflow_dispatch:
-    # Inputs the workflow accepts.
     inputs:
-      name:
-        # Friendly description to be shown in the UI instead of 'name'
-        description: 'Person to greet'
-        # Default value if no value is explicitly provided
-        default: 'World'
-        # Input has to be provided for the workflow to run
+      release_version:
+        description: "Release version without the v prefix, for example 1.5.3"
         required: true
-        # The data type of the input
+        type: string
+      target_branch:
+        description: "Branch that Codex updates and pushes to"
+        required: true
+        default: "main"
+        type: string
+      model:
+        description: "OpenAI model available to this API project"
+        required: true
+        default: "gpt-5.3-codex"
         type: string
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
-jobs:
-  # This workflow contains a single job called "greet"
-  greet:
-    # The type of runner that the job will run on
-    runs-on: ubuntu-latest
+permissions:
+  contents: write
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
+concurrency:
+  group: release-docs-${{ inputs.target_branch }}
+  cancel-in-progress: false
+
+jobs:
+  update-release-docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
     steps:
-    # Runs a single command using the runners shell
-    - name: Send greeting
-      run: echo "Hello ${{ inputs.name }}"
+      - name: Validate inputs
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+        run: |
+          if ! [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "release_version must use MAJOR.MINOR.PATCH, for example 1.5.3"
+            exit 1
+          fi
+
+          if ! [[ "$TARGET_BRANCH" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+            echo "target_branch contains unsupported characters"
+            exit 1
+          fi
+
+      - name: Checkout target branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.target_branch }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install .
+
+      - name: Verify baseline tests
+        run: pytest -q
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Install OpenAI Codex CLI
+        run: npm install --global @openai/codex@latest
+
+      - name: Update documentation and test descriptions
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          CODEX_MODEL: ${{ inputs.model }}
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "Repository secret OPENAI_API_KEY is not configured."
+            exit 1
+          fi
+
+          codex exec \
+            --model "$CODEX_MODEL" \
+            --sandbox workspace-write \
+            --approve-for-me \
+            --ephemeral \
+            "You are maintaining Device Test Runner release v${RELEASE_VERSION}.
+
+            Work only inside this repository. Read CommitManual.md completely first.
+            Use CHANGELOG.md, complete Git history and diff, runner source code,
+            configs, tests, and existing versioned documentation as evidence.
+            Do not invent features, results, tags, releases, issue status, or test counts.
+
+            Add or update all release documentation consistently:
+            - README.md
+            - docs/architecture/architecture_v${RELEASE_VERSION}.md
+            - docs/test_matrix/test_matrix_v${RELEASE_VERSION}.md
+            - docs/acceptance_criteria/acceptance_criteria_v${RELEASE_VERSION}.md
+            - docs/definition_of_done/definition_of_done_v${RELEASE_VERSION}.md
+            - docs/roadmap.md
+            - CHANGELOG.md
+
+            Preserve older versioned documents as history. Follow the repository's
+            existing language, headings, filename conventions, and Markdown style.
+            Use actual source and test behavior as the authority when older docs differ.
+
+            Audit every Python test function under tests/. Each test must have a concise
+            docstring containing meaningful Given, When, and Then lines. Add or update
+            descriptions only where needed; do not change production behavior merely
+            to satisfy this documentation task.
+
+            Run pytest -q and git diff --check. Record test evidence only when it was
+            observed in this run. Leave tag and GitHub Release checklist items unchecked
+            unless Git proves they already exist. Finish with the requested files edited
+            in the working tree; do not commit, push, or modify GitHub settings."
+
+      - name: Verify generated changes
+        run: |
+          git diff --check
+          pytest -q
+
+          test_count=$(rg -n '^def test_' tests -g '*.py' | wc -l | tr -d ' ')
+          given_count=$(rg -n '^    Given ' tests -g '*.py' | wc -l | tr -d ' ')
+          when_count=$(rg -n '^    When ' tests -g '*.py' | wc -l | tr -d ' ')
+          then_count=$(rg -n '^    Then ' tests -g '*.py' | wc -l | tr -d ' ')
+
+          echo "tests=$test_count Given=$given_count When=$when_count Then=$then_count"
+          test "$test_count" -eq "$given_count"
+          test "$test_count" -eq "$when_count"
+          test "$test_count" -eq "$then_count"
+
+      - name: Commit and push changes
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+        run: |
+          if [ -z "$(git status --porcelain -- README.md CHANGELOG.md docs tests)" ]; then
+            echo "Codex found no documentation changes to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md CHANGELOG.md docs tests
+          git commit -m "docs: update Device Test Runner v${RELEASE_VERSION}"
+          git push origin "HEAD:${TARGET_BRANCH}"

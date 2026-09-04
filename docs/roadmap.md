@@ -426,6 +426,27 @@ Completed
 
 ---
 
+## v1.5.3 — Selective Retry and Artifact Criticality
+
+### Goal
+
+讓使用者依 failure type 精確控制 retry，並區分會阻擋測試結果的 required artifact 與僅供診斷的 optional artifact。
+
+### Core Features
+
+* `retry.retry_on` 接受 `timeout`、`device_offline`、`process_error`、`artifact_missing`、`artifact_invalid`
+* 未設定 `retry_on` 時不重試；重複值去重，未知值與 `none` 拒絕載入
+* artifact rule 的 `required` 預設為 `true`
+* optional artifact validation failure 保留於 report，但不影響 attempt 或 run status
+* retry cleanup 僅移除 run directory 內的 required targets
+* summary 新增 `failed_required_artifact_rules`
+
+### Status
+
+Completed
+
+---
+
 ## v1.6 — Timeout and Cancellation
 
 ### Goal
@@ -969,6 +990,7 @@ v1.4.1
 v1.5.0
 v1.5.1
 v1.5.2
+v1.5.3
 v2.0.0
 ```
 
@@ -994,6 +1016,7 @@ v1.4 artifact validation
 v1.5 retry policy
 v1.5.1 artifact-aware retry
 v1.5.2 failure classification
+v1.5.3 selective retry and artifact criticality
 ```
 
 ## PATCH
@@ -1006,6 +1029,7 @@ Example:
 v1.4.1 fix file size validation
 v1.4.2 fix report serialization
 v1.5.2 add failure classification and diagnostics
+v1.5.3 add selective retry and optional artifacts
 ```
 
 ---
@@ -1085,7 +1109,7 @@ Done
 
 # 9. Current Priorities
 
-目前已完成 v1.5.2，接下來的開發優先順序：
+目前已完成 v1.5.3，接下來的開發優先順序：
 
 ```text
 1. v1.6 Timeout and Cancellation

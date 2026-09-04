@@ -43,7 +43,7 @@ class FailureClassifier:
         if not failed_results:
             return FailureType.NONE
 
-        if any(result.failure_type in FailureType.ARTIFACT_MISSING for result in artifact_results):
+        if any(result.failure_type == FailureType.ARTIFACT_MISSING for result in artifact_results):
             return FailureType.ARTIFACT_MISSING
 
         return FailureType.ARTIFACT_INVALID

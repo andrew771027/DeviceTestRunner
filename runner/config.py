@@ -8,6 +8,7 @@ from runner.models import (
     ArtifactValidationRule,
     DeviceInfo,
     DeviceTestCase,
+    FailureType,
     LifecycleConfig,
     LifecycleStepContent,
     LifecycleSteps,
@@ -41,7 +42,7 @@ class ConfigLoader:
 
         artifact = ArtifactConfig(
             output_dir=raw["artifact"]["output_dir"],
-            validation=self._load_validation(raw["artifact"]),
+            validation=self._load_artifact_validation(raw["artifact"]),
         )
 
         retry = self._load_retry(raw)
@@ -49,8 +50,8 @@ class ConfigLoader:
         return RunnerConfig(
             test_case=test_case,
             device=device,
-            lifecycle=lifecycle,
             retry=retry,
+            lifecycle=lifecycle,
             artifact=artifact,
         )
 
@@ -70,9 +71,7 @@ class ConfigLoader:
 
         device = raw["device"]
 
-        return DeviceInfo(
-            serial=device["serial"], product=device["product"], build=device["build"]
-        )
+        return DeviceInfo(serial=device["serial"], product=device["product"], build=device["build"])
 
     @staticmethod
     def _load_steps(raw: dict[str, Any]) -> LifecycleSteps:
@@ -92,7 +91,7 @@ class ConfigLoader:
         )
 
     @staticmethod
-    def _load_validation(raw: dict[str, dict]) -> ArtifactValidationConfig:
+    def _load_artifact_validation(raw: dict[str, dict]) -> ArtifactValidationConfig:
         validation = raw.get("validation", {})
 
         return ArtifactValidationConfig(
@@ -102,7 +101,7 @@ class ConfigLoader:
                     type=rule["type"],
                     path=rule["path"],
                     after_step=rule.get("after_step"),
-                    retry_on_failure=rule.get("retry_on_failure", False),
+                    required=rule.get("required", True),
                     min_size_bytes=rule.get("min_size_bytes"),
                     max_size_bytes=rule.get("max_size_bytes"),
                     allowed_extensions=rule.get("allowed_extensions", []),
@@ -128,4 +127,33 @@ class ConfigLoader:
         if delay_seconds < 0:
             raise ValueError("retry.delay_seconds must be >= 0")
 
-        return RetryConfig(max_attempts=max_attempts, delay_seconds=delay_seconds)
+        retry_on = ConfigLoader._parse_retry_on(retry.get("retry_on", []))
+
+        return RetryConfig(
+            max_attempts=max_attempts, delay_seconds=delay_seconds, retry_on=retry_on
+        )
+
+    @staticmethod
+    def _parse_retry_on(values: list[str]) -> list[FailureType]:
+
+        retry_on: list[FailureType] = []
+
+        for value in values:
+
+            try:
+
+                failure_type = FailureType(value)
+
+            except ValueError:
+
+                raise ValueError(f"Unkown retry failure type: {value}")
+
+            if failure_type == FailureType.NONE:
+
+                raise ValueError("retry.retry_on cannot contain 'none")
+
+            if failure_type not in retry_on:
+
+                retry_on.append(failure_type)
+
+        return retry_on

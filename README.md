@@ -36,7 +36,7 @@ Device Test Runner 將這些既有工具組合成一致的測試生命週期，�
 * Cleanup
 * Execution summary
 
-目前 v1.5.2 已完成 lifecycle orchestration、artifact management、artifact validation、artifact-aware retry 與 failure classification。Runner 可區分 timeout、device offline、process error、artifact missing 與 artifact invalid；更完整的 cancellation guarantees、recorder lifecycle 和 distributed execution 仍在規劃中。
+目前 v1.5.3 已完成 lifecycle orchestration、artifact management、artifact validation、artifact-aware retry、failure classification、selective retry 與 required／optional artifact。Runner 只重試 `retry.retry_on` 明確列出的 failure type；optional artifact 失敗會保留診斷結果，但不影響 step 或 run 狀態。更完整的 cancellation guarantees、recorder lifecycle 和 distributed execution 仍在規劃中。
 
 ---
 
@@ -128,9 +128,9 @@ RunResult / result.json
 
 詳細架構說明請參考：
 
-* [Architecture v1.5.2](docs/architecture/architecture_v1.5.2.md)
-* [Test Matrix v1.5.2](docs/test_matrix/test_matrix_v1.5.2.md)
-* [Acceptance Criteria v1.5.2](docs/acceptance_criteria/acceptance_criteria_v1.5.2.md)
+* [Architecture v1.5.3](docs/architecture/architecture_v1.5.3.md)
+* [Test Matrix v1.5.3](docs/test_matrix/test_matrix_v1.5.3.md)
+* [Acceptance Criteria v1.5.3](docs/acceptance_criteria/acceptance_criteria_v1.5.3.md)
 * [Roadmap](docs/roadmap.md)
 
 ---
@@ -242,6 +242,10 @@ device:
 retry:
   max_attempts: 3
   delay_seconds: 1
+  retry_on:
+    - timeout
+    - device_offline
+    - artifact_missing
 
 lifecycle:
   global_setup:
@@ -292,14 +296,14 @@ artifact:
         type: csv_content
         path: result.csv
         after_step: run_idle_scenario
-        retry_on_failure: true
+        required: true
         required_columns:
           - timestamp
           - power
         min_rows: 1
 ```
 
-`after_step` 將 validation rule 綁定到指定 step；當 `retry_on_failure: true` 時，runner 會在該 step 每次 command 成功後立即驗證 artifact。command 或綁定的 artifact rule 任一失敗，都會依全域 `retry.max_attempts` 與 `retry.delay_seconds` 重試。未設定 `retry_on_failure` 的規則不會觸發 step retry，仍會在 lifecycle 結束後進行 final validation，並可使最終 run status 成為 `FAILED`。
+`after_step` 將 validation rule 綁定到指定 step，runner 會在該 step 每次 command 成功後立即驗證。`required` 預設為 `true`：required rule 失敗會使 attempt 失敗，且只有 failure type 出現在 `retry.retry_on`、尚未達 `max_attempts` 時才重試；`required: false` 的失敗仍寫入 report，但不影響 step 或 run 狀態。沒有 `after_step` 的規則於 lifecycle 結束後執行 final validation。未設定 `retry_on` 時預設為空清單，因此任何失敗都不會重試。
 
 ---
 
@@ -329,8 +333,8 @@ artifact:
 Clone repository：
 
 ```bash
-git clone <repository-url>
-cd device-test-runner
+git clone git@github.com:andrew771027/DeviceTestRunner.git
+cd DeviceTestRsunner
 ```
 
 建立 virtual environment：
@@ -466,7 +470,7 @@ artifacts/
     "device_serial": "ABC123",
     "device_product": "pixel",
     "device_build": "build_12345",
-    "runner_version": "1.5.2",
+    "runner_version": "1.5.3",
     "started_at": "2026-07-22T22:30:00+00:00",
     "finished_at": "2026-07-22T22:32:05+00:00"
   },
@@ -480,6 +484,7 @@ artifacts/
     "configured_artifact_rules": 1,
     "passed_artifact_rules": 1,
     "failed_artifact_rules": 0,
+    "failed_required_artifact_rules": 0,
     "duration_seconds": 2.1
   },
   "step_results": [
@@ -573,6 +578,7 @@ Report schema 會隨專案版本逐步擴充。
 | v1.5    | Retry Policy                 | Completed   |
 | v1.5.1  | Artifact-Aware Retry          | Completed   |
 | v1.5.2  | Failure Classification        | Completed   |
+| v1.5.3  | Selective Retry and Artifact Criticality | Completed   |
 | v1.6    | Timeout and Cancellation     | Planned     |
 | v1.7    | Recorder Lifecycle           | Planned     |
 | v1.8    | Hook and Teardown Guarantees | Planned     |
@@ -650,6 +656,7 @@ v1.4.1
 v1.5.0
 v1.5.1
 v1.5.2
+v1.5.3
 v2.0.0
 ```
 
@@ -666,6 +673,7 @@ v2.0.0
 * `v1.5.0`：加入 Retry Policy
 * `v1.5.1`：加入 step-scoped Artifact-Aware Retry
 * `v1.5.2`：加入可追蹤且可驅動 retry decision 的 Failure Classification
+* `v1.5.3`：加入 `retry_on` selective retry 與 required／optional artifact semantics
 * `v2.0.0`：加入 Controller／Worker architecture
 
 ---
@@ -744,6 +752,7 @@ docs/update-roadmap
 4. v1.5 Retry Policy 與 per-attempt logs
 5. v1.5.1 Artifact-Aware Retry 與 per-attempt validation results
 6. v1.5.2 Failure Classification 與 failure-aware retry decision
+7. v1.5.3 Selective Retry 與 Artifact Criticality
 
 接下來的優先事項：
 
@@ -810,10 +819,10 @@ Device Validation Platform
 
 ## Documentation
 
-* [Architecture v1.5.2](docs/architecture/architecture_v1.5.2.md)
-* [Definition of Done v1.5.2](docs/definition_of_done/definition_of_done_v1.5.2.md)
-* [Test Matrix v1.5.2](docs/test_matrix/test_matrix_v1.5.2.md)
-* [Acceptance Criteria v1.5.2](docs/acceptance_criteria/acceptance_criteria_v1.5.2.md)
+* [Architecture v1.5.3](docs/architecture/architecture_v1.5.3.md)
+* [Definition of Done v1.5.3](docs/definition_of_done/definition_of_done_v1.5.3.md)
+* [Test Matrix v1.5.3](docs/test_matrix/test_matrix_v1.5.3.md)
+* [Acceptance Criteria v1.5.3](docs/acceptance_criteria/acceptance_criteria_v1.5.3.md)
 * [Roadmap](docs/roadmap.md)
 * [Changelog](CHANGELOG.md)
 

@@ -40,6 +40,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(resolved_path),
                 passed=False,
+                required=rule.required,
                 failure_type=FailureType.ARTIFACT_INVALID,
                 message=f"Unknown validation type: {rule.type}.",
             )
@@ -54,6 +55,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(resolved_path),
                 passed=False,
+                required=rule.required,
                 failure_type=FailureType.ARTIFACT_INVALID,
                 message=f"Error during validation: {error}",
             )
@@ -82,6 +84,7 @@ class ArtifactValidator:
             type=rule.type,
             path=str(path),
             passed=passed,
+            required=rule.required,
             failure_type=FailureType.NONE if passed else FailureType.ARTIFACT_MISSING,
             message=message,
         )
@@ -94,6 +97,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(path),
                 passed=False,
+                required=rule.required,
                 failure_type=FailureType.ARTIFACT_MISSING,
                 message="File doesn't exist.",
             )
@@ -104,6 +108,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(path),
                 passed=False,
+                required=rule.required,
                 failure_type=FailureType.ARTIFACT_INVALID,
                 message="Artifact is not a file.",
             )
@@ -116,6 +121,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(path),
                 passed=False,
+                required=rule.required,
                 failure_type=FailureType.ARTIFACT_INVALID,
                 message=f"File size {actual_size} bytes is smaller than the minimum required size of {rule.min_size_bytes} bytes.",
                 actual_size_bytes=actual_size,
@@ -127,6 +133,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(path),
                 passed=False,
+                required=rule.required,
                 failure_type=FailureType.ARTIFACT_INVALID,
                 message=f"File size {actual_size} bytes exceeds the maximum allowed size of {rule.max_size_bytes} bytes.",
                 actual_size_bytes=actual_size,
@@ -137,6 +144,7 @@ class ArtifactValidator:
             type=rule.type,
             path=str(path),
             passed=True,
+            required=rule.required,
             failure_type=FailureType.NONE,
             message=f"File size {actual_size} bytes is within the allowed range.",
             actual_size_bytes=actual_size,
@@ -153,6 +161,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(path),
                 passed=False,
+                required=rule.required,
                 failure_type=FailureType.ARTIFACT_MISSING,
                 message="File doesn't exist.",
             )
@@ -163,6 +172,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(path),
                 passed=False,
+                required=rule.required,
                 failure_type=FailureType.ARTIFACT_INVALID,
                 message="Artifact is not a file.",
             )
@@ -178,6 +188,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(path),
                 passed=False,
+                required=rule.required,
                 failure_type=FailureType.ARTIFACT_INVALID,
                 message=("allowed_extensions cannot be empty."),
             )
@@ -198,6 +209,7 @@ class ArtifactValidator:
             type=rule.type,
             path=str(path),
             passed=passed,
+            required=rule.required,
             failure_type=FailureType.NONE if passed else FailureType.ARTIFACT_INVALID,
             message=message,
         )
@@ -212,6 +224,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(path),
                 passed=False,
+                required=rule.required,
                 failure_type=FailureType.ARTIFACT_MISSING,
                 message="Directory doesn't exist.",
             )
@@ -222,6 +235,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(path),
                 passed=False,
+                required=rule.required,
                 failure_type=FailureType.ARTIFACT_INVALID,
                 message="Artifact is not a directory.",
             )
@@ -238,6 +252,7 @@ class ArtifactValidator:
             type=rule.type,
             path=str(path),
             passed=has_contents,
+            required=rule.required,
             failure_type=(FailureType.NONE if has_contents else FailureType.ARTIFACT_MISSING),
             message=message,
         )
@@ -250,6 +265,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(path),
                 passed=False,
+                required=rule.required,
                 failure_type=FailureType.ARTIFACT_MISSING,
                 message="CSV file does not exists.",
             )
@@ -259,6 +275,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(path),
                 passed=False,
+                required=rule.required,
                 failure_type=FailureType.ARTIFACT_INVALID,
                 message="Artifact is not a file.",
             )
@@ -274,6 +291,7 @@ class ArtifactValidator:
                         type=rule.type,
                         path=str(path),
                         passed=False,
+                        required=rule.required,
                         failure_type=FailureType.ARTIFACT_INVALID,
                         message="CSV header is missing.",
                     )
@@ -290,6 +308,7 @@ class ArtifactValidator:
                         type=rule.type,
                         path=str(path),
                         passed=False,
+                        required=rule.required,
                         failure_type=FailureType.ARTIFACT_INVALID,
                         message=f"CSV missing requred columns: {missing_columns}",
                     )
@@ -302,6 +321,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(path),
                 passed=False,
+                required=rule.required,
                 failure_type=FailureType.ARTIFACT_INVALID,
                 message=f"Unable to parse CSV: {error}",
             )
@@ -312,6 +332,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(path),
                 passed=False,
+                required=rule.required,
                 failure_type=FailureType.ARTIFACT_INVALID,
                 message=f"CSV contains {row_count} data rows, fewer than minimum {rule.min_rows}",
             )
@@ -321,6 +342,7 @@ class ArtifactValidator:
             type=rule.type,
             path=str(path),
             passed=True,
+            required=rule.required,
             failure_type=FailureType.NONE,
             message=f"CSV content is valid. Rows: {row_count}, coumns: {sorted(actual_columns)}.",
         )
@@ -335,6 +357,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(path),
                 passed=False,
+                required=rule.required,
                 failure_type=FailureType.ARTIFACT_MISSING,
                 message="JSON file does not exists.",
             )
@@ -345,6 +368,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(path),
                 passed=False,
+                required=rule.required,
                 failure_type=FailureType.ARTIFACT_INVALID,
                 message="Artifact is not a file.",
             )
@@ -359,6 +383,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(path),
                 passed=False,
+                required=rule.required,
                 failure_type=FailureType.ARTIFACT_INVALID,
                 message=f"Unable to parse JSON: {error}",
             )
@@ -377,6 +402,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(path),
                 passed=False,
+                required=rule.required,
                 failure_type=FailureType.ARTIFACT_INVALID,
                 message=f"JSON missing required paths: {missing_paths}",
             )
@@ -404,6 +430,7 @@ class ArtifactValidator:
                 type=rule.type,
                 path=str(path),
                 passed=False,
+                required=rule.required,
                 failure_type=FailureType.ARTIFACT_INVALID,
                 message=f"JSON value validation failed: {mismatches}",
             )
@@ -413,6 +440,7 @@ class ArtifactValidator:
             type=rule.type,
             path=str(path),
             passed=True,
+            required=rule.required,
             failure_type=FailureType.NONE,
             message="JSON content is valid.",
         )

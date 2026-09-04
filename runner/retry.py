@@ -3,26 +3,20 @@ from runner.models import ArtifactValidationResult, FailureType, RetryConfig
 
 class RetryPolicy:
 
-    RETRYABLE_FAILURES = {
-        FailureType.TIMEOUT,
-        FailureType.DEVICE_OFFLINE,
-        FailureType.PROCESS_ERROR,
-        FailureType.ARTIFACT_MISSING,
-        FailureType.ARTIFACT_INVALID,
-    }
-
     def __init__(self, config: RetryConfig):
         self.config = config
 
     def should_retry(self, attempt: int, failure_type: FailureType) -> bool:
 
+        # 已經成功
         if failure_type == FailureType.NONE:
             return False
 
+        # 已經最大 attempt
         if attempt >= self.config.max_attempts:
             return False
 
-        return failure_type in self.RETRYABLE_FAILURES
+        return failure_type in self.config.retry_on
 
     @property
     def delay_seconds(self) -> float:

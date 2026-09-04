@@ -35,6 +35,8 @@ def test_real_artifact_aware_retry(tmp_path: Path):
     retry:
         max_attempts: 3
         delay_seconds: 0
+        retry_on:
+            - artifact_invalid
     lifecycle:
         global_setup:
             steps: []
@@ -82,7 +84,7 @@ def test_real_artifact_aware_retry(tmp_path: Path):
                 type: csv_content
                 path: results/power.csv
                 after_step: run_power_test
-                retry_on_failure: true
+                required: true
                 required_columns:
                   - timestamp
                   - power

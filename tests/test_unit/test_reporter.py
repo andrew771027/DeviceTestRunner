@@ -42,6 +42,7 @@ from runner.reporter import JsonReporter
                 configured_artifact_rules=2,
                 passed_artifact_rules=2,
                 failed_artifact_rules=0,
+                failed_required_artifact_rules=0,
                 duration_seconds=600.0,
             ),
             [
@@ -115,6 +116,7 @@ from runner.reporter import JsonReporter
                     type="exists",
                     path="results/test_file.txt",
                     passed=True,
+                    required=False,
                     message="File Exists",
                     failure_type=FailureType.NONE,
                 ),
@@ -123,6 +125,7 @@ from runner.reporter import JsonReporter
                     type="file_size",
                     path="results/test_file.txt",
                     passed=False,
+                    required=True,
                     message="File size excede maxmium.",
                     actual_size_bytes=1,
                     failure_type=FailureType.ARTIFACT_INVALID,

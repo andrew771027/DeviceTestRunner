@@ -159,11 +159,26 @@ class ArtifactManager:
     def cleanup_validation_targets(
         self, run_dir: Path, rules: list[ArtifactValidationRule]
     ) -> None:
+        run_dir = Path(run_dir).resolve()
+
         for rule in rules:
+            if not rule.required:
+                continue
+
             path = Path(rule.path)
 
             if not path.is_absolute():
                 path = run_dir / path
+
+            path = path.resolve()
+
+            # Safety boundary:
+            # cleanup can only touch files/directories inside run_dir
+            try:
+                path.relative_to(run_dir)
+            except ValueError:
+                continue
+
             if not path.exists():
                 continue
 

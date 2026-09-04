@@ -1449,6 +1449,12 @@ def test_artifact_missing_retries(tmp_path: Path):
 
 
 def test_optional_artifact_missing_does_not_fail_step(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a step-scoped optional artifact is missing.
+    When the runner evaluates the artifact after a successful command.
+    Then the failure is reported without failing or retrying the step.
+    """
 
     config = RunnerConfig(
         test_case=DeviceTestCase(
@@ -1520,6 +1526,12 @@ def test_optional_artifact_missing_does_not_fail_step(tmp_path: Path):
 
 
 def test_required_invalid_artifact_fails_without_retry(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a required artifact is invalid but only missing artifacts are retryable.
+    When the runner evaluates the artifact after a successful command.
+    Then the step fails as artifact-invalid without another attempt.
+    """
 
     config = RunnerConfig(
         test_case=DeviceTestCase(
@@ -1590,6 +1602,12 @@ def test_required_invalid_artifact_fails_without_retry(tmp_path: Path):
 def test_required_missing_artifact_does_not_retry_when_not_configured(
     tmp_path: Path,
 ):
+    """Acceptance scenario.
+
+    Given a required artifact is missing and retry_on is empty.
+    When the runner evaluates the artifact failure.
+    Then the step fails after its first attempt without retrying.
+    """
     config = RunnerConfig(
         test_case=DeviceTestCase("test", "test", "test"),
         device=DeviceInfo("device", "product", "build"),
@@ -1628,6 +1646,12 @@ def test_required_missing_artifact_does_not_retry_when_not_configured(
 
 
 def test_runner_retries_configured_timeout(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given timeout is configured for retry with three maximum attempts.
+    When every command attempt ends with a timeout.
+    Then the runner executes all three allowed attempts.
+    """
     config = RunnerConfig(
         test_case=DeviceTestCase("test", "test", "test"),
         device=DeviceInfo("device", "product", "build"),
@@ -1650,6 +1674,12 @@ def test_runner_retries_configured_timeout(tmp_path: Path):
 
 
 def test_runner_does_not_retry_unconfigured_timeout(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given retry_on is empty.
+    When a command attempt ends with a timeout.
+    Then the runner stops after the first attempt.
+    """
     config = RunnerConfig(
         test_case=DeviceTestCase("test", "test", "test"),
         device=DeviceInfo("device", "product", "build"),
@@ -1672,6 +1702,12 @@ def test_runner_does_not_retry_unconfigured_timeout(tmp_path: Path):
 
 
 def test_runner_does_not_retry_unconfigured_process_error(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given retry_on is empty.
+    When a command attempt ends with a process error.
+    Then the runner stops after the first attempt.
+    """
     config = RunnerConfig(
         test_case=DeviceTestCase("test", "test", "test"),
         device=DeviceInfo("device", "product", "build"),

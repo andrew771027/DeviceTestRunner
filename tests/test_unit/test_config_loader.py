@@ -639,6 +639,12 @@ def test_retry_delay_seconds_must_be_positive(tmp_path: Path):
 
 
 def test_artifact_required_defaults_to_true():
+    """Acceptance scenario.
+
+    Given an artifact validation rule omits the required option.
+    When artifact configuration is loaded.
+    Then the rule defaults to required.
+    """
 
     raw = {"validation": {"rules": [{"name": "test", "type": "exists", "path": "test.csv"}]}}
 
@@ -648,6 +654,12 @@ def test_artifact_required_defaults_to_true():
 
 
 def test_load_optional_artifact():
+    """Acceptance scenario.
+
+    Given an artifact validation rule explicitly sets required to false.
+    When artifact configuration is loaded.
+    Then the rule is preserved as optional.
+    """
 
     raw = {
         "validation": {
@@ -668,6 +680,12 @@ def test_load_optional_artifact():
 
 
 def test_build_selective_retry_config():
+    """Acceptance scenario.
+
+    Given retry configuration lists supported failure types.
+    When retry configuration is loaded.
+    Then timing values and ordered failure types are preserved.
+    """
 
     raw = {
         "retry": {
@@ -694,6 +712,12 @@ def test_build_selective_retry_config():
 
 
 def test_retry_on_defaults_to_empty():
+    """Acceptance scenario.
+
+    Given retry configuration omits retry_on.
+    When retry configuration is loaded.
+    Then no failure type is eligible for retry.
+    """
 
     raw = {"retry": {"max_attempts": 3}}
 
@@ -704,16 +728,34 @@ def test_retry_on_defaults_to_empty():
 
 
 def test_unknown_retry_failure_type_raises_value_error():
+    """Acceptance scenario.
+
+    Given retry_on contains an unknown failure type.
+    When the failure type list is parsed.
+    Then configuration is rejected with a ValueError.
+    """
     with pytest.raises(ValueError, match="retry failure type: unknown"):
         ConfigLoader._parse_retry_on(["unknown"])
 
 
 def test_retry_on_rejects_none():
+    """Acceptance scenario.
+
+    Given retry_on contains the successful none classification.
+    When the failure type list is parsed.
+    Then configuration is rejected because success cannot be retried.
+    """
     with pytest.raises(ValueError, match="cannot contain 'none"):
         ConfigLoader._parse_retry_on(["none"])
 
 
 def test_duplicate_retry_on_values_are_removed():
+    """Acceptance scenario.
+
+    Given retry_on repeats a supported failure type.
+    When the failure type list is parsed.
+    Then duplicates are removed while the original order is retained.
+    """
     retry_on = ConfigLoader._parse_retry_on(
         ["timeout", "device_offline", "timeout", "artifact_missing"]
     )

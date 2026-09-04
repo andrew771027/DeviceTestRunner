@@ -71,6 +71,12 @@ def test_cleanup_retry_artifact_directory(tmp_path: Path):
 
 
 def test_cleanup_does_not_remove_optional_artifact(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given an optional artifact exists inside the run directory.
+    When retry cleanup processes its validation rule.
+    Then the optional diagnostic artifact remains available.
+    """
     run_dir = tmp_path / "run"
     run_dir.mkdir()
     artifact = run_dir / "debug.log"
@@ -92,6 +98,12 @@ def test_cleanup_does_not_remove_optional_artifact(tmp_path: Path):
 
 
 def test_cleanup_does_not_remove_path_outside_run_directory(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a required validation rule targets a path outside the run directory.
+    When retry cleanup resolves the target.
+    Then the external artifact is not removed.
+    """
     run_dir = tmp_path / "run"
     run_dir.mkdir()
     outside_artifact = tmp_path / "outside.csv"
@@ -113,6 +125,12 @@ def test_cleanup_does_not_remove_path_outside_run_directory(tmp_path: Path):
 
 
 def test_cleanup_removes_file_inside_run_directory(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a required artifact exists inside the run directory.
+    When retry cleanup processes its absolute path.
+    Then the stale artifact is removed before the next attempt.
+    """
     run_dir = tmp_path / "run"
     run_dir.mkdir()
 
@@ -138,6 +156,12 @@ def test_cleanup_removes_file_inside_run_directory(tmp_path: Path):
 
 
 def test_cleanup_resolves_relative_path_under_run_directory(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a required artifact rule uses a relative path.
+    When retry cleanup resolves the path from the run directory.
+    Then the matching artifact inside the run directory is removed.
+    """
     run_dir = tmp_path / "run"
     run_dir.mkdir()
 
@@ -163,6 +187,12 @@ def test_cleanup_resolves_relative_path_under_run_directory(tmp_path: Path):
 
 
 def test_cleanup_ignores_missing_target(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a required cleanup target does not exist.
+    When retry cleanup processes the rule.
+    Then cleanup completes without raising an error.
+    """
     run_dir = tmp_path / "run"
     run_dir.mkdir()
 

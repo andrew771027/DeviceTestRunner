@@ -199,6 +199,12 @@ def test_failure_not_retried_after_max_attempts():
 
 
 def test_retry_timeout_when_conifgured():
+    """Acceptance scenario.
+
+    Given timeout is explicitly eligible and attempts remain.
+    When the retry policy evaluates a timeout failure.
+    Then another attempt is allowed.
+    """
 
     policy = RetryPolicy(
         RetryConfig(max_attempts=3, retry_on=[FailureType.TIMEOUT]),
@@ -210,6 +216,12 @@ def test_retry_timeout_when_conifgured():
 
 
 def test_process_error_not_retried():
+    """Acceptance scenario.
+
+    Given retry_on excludes process errors.
+    When the retry policy evaluates a process error.
+    Then another attempt is not allowed.
+    """
 
     policy = RetryPolicy(
         RetryConfig(
@@ -227,12 +239,24 @@ def test_process_error_not_retried():
 
 
 def test_timeout_not_retried_when_not_configured():
+    """Acceptance scenario.
+
+    Given retry_on only includes device-offline failures.
+    When the retry policy evaluates a timeout.
+    Then another attempt is not allowed.
+    """
     policy = RetryPolicy(RetryConfig(max_attempts=3, retry_on=[FailureType.DEVICE_OFFLINE]))
 
     assert policy.should_retry(attempt=1, failure_type=FailureType.TIMEOUT) is False
 
 
 def test_artifact_invalid_not_retried_when_not_configured():
+    """Acceptance scenario.
+
+    Given retry_on only includes missing artifacts.
+    When the retry policy evaluates an invalid artifact.
+    Then another attempt is not allowed.
+    """
     policy = RetryPolicy(RetryConfig(max_attempts=3, retry_on=[FailureType.ARTIFACT_MISSING]))
 
     assert policy.should_retry(attempt=1, failure_type=FailureType.ARTIFACT_INVALID) is False

@@ -765,3 +765,18 @@ def test_duplicate_retry_on_values_are_removed():
         FailureType.DEVICE_OFFLINE,
         FailureType.ARTIFACT_MISSING,
     ]
+
+
+def test_retry_on_cancelled_is_invalid():
+
+    raw = {
+        "retry": {
+            "max_attempts": 3,
+            "retry_on": [
+                "cancelled",
+            ],
+        }
+    }
+
+    with pytest.raises(ValueError, match="retry.retry_on cannnot contain 'cancelled'"):
+        ConfigLoader()._load_retry(raw=raw)

@@ -5,6 +5,8 @@ from runner.executor import SubprocessExecutor
 from runner.failure import FailureClassifier
 from runner.models import FailureType, LifecycleStepContent
 
+PROJECT_ROOT = Path(__file__).resolve().parent
+
 
 def test_executor_classifies_timeout(tmp_path: Path):
     """Acceptance scenario.
@@ -72,7 +74,7 @@ def test_executor_classifies_device_offline(tmp_path: Path):
     )
 
     executor = SubprocessExecutor(
-        project_directory=tmp_path,
+        project_directory=PROJECT_ROOT,
         failure_classifier=FailureClassifier(),
     )
 
@@ -116,7 +118,7 @@ def test_executor_classifies_process_error(tmp_path: Path):
     )
 
     executor = SubprocessExecutor(
-        project_directory=tmp_path,
+        project_directory=PROJECT_ROOT,
         failure_classifier=FailureClassifier(),
     )
 

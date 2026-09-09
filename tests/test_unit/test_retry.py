@@ -1,3 +1,5 @@
+import pytest
+
 from runner.models import ArtifactValidationResult, FailureType, RetryConfig
 from runner.retry import RetryPolicy
 
@@ -259,4 +261,16 @@ def test_artifact_invalid_not_retried_when_not_configured():
     """
     policy = RetryPolicy(RetryConfig(max_attempts=3, retry_on=[FailureType.ARTIFACT_MISSING]))
 
-    assert policy.should_retry(attempt=1, failure_type=FailureType.ARTIFACT_INVALID) is False
+    should_retry = policy.should_retry(attempt=1, failure_type=FailureType.ARTIFACT_INVALID)
+
+    assert should_retry is False
+
+
+@pytest.mark.cancelled
+def test_cancelled_is_never_retried():
+
+    policy = RetryPolicy(RetryConfig(max_attempts=3, retry_on=FailureType.TIMEOUT))
+
+    should_retry = policy.should_retry(attempt=1, failure_type=FailureType.CANCELLED)
+
+    assert should_retry is False

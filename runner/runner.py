@@ -13,6 +13,7 @@ from runner.models import (
     ArtifactValidationRule,
     ExecutionSummary,
     FailureType,
+    LifecycleStepContent,
     LifecycleSteps,
     RunMetadata,
     RunnerConfig,
@@ -44,18 +45,17 @@ class DeviceTestRunner:
 
         self.show_console_output = show_console_output
 
-    def run(self,
-            config: RunnerConfig, 
-            cancellation_token: CancellationToken | None = None
-        ) -> RunResult:
-        
+    def run(
+        self, config: RunnerConfig, cancellation_token: CancellationToken | None = None
+    ) -> RunResult:
+
         if cancellation_token is None:
             cancellation_token = CancellationToken()
 
         started_at = datetime.now(timezone.utc)
-        
+
         started_counter = time.perf_counter()
-        
+
         artifact_results: List[ArtifactValidationResult] = []
 
         run_dir = self.artifact_manager.create_run_directory(test_case_id=config.test_case.id)
@@ -88,7 +88,7 @@ class DeviceTestRunner:
                 artifact_manager=self.artifact_manager,
                 step_results=step_results,
                 stop_on_failure=True,
-                cancellation_token=cancellation_token, 
+                cancellation_token=cancellation_token,
                 ignore_cancellation=False,
             )
 
@@ -102,15 +102,15 @@ class DeviceTestRunner:
                     artifact_manager=self.artifact_manager,
                     step_results=step_results,
                     stop_on_failure=True,
-                    cancellation_token=cancellation_token, 
+                    cancellation_token=cancellation_token,
                     ignore_cancellation=False,
                 )
-            
-            # 
-            # teardown 是 cleanup。 
-            # 
-            # 即使 cancellation token 已經是 cancelled， 
-            # teardown 還是要執行。 
+
+            #
+            # teardown 是 cleanup。
+            #
+            # 即使 cancellation token 已經是 cancelled，
+            # teardown 還是要執行。
             #
             if global_setup_success:
 
@@ -122,12 +122,12 @@ class DeviceTestRunner:
                     artifact_manager=self.artifact_manager,
                     step_results=step_results,
                     stop_on_failure=False,
-                    cancellation_token=cancellation_token, 
+                    cancellation_token=cancellation_token,
                     ignore_cancellation=True,
                 )
 
-        # 
-        # global teardown 永遠 best effort。 
+        #
+        # global teardown 永遠 best effort。
         #
         self._run_stage(
             stage="global_teardown",
@@ -137,7 +137,7 @@ class DeviceTestRunner:
             artifact_manager=self.artifact_manager,
             step_results=step_results,
             stop_on_failure=False,
-            cancellation_token=cancellation_token, 
+            cancellation_token=cancellation_token,
             ignore_cancellation=False,
         )
 
@@ -170,10 +170,9 @@ class DeviceTestRunner:
         steps: List[LifecycleSteps],
         config: RunnerConfig,
         run_dir: Path,
-        artifact_manager: ArtifactManager,
         step_results: List[StepResult],
         stop_on_failure: bool,
-        cancellation_token: CancellationToken, 
+        cancellation_token: CancellationToken,
         ignore_cancellation: bool,
     ) -> bool:
 
@@ -185,15 +184,15 @@ class DeviceTestRunner:
             if cancellation_token.is_cancelled and not ignore_cancellation:
                 return False
 
-            
-            step_result = self._run_step_with_retry(stage=stage, 
-                                                    step=step, 
-                                                    config=config, 
-                                                    retry_policy=retry_policy, 
-                                                    run_dir=run_dir, 
-                                                    cancellation_token=cancellation_token, 
-                                                    ignore_cancellation=ignore_cancellation, 
-                                                    )
+            step_result = self._run_step_with_retry(
+                stage=stage,
+                step=step,
+                config=config,
+                retry_policy=retry_policy,
+                run_dir=run_dir,
+                cancellation_token=cancellation_token,
+                ignore_cancellation=ignore_cancellation,
+            )
 
             step_results.append(step_result)
 
@@ -218,7 +217,7 @@ class DeviceTestRunner:
         run_dir: Path,
         cancellation_token: CancellationToken,
         ignore_cancellation: bool,
-    ) -> stepResult:
+    ) -> StepResult:
 
         attempt_results: List[StepAttemptResult] = []
 
@@ -230,13 +229,13 @@ class DeviceTestRunner:
 
         for attempt in range(1, config.retry.max_attempts + 1):
 
-            if cancellation_token.is_cancelled: and not ignore_cancellation:
+            if cancellation_token.is_cancelled and not ignore_cancellation:
                 step_cancelled = True
                 break
-            
+
             execution_token = CancellationToken() if ignore_cancellation else cancellation_token
 
-            log_writer = artifact_manager.create_step_log_writer(
+            log_writer = self.artifact_manager.create_step_log_writer(
                 run_dir=run_dir,
                 stage=stage,
                 step_name=step.name,
@@ -258,9 +257,7 @@ class DeviceTestRunner:
             # Cancelled 不做 Artifact Validation
             #
             if process_result.canceled:
-
                 step_cancelled = True
-
                 break
 
             artifact_results: List[ArtifactValidationResult] = []
@@ -296,10 +293,6 @@ class DeviceTestRunner:
 
             attempt_success = final_failure_type == FailureType.NONE
 
-            # attempt_success = process_result.success and all(
-            # result.passed for result in artifact_results
-            # )
-
             attempt_result = StepAttemptResult(
                 attempt=attempt,
                 success=attempt_success,
@@ -328,6 +321,19 @@ class DeviceTestRunner:
             if not should_retry:
                 break
 
+            #
+            # Retry delay 中也要能取消
+            #
+            if retry_policy.delay_seconds > 0:
+                cancelled_during_delay = self._wait_retry_delay(
+                    delay_seconds=retry_policy.delay_seconds,
+                    cancellation_token=cancellation_token,
+                )
+
+                if cancelled_during_delay and not ignore_cancellation:
+                    step_cancelled = True
+                    break
+
             required_rules = [rule for rule in artifact_rules if rule.required]
 
             if required_rules:
@@ -336,17 +342,36 @@ class DeviceTestRunner:
                     rules=required_rules,
                 )
 
-            # Retry delay 中也要能取消
-            #
-            if retry_policy.delay_seconds > 0:
-            
-                cancelled_during_delay = self._wait_retry_delay(delay_seconds=retry_policy.delay_seconds, cancellation_token=cancellation_token)
+        duration_seconds = time.perf_counter() - step_started_at
 
-                time.sleep(retry_policy.delay_seconds)
+        return StepResult(
+            stage=stage,
+            name=step.name,
+            command=step.command,
+            success=step_success,
+            cancelled=step_cancelled,
+            attempts=len(attempt_results),
+            attempt_results=attempt_results,
+            duration_seconds=duration_seconds,
+        )
 
-        step_duration_seconds = time.perf_counter() - step_started_at
+    def _wait_retry_delay(
+        self, delay_seconds: float, cancellation_token: CancellationToken
+    ) -> bool:
 
+        deadline = time.monotonic() + delay_seconds
 
+        while True:
+
+            if cancellation_token.is_cancelled:
+                return True
+
+            remaining = deadline - time.monotonic()
+
+            if remaining <= 0:
+                return False
+
+            time.sleep(min(0.1, remaining))
 
     def _build_run_result(
         self,
@@ -365,7 +390,11 @@ class DeviceTestRunner:
 
         passed_steps = sum(1 for result in step_results if result.success)
 
-        failed_steps = sum(1 for result in step_results if not result.success)
+        cancelled_steps = sum(1 for result in step_results if result.cancelled)
+
+        failed_steps = sum(
+            1 for result in step_results if not result.success and not result.cancelleds
+        )
 
         skipped_steps = configured_steps - executed_steps
 
@@ -383,6 +412,7 @@ class DeviceTestRunner:
 
         status = self._calculate_status(
             failed_steps=failed_steps,
+            cancelled_steps=cancelled_steps,
             skipped_steps=skipped_steps,
             failed_required_artifact_rules=failed_required_artifact_rules,
         )
@@ -440,8 +470,14 @@ class DeviceTestRunner:
 
     @staticmethod
     def _calculate_status(
-        failed_steps: int, skipped_steps: int, failed_required_artifact_rules: int
+        failed_steps: int,
+        cancelled_steps: int,
+        skipped_steps: int,
+        failed_required_artifact_rules: int,
     ) -> str:
+
+        if cancelled_steps > 0:
+            return "CANCELLED"
 
         if failed_steps > 0:
             return "FAILED"

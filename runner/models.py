@@ -6,6 +6,8 @@ from typing import Any, List, Optional
 class FailureType(str, Enum):
     NONE = "none"
 
+    CANCELLED = "cancelled"
+
     TIMEOUT = "timeout"
     DEVICE_OFFLINE = "device_offline"
     PROCESS_ERROR = "process_error"
@@ -140,7 +142,11 @@ class ArtifactValidationResult:
 class StepAttemptResult:
     attempt: int
     success: bool
+
     failure_type: FailureType
+    timed_out: bool
+    cancelled: bool
+    
     exit_code: Optional[int]
     duration_seconds: float
 
@@ -170,6 +176,7 @@ class StepResult:
     command: str
     attempts: int
     success: bool
+    cancelled: bool
     attempt_results: list[StepAttemptResult]
     duration_seconds: float
 
@@ -194,6 +201,7 @@ class ExecutionSummary:
     executed_steps: int
     passed_steps: int
     failed_steps: int
+    cancelled_steps: int
     skipped_steps: int
 
     configured_artifact_rules: int

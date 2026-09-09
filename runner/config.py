@@ -152,6 +152,10 @@ class ConfigLoader:
 
                 raise ValueError("retry.retry_on cannot contain 'none")
 
+            if failure_type == FailureType.CANCELLED:
+                raise ValueError("retry.retry_on cannot contain 'cancelled'")
+
+
             if failure_type not in retry_on:
 
                 retry_on.append(failure_type)

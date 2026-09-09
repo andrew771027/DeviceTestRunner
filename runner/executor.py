@@ -7,11 +7,13 @@ from pathlib import Path
 from typing import TextIO
 
 from runner.artifact import StepLogWriter
+from runner.cancellation import CancellationToken
 from runner.failure import FailureClassifier
 from runner.models import LifecycleStepContent, StepAttemptResult
 
 
 class SubprocessExecutor:
+    POLL_INTERVAL_SECONDS = 0.1
 
     def __init__(
         self,
@@ -28,6 +30,7 @@ class SubprocessExecutor:
         attempt: int,
         log_writer: StepLogWriter | None,
         working_directory: str | Path,
+        cancellation_token: CancellationToken,
     ) -> StepAttemptResult:
 
         if log_writer is None:
@@ -40,8 +43,11 @@ class SubprocessExecutor:
         environment["RUN_ARTIFACT_DIR"] = str(Path(working_directory).resolve())
 
         start_time = time.perf_counter()
+
         process: subprocess.Popen[str] | None = None
+        
         error_message: str | None = None
+        
         timed_out: bool = False
 
         try:
@@ -78,31 +84,67 @@ class SubprocessExecutor:
             stdout_thread.start()
             stderr_thread.start()
 
-            try:
-                process.wait(timeout=step.timeout_second)
-            except subprocess.TimeoutExpired:
-                timed_out = True
-                error_message = f"Timeout after {step.timeout_second} seconds"
-                self._stop_process(process)
+            while True:
+
+                # 1. process 已經正常結束
+                if process.pooll() is not None:
+                    break
+                
+                # 2. 外部要求取消
+                if cancellation_token.is_cancelled:
+                    cancelled = True
+
+                    error_message = "Execution cancelled"
+
+                    self._stop_process(process)
+
+                    break
+                
+                # 3. timeout
+                elapsed_seconds = time.perf_counter() - start_time
+
+                if elapsed_seconds >= step.timeout_second:
+                    timed_out = True
+
+                    error_message = f"Command timeout after {step.timeout_second}"
+
+                    self._stop_process(process)
+
+                    break
+                
+                time.sleep(self.POLL_INTERVAL_SECONDS)
+
 
             stdout_thread.join()
             stderr_thread.join()
 
             exit_code = process.returncode
-            duration_seconds = time.perf_counter() - start_time
-            success = not timed_out and exit_code == 0
 
-            failure_type = self.failure_classifier.classify_process_failure(
-                process_success=success,
-                timed_out=timed_out,
-                stderr=log_writer.stderr,
-                error=error_message,
-            )
+            duration_seconds = time.perf_counter() - start_time
+            
+            if cancelled:
+            
+                success = False
+                
+                failure_type = FailureType.CANCELLED
+            
+            else:
+
+                success = not timed_out and exit_code == 0
+
+                failure_type = self.failure_classifier.classify_process_failure(
+                    process_success=success,
+                    timed_out=timed_out,
+                    stderr=log_writer.stderr,
+                    error=error_message,
+                )
 
             return StepAttemptResult(
                 attempt=attempt,
                 success=success,
                 failure_type=failure_type,
+                timed_out=timed_out,
+                cancelled=cancelled,
                 exit_code=exit_code,
                 duration_seconds=duration_seconds,
                 stdout=log_writer.stdout,
@@ -125,11 +167,16 @@ class SubprocessExecutor:
                 error=error_message,
             )
 
+            if process is not None:
+                self._stop_process(process)
+
             return StepAttemptResult(
                 attempt=attempt,
                 success=False,
                 failure_type=failure_type,
-                exit_code=None,
+                timed_out=False,
+                cancelled=False,
+                exit_code=process.returncode if process is not None else None,
                 duration_seconds=duration_seconds,
                 stdout=log_writer.stdout,
                 stderr=log_writer.stderr,
@@ -158,6 +205,8 @@ class SubprocessExecutor:
                 attempt=attempt,
                 success=False,
                 failure_type=failure_type,
+                timed_out=False,
+                cancelled=False,
                 exit_code=process.returncode if process is not None else None,
                 duration_seconds=duration_seconds,
                 stdout=log_writer.stdout,
@@ -183,7 +232,7 @@ class SubprocessExecutor:
         process.terminate()
 
         try:
-            process.wait()
+            process.wait(timeout=2)
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait()

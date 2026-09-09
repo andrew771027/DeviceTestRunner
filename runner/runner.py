@@ -5,6 +5,7 @@ from typing import List
 
 from runner.artifact import ArtifactManager
 from runner.artifact_validator import ArtifactValidator
+from runner.cancellation import CancellationToken
 from runner.executor import SubprocessExecutor
 from runner.failure import FailureClassifier
 from runner.models import (
@@ -43,26 +44,41 @@ class DeviceTestRunner:
 
         self.show_console_output = show_console_output
 
-    def run(self, config: RunnerConfig) -> RunResult:
+    def run(self,
+            config: RunnerConfig, 
+            cancellation_token: CancellationToken | None = None
+        ) -> RunResult:
+        
+        if cancellation_token is None:
+            cancellation_token = CancellationToken()
+
         started_at = datetime.now(timezone.utc)
+        
         started_counter = time.perf_counter()
+        
         artifact_results: List[ArtifactValidationResult] = []
 
         run_dir = self.artifact_manager.create_run_directory(test_case_id=config.test_case.id)
 
         step_results: List[StepResult] = []
 
-        global_setup_success = self._run_stage(
-            stage="global_setup",
-            steps=config.lifecycle.global_setup.steps,
-            config=config,
-            run_dir=run_dir,
-            artifact_manager=self.artifact_manager,
-            step_results=step_results,
-            stop_on_failure=True,
-        )
+        global_setup_success = False
 
-        if global_setup_success:
+        setup_success = False
+
+        if not cancellation_token.is_cancelled:
+
+            global_setup_success = self._run_stage(
+                stage="global_setup",
+                steps=config.lifecycle.global_setup.steps,
+                config=config,
+                run_dir=run_dir,
+                artifact_manager=self.artifact_manager,
+                step_results=step_results,
+                stop_on_failure=True,
+            )
+
+        if global_setup_success and not cancellation_token.is_cancelled:
 
             setup_success = self._run_stage(
                 stage="setup",
@@ -72,9 +88,11 @@ class DeviceTestRunner:
                 artifact_manager=self.artifact_manager,
                 step_results=step_results,
                 stop_on_failure=True,
+                cancellation_token=cancellation_token, 
+                ignore_cancellation=False,
             )
 
-            if setup_success:
+            if setup_success and not cancellation_token.is_cancelled:
 
                 self._run_stage(
                     stage="scenario",
@@ -84,18 +102,33 @@ class DeviceTestRunner:
                     artifact_manager=self.artifact_manager,
                     step_results=step_results,
                     stop_on_failure=True,
+                    cancellation_token=cancellation_token, 
+                    ignore_cancellation=False,
+                )
+            
+            # 
+            # teardown 是 cleanup。 
+            # 
+            # 即使 cancellation token 已經是 cancelled， 
+            # teardown 還是要執行。 
+            #
+            if global_setup_success:
+
+                self._run_stage(
+                    stage="teardown",
+                    steps=config.lifecycle.teardown.steps,
+                    config=config,
+                    run_dir=run_dir,
+                    artifact_manager=self.artifact_manager,
+                    step_results=step_results,
+                    stop_on_failure=False,
+                    cancellation_token=cancellation_token, 
+                    ignore_cancellation=True,
                 )
 
-            self._run_stage(
-                stage="teardown",
-                steps=config.lifecycle.teardown.steps,
-                config=config,
-                run_dir=run_dir,
-                artifact_manager=self.artifact_manager,
-                step_results=step_results,
-                stop_on_failure=False,
-            )
-
+        # 
+        # global teardown 永遠 best effort。 
+        #
         self._run_stage(
             stage="global_teardown",
             steps=config.lifecycle.global_teardown.steps,
@@ -104,6 +137,8 @@ class DeviceTestRunner:
             artifact_manager=self.artifact_manager,
             step_results=step_results,
             stop_on_failure=False,
+            cancellation_token=cancellation_token, 
+            ignore_cancellation=False,
         )
 
         # 最終 Run-level Artifact Validation
@@ -138,6 +173,8 @@ class DeviceTestRunner:
         artifact_manager: ArtifactManager,
         step_results: List[StepResult],
         stop_on_failure: bool,
+        cancellation_token: CancellationToken, 
+        ignore_cancellation: bool,
     ) -> bool:
 
         stage_success = True
@@ -145,122 +182,24 @@ class DeviceTestRunner:
 
         for step in steps:
 
-            attempt_results: List[StepAttemptResult] = []
+            if cancellation_token.is_cancelled and not ignore_cancellation:
+                return False
 
-            artifact_rules = self._get_rules_for_step(step_name=step.name, config=config)
-
-            step_started_at = time.perf_counter()
-
-            step_success = False
-
-            for attempt in range(1, config.retry.max_attempts + 1):
-
-                log_writer = artifact_manager.create_step_log_writer(
-                    run_dir=run_dir,
-                    stage=stage,
-                    step_name=step.name,
-                    attempt=attempt,
-                    show_console=self.show_console_output,
-                )
-
-                with log_writer:
-                    process_result = self.executor.execute(
-                        step=step,
-                        stage=stage,
-                        attempt=attempt,
-                        log_writer=log_writer,
-                        working_directory=run_dir,
-                    )
-
-                artifact_results: List[ArtifactValidationResult] = []
-
-                # 只有 process 成功時，
-                # artifact validation 才有意義。
-                if process_result.success and artifact_rules:
-                    artifact_results = self.artifact_validator.validate_all(
-                        rules=artifact_rules, base_dir=run_dir
-                    )
-
-                required_artifact_results = self._get_required_artifact_results(artifact_results)
-
-                artifact_failure_type = self.failure_classifier.classify_artifact_failure(
-                    artifact_results=required_artifact_results
-                )
-
-                #
-                # Failure priority:
-                #
-                # Process Failure
-                #     >
-                # Artifact Failure
-                #     >
-                # NONE
-                #
-                if not process_result.success:
-                    final_failure_type = process_result.failure_type
-                elif artifact_failure_type != FailureType.NONE:
-                    final_failure_type = artifact_failure_type
-                else:
-                    final_failure_type = FailureType.NONE
-
-                attempt_success = final_failure_type == FailureType.NONE
-
-                # attempt_success = process_result.success and all(
-                # result.passed for result in artifact_results
-                # )
-
-                attempt_result = StepAttemptResult(
-                    attempt=attempt,
-                    success=attempt_success,
-                    failure_type=(final_failure_type),
-                    exit_code=process_result.exit_code,
-                    duration_seconds=process_result.duration_seconds,
-                    stdout=process_result.stdout,
-                    stderr=process_result.stderr,
-                    stdout_log_path=process_result.stdout_log_path,
-                    stderr_log_path=process_result.stderr_log_path,
-                    error=process_result.error,
-                    artifact_validation_results=artifact_results,
-                )
-
-                attempt_results.append(attempt_result)
-
-                if attempt_success:
-                    step_success = True
-                    break
-
-                should_retry = retry_policy.should_retry(
-                    attempt=attempt,
-                    failure_type=(final_failure_type),
-                )
-
-                if not should_retry:
-                    break
-
-                required_rules = [rule for rule in artifact_rules if rule.required]
-
-                if required_rules:
-                    self.artifact_manager.cleanup_validation_targets(
-                        run_dir=run_dir,
-                        rules=required_rules,
-                    )
-
-                if retry_policy.delay_seconds > 0:
-                    time.sleep(retry_policy.delay_seconds)
-
-            step_duration_seconds = time.perf_counter() - step_started_at
-
-            step_result = StepResult(
-                stage=stage,
-                name=step.name,
-                command=step.command,
-                success=step_success,
-                attempts=len(attempt_results),
-                attempt_results=attempt_results,
-                duration_seconds=step_duration_seconds,
-            )
+            
+            step_result = self._run_step_with_retry(stage=stage, 
+                                                    step=step, 
+                                                    config=config, 
+                                                    retry_policy=retry_policy, 
+                                                    run_dir=run_dir, 
+                                                    cancellation_token=cancellation_token, 
+                                                    ignore_cancellation=ignore_cancellation, 
+                                                    )
 
             step_results.append(step_result)
+
+            if step_result.cancelled:
+                stage_success = False
+                break
 
             if not step_result.success:
                 stage_success = False
@@ -269,6 +208,145 @@ class DeviceTestRunner:
                     break
 
         return stage_success
+
+    def _run_step_with_retry(
+        self,
+        stage: str,
+        step: LifecycleStepContent,
+        config: RunnerConfig,
+        retry_policy: RetryPolicy,
+        run_dir: Path,
+        cancellation_token: CancellationToken,
+        ignore_cancellation: bool,
+    ) -> stepResult:
+
+        attempt_results: List[StepAttemptResult] = []
+
+        artifact_rules = self._get_rules_for_step(step_name=step.name, config=config)
+
+        step_started_at = time.perf_counter()
+
+        step_success = False
+
+        for attempt in range(1, config.retry.max_attempts + 1):
+
+            if cancellation_token.is_cancelled: and not ignore_cancellation:
+                step_cancelled = True
+                break
+            
+            execution_token = CancellationToken() if ignore_cancellation else cancellation_token
+
+            log_writer = artifact_manager.create_step_log_writer(
+                run_dir=run_dir,
+                stage=stage,
+                step_name=step.name,
+                attempt=attempt,
+                show_console=self.show_console_output,
+            )
+
+            with log_writer:
+                process_result = self.executor.execute(
+                    step=step,
+                    stage=stage,
+                    attempt=attempt,
+                    log_writer=log_writer,
+                    working_directory=run_dir,
+                    cancellation_token=execution_token,
+                )
+
+            #
+            # Cancelled 不做 Artifact Validation
+            #
+            if process_result.canceled:
+
+                step_cancelled = True
+
+                break
+
+            artifact_results: List[ArtifactValidationResult] = []
+
+            # 只有 process 成功時，
+            # artifact validation 才有意義。
+            if process_result.success and artifact_rules:
+                artifact_results = self.artifact_validator.validate_all(
+                    rules=artifact_rules, base_dir=run_dir
+                )
+
+            required_artifact_results = self._get_required_artifact_results(artifact_results)
+
+            artifact_failure_type = self.failure_classifier.classify_artifact_failure(
+                artifact_results=required_artifact_results
+            )
+
+            #
+            # Failure priority:
+            #
+            # Process Failure
+            #     >
+            # Artifact Failure
+            #     >
+            # NONE
+            #
+            if not process_result.success:
+                final_failure_type = process_result.failure_type
+            elif artifact_failure_type != FailureType.NONE:
+                final_failure_type = artifact_failure_type
+            else:
+                final_failure_type = FailureType.NONE
+
+            attempt_success = final_failure_type == FailureType.NONE
+
+            # attempt_success = process_result.success and all(
+            # result.passed for result in artifact_results
+            # )
+
+            attempt_result = StepAttemptResult(
+                attempt=attempt,
+                success=attempt_success,
+                failure_type=(final_failure_type),
+                exit_code=process_result.exit_code,
+                duration_seconds=process_result.duration_seconds,
+                stdout=process_result.stdout,
+                stderr=process_result.stderr,
+                stdout_log_path=process_result.stdout_log_path,
+                stderr_log_path=process_result.stderr_log_path,
+                error=process_result.error,
+                artifact_validation_results=artifact_results,
+            )
+
+            attempt_results.append(attempt_result)
+
+            if attempt_success:
+                step_success = True
+                break
+
+            should_retry = retry_policy.should_retry(
+                attempt=attempt,
+                failure_type=(final_failure_type),
+            )
+
+            if not should_retry:
+                break
+
+            required_rules = [rule for rule in artifact_rules if rule.required]
+
+            if required_rules:
+                self.artifact_manager.cleanup_validation_targets(
+                    run_dir=run_dir,
+                    rules=required_rules,
+                )
+
+            # Retry delay 中也要能取消
+            #
+            if retry_policy.delay_seconds > 0:
+            
+                cancelled_during_delay = self._wait_retry_delay(delay_seconds=retry_policy.delay_seconds, cancellation_token=cancellation_token)
+
+                time.sleep(retry_policy.delay_seconds)
+
+        step_duration_seconds = time.perf_counter() - step_started_at
+
+
 
     def _build_run_result(
         self,

@@ -12,6 +12,10 @@ class RetryPolicy:
         if failure_type == FailureType.NONE:
             return False
 
+        # 取消
+        if failure_type == FailureType.CANCELLED:
+            return False
+
         # 已經最大 attempt
         if attempt >= self.config.max_attempts:
             return False

@@ -778,5 +778,5 @@ def test_retry_on_cancelled_is_invalid():
         }
     }
 
-    with pytest.raises(ValueError, match="retry.retry_on cannnot contain 'cancelled'"):
+    with pytest.raises(ValueError, match=r"retry\.retry_on cannot contain 'cancelled'"):
         ConfigLoader()._load_retry(raw=raw)

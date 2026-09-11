@@ -269,7 +269,9 @@ def test_artifact_invalid_not_retried_when_not_configured():
 @pytest.mark.cancelled
 def test_cancelled_is_never_retried():
 
-    policy = RetryPolicy(RetryConfig(max_attempts=3, retry_on=FailureType.TIMEOUT))
+    policy = RetryPolicy(
+        RetryConfig(max_attempts=3, retry_on=[FailureType.TIMEOUT, FailureType.CANCELLED])
+    )
 
     should_retry = policy.should_retry(attempt=1, failure_type=FailureType.CANCELLED)
 

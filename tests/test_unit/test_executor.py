@@ -7,9 +7,10 @@ from unittest.mock import Mock
 import pytest
 
 from runner.artifact import ArtifactManager
+from runner.cancellation import CancellationToken
 from runner.executor import SubprocessExecutor
 from runner.failure import FailureClassifier
-from runner.models import LifecycleStepContent
+from runner.models import FailureType, LifecycleStepContent
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 
@@ -43,6 +44,8 @@ def test_subprocess_executor_return_success(tmp_path, test_case_id, step, stage,
         project_directory=PROJECT_ROOT, failure_classifier=FailureClassifier()
     )
 
+    token = CancellationToken()
+
     artifact_manager = ArtifactManager(tmp_path)
 
     run_dir = artifact_manager.create_run_directory(test_case_id=test_case_id)
@@ -62,12 +65,15 @@ def test_subprocess_executor_return_success(tmp_path, test_case_id, step, stage,
             attempt=attempt,
             log_writer=log_writer,
             working_directory=run_dir,
+            cancellation_token=token,
         )
 
     assert result.attempt == attempt
     assert result.exit_code == 0
     assert result.passed is True
     assert result.success is True
+    assert result.cancelled is False
+    assert result.timed_out is False
 
     assert log_writer.stdout_path.read_text(encoding="utf-8") == result.stdout
     assert result.stdout == "Hello World\n"
@@ -105,6 +111,8 @@ def test_subprocess_executor_failure(tmp_path, test_case_id, step, stage, attemp
 
     artifact_manager = ArtifactManager(tmp_path)
 
+    token = CancellationToken()
+
     run_dir = artifact_manager.create_run_directory(test_case_id=test_case_id)
 
     log_writer = artifact_manager.create_step_log_writer(
@@ -122,6 +130,7 @@ def test_subprocess_executor_failure(tmp_path, test_case_id, step, stage, attemp
             attempt=attempt,
             log_writer=log_writer,
             working_directory=run_dir,
+            cancellation_token=token,
         )
 
     assert result.attempt == attempt
@@ -152,20 +161,20 @@ def test_subprocess_executor_failure(tmp_path, test_case_id, step, stage, attemp
         )
     ],
 )
-def test_subprocess_executor_passes_timeout_to_subprocess(
+def test_subprocess_executor_polls_completed_subprocess(
     tmp_path, monkeypatch, tase_case_id, step, stage, attempt
 ):
     """Acceptance scenario.
 
     Given a test step is configured for subprocess execution.
     When the subprocess executor runs the step and captures its outcome.
-    Then subprocess executor passes timeout to subprocess.
+    Then subprocess executor detects completion through polling and captures output.
     """
     mocked_process = Mock()
 
     mocked_process.stdout = StringIO("Hello World\n")
     mocked_process.stderr = StringIO("")
-    mocked_process.wait.return_value = 0
+    mocked_process.poll.return_value = 0
     mocked_process.returncode = 0
 
     mocked_popen = Mock(return_value=mocked_process)
@@ -175,6 +184,8 @@ def test_subprocess_executor_passes_timeout_to_subprocess(
     executor = SubprocessExecutor(
         project_directory=PROJECT_ROOT, failure_classifier=FailureClassifier()
     )
+
+    token = CancellationToken()
 
     artifact_manager = ArtifactManager(tmp_path)
 
@@ -195,6 +206,7 @@ def test_subprocess_executor_passes_timeout_to_subprocess(
             attempt=attempt,
             log_writer=log_writer,
             working_directory=run_dir,
+            cancellation_token=token,
         )
 
     mocked_popen.assert_called_once()
@@ -212,7 +224,8 @@ def test_subprocess_executor_passes_timeout_to_subprocess(
     assert kwargs["errors"] == "replace"
     assert kwargs["bufsize"] == 1
 
-    mocked_process.wait.assert_called_once_with(timeout=5)
+    mocked_process.poll.assert_called_once_with()
+    mocked_process.wait.assert_not_called()
 
     assert result.exit_code == 0
     assert result.stdout == "Hello World\n"
@@ -245,7 +258,7 @@ def test_subprocess_executor_raised_timeout_error(
 
     Given a test step is configured for subprocess execution.
     When the subprocess executor runs the step and captures its outcome.
-    Then subprocess executor raised timeout error.
+    Then subprocess executor terminates the process and reports a timeout.
     """
 
     mocked_process = Mock()
@@ -254,10 +267,14 @@ def test_subprocess_executor_raised_timeout_error(
     mocked_process.stdout = StringIO("")
     mocked_process.stderr = StringIO("")
 
-    # timeout 應發生在 wait()，不是 Popen()。
-    mocked_process.wait.side_effect = subprocess.TimeoutExpired(
-        cmd=step.command,
-        timeout=step.timeout_second,
+    # poll() 回傳 None 表示程序仍在執行；wait() 用於終止後回收程序。
+    mocked_process.poll.return_value = None
+    mocked_process.wait.return_value = 0
+
+    # 依序模擬開始時間、逾時檢查時間與結束時間，避免實際等待。
+    monkeypatch.setattr(
+        "runner.executor.time.perf_counter",
+        Mock(side_effect=[0, step.timeout_second, step.timeout_second]),
     )
 
     mocked_process.returncode = None
@@ -267,6 +284,8 @@ def test_subprocess_executor_raised_timeout_error(
     monkeypatch.setattr("runner.executor.subprocess.Popen", mocked_popen)
 
     artifact_manager = ArtifactManager(tmp_path)
+
+    token = CancellationToken()
 
     run_dir = artifact_manager.create_run_directory(test_case_id=test_case_id)
 
@@ -289,6 +308,7 @@ def test_subprocess_executor_raised_timeout_error(
             attempt=attempt,
             log_writer=log_writer,
             working_directory=run_dir,
+            cancellation_token=token,
         )
 
     mocked_popen.assert_called_once()
@@ -299,8 +319,14 @@ def test_subprocess_executor_raised_timeout_error(
     assert result.passed is False
 
     assert log_writer.stdout_path.read_text(encoding="utf-8") == result.stdout
-    assert result.stderr == ""
-    assert log_writer.stderr_path.read_text(encoding="utf-8") == result.stderr
     assert result.stdout == ""
+    assert log_writer.stderr_path.read_text(encoding="utf-8") == result.stderr
+    assert result.stderr == ""
 
-    assert result.error == f"Timeout after {step.timeout_second} seconds"
+    assert result.timed_out is True
+    assert result.cancelled is False
+    assert result.failure_type == FailureType.TIMEOUT
+    assert result.error == f"Command timeout after {step.timeout_second}"
+    mocked_process.terminate.assert_called_once_with()
+    mocked_process.wait.assert_called_once_with(timeout=2)
+    mocked_process.kill.assert_not_called()

@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from runner.artifact import ArtifactManager
+from runner.cancellation import CancellationToken
 from runner.executor import SubprocessExecutor
 from runner.failure import FailureClassifier
 from runner.models import FailureType, LifecycleStepContent
@@ -16,6 +17,8 @@ def test_executor_classifies_timeout(tmp_path: Path):
     Then executor classifies timeout.
     """
     artifat_manager = ArtifactManager(output_dir=tmp_path)
+
+    token = CancellationToken()
 
     run_dir = artifat_manager.create_run_directory("timeout_test")
 
@@ -41,10 +44,11 @@ def test_executor_classifies_timeout(tmp_path: Path):
             attempt=1,
             log_writer=writer,
             working_directory=run_dir,
+            cancellation_token=token,
         )
 
     assert result.success is False
-    assert result.canceled is False
+    assert result.cancelled is False
     assert result.timed_out is True
     assert result.failure_type != FailureType.CANCELLED
     assert result.failure_type == FailureType.TIMEOUT
@@ -58,6 +62,8 @@ def test_executor_classifies_device_offline(tmp_path: Path):
     Then executor classifies device offline.
     """
     artifact_manager = ArtifactManager(output_dir=tmp_path)
+
+    token = CancellationToken()
 
     run_dir = artifact_manager.create_run_directory("offline_test")
 
@@ -88,6 +94,7 @@ def test_executor_classifies_device_offline(tmp_path: Path):
             attempt=1,
             log_writer=writer,
             working_directory=run_dir,
+            cancellation_token=token,
         )
 
     assert result.success is False
@@ -102,6 +109,8 @@ def test_executor_classifies_process_error(tmp_path: Path):
     Then executor classifies process error.
     """
     artifact_manager = ArtifactManager(output_dir=tmp_path)
+
+    token = CancellationToken()
 
     run_dir = artifact_manager.create_run_directory("process_test")
 
@@ -132,6 +141,7 @@ def test_executor_classifies_process_error(tmp_path: Path):
             attempt=1,
             log_writer=writer,
             working_directory=run_dir,
+            cancellation_token=token,
         )
 
     assert result.success is False

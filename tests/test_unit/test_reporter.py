@@ -31,6 +31,7 @@ from runner.reporter import JsonReporter
                 runner_version="1.0.0",
                 started_at="2024-01-01T00:00:00Z",
                 finished_at="2024-01-01T00:10:00Z",
+                cancel_requested=False,
             ),
             ExecutionSummary(
                 status="FAILED",
@@ -38,6 +39,7 @@ from runner.reporter import JsonReporter
                 executed_steps=3,
                 passed_steps=2,
                 failed_steps=1,
+                cancelled_steps=0,
                 skipped_steps=0,
                 configured_artifact_rules=2,
                 passed_artifact_rules=2,
@@ -52,11 +54,14 @@ from runner.reporter import JsonReporter
                     command="echo 'Setup 1'",
                     attempts=1,
                     success=True,
+                    cancelled=False,
                     attempt_results=[
                         StepAttemptResult(
                             attempt=1,
                             success=True,
                             exit_code=0,
+                            timed_out=False,
+                            cancelled=False,
                             failure_type=FailureType.NONE,
                             duration_seconds=5.0,
                             stdout="Setup 1 completed.",
@@ -73,11 +78,14 @@ from runner.reporter import JsonReporter
                     command="echo 'Test 1'",
                     attempts=1,
                     success=True,
+                    cancelled=False,
                     attempt_results=[
                         StepAttemptResult(
                             attempt=1,
                             success=True,
                             exit_code=0,
+                            timed_out=False,
+                            cancelled=False,
                             failure_type=FailureType.NONE,
                             duration_seconds=10.0,
                             stdout="Test 1 completed.",
@@ -94,10 +102,13 @@ from runner.reporter import JsonReporter
                     command="echo 'Test 2'",
                     attempts=1,
                     success=False,
+                    cancelled=False,
                     attempt_results=[
                         StepAttemptResult(
                             attempt=1,
                             success=False,
+                            timed_out=False,
+                            cancelled=False,
                             failure_type=FailureType.PROCESS_ERROR,
                             exit_code=1,
                             duration_seconds=15.0,

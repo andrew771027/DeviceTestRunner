@@ -182,10 +182,13 @@ def test_config_contains_all_section(config: RunnerConfig):
             command="echo 'Hello World'",
             attempts=1,
             success=True,
+            cancelled=False,
             attempt_results=[
                 StepAttemptResult(
                     attempt=1,
                     success=True,
+                    timed_out=False,
+                    cancelled=False,
                     failure_type=FailureType.NONE,
                     exit_code=0,
                     duration_seconds=1,
@@ -219,10 +222,13 @@ def test_step_result_passed_when_exit_code_is_zero(result):
             command="echo 'Hello World'",
             attempts=1,
             success=False,
+            cancelled=False,
             attempt_results=[
                 StepAttemptResult(
                     attempt=1,
                     success=False,
+                    timed_out=False,
+                    cancelled=False,
                     failure_type=FailureType.PROCESS_ERROR,
                     exit_code=1,
                     duration_seconds=1,

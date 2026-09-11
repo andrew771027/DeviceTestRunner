@@ -26,7 +26,7 @@ from runner.retry import RetryPolicy
 
 
 class DeviceTestRunner:
-    VERSION = "1.5.3"
+    VERSION = "1.6.0"
 
     def __init__(
         self,
@@ -73,9 +73,10 @@ class DeviceTestRunner:
                 steps=config.lifecycle.global_setup.steps,
                 config=config,
                 run_dir=run_dir,
-                artifact_manager=self.artifact_manager,
                 step_results=step_results,
                 stop_on_failure=True,
+                cancellation_token=cancellation_token,
+                ignore_cancellation=False,
             )
 
         if global_setup_success and not cancellation_token.is_cancelled:
@@ -85,7 +86,6 @@ class DeviceTestRunner:
                 steps=config.lifecycle.setup.steps,
                 config=config,
                 run_dir=run_dir,
-                artifact_manager=self.artifact_manager,
                 step_results=step_results,
                 stop_on_failure=True,
                 cancellation_token=cancellation_token,
@@ -99,7 +99,6 @@ class DeviceTestRunner:
                     steps=config.lifecycle.scenario.steps,
                     config=config,
                     run_dir=run_dir,
-                    artifact_manager=self.artifact_manager,
                     step_results=step_results,
                     stop_on_failure=True,
                     cancellation_token=cancellation_token,
@@ -119,7 +118,6 @@ class DeviceTestRunner:
                     steps=config.lifecycle.teardown.steps,
                     config=config,
                     run_dir=run_dir,
-                    artifact_manager=self.artifact_manager,
                     step_results=step_results,
                     stop_on_failure=False,
                     cancellation_token=cancellation_token,
@@ -134,11 +132,10 @@ class DeviceTestRunner:
             steps=config.lifecycle.global_teardown.steps,
             config=config,
             run_dir=run_dir,
-            artifact_manager=self.artifact_manager,
             step_results=step_results,
             stop_on_failure=False,
             cancellation_token=cancellation_token,
-            ignore_cancellation=False,
+            ignore_cancellation=True,
         )
 
         # 最終 Run-level Artifact Validation
@@ -222,20 +219,56 @@ class DeviceTestRunner:
 
         attempt_results: List[StepAttemptResult] = []
 
+        #
+        # 找出這個 step 跑完後需要驗證的 Artifact Rules。
+        #
         artifact_rules = self._get_rules_for_step(step_name=step.name, config=config)
 
         step_started_at = time.perf_counter()
 
         step_success = False
 
+        step_cancelled = False
+
+        #
+        # 一個 Step 最多執行 max_attempts 次。
+        #
         for attempt in range(1, config.retry.max_attempts + 1):
 
+            #
+            # ---------------------------------------------------------
+            # 1. Attempt 開始前先檢查 Cancellation
+            # ---------------------------------------------------------
+            #
+            # Normal lifecycle:
+            #
+            #   cancel → 不要再啟動新的 attempt
+            #
+            # Cleanup lifecycle:
+            #
+            #   teardown/global_teardown
+            #   可以 ignore cancellation
+            #
             if cancellation_token.is_cancelled and not ignore_cancellation:
                 step_cancelled = True
                 break
 
+            #
+            # Cleanup stage 不應該使用已經 cancelled 的 token。
+            #
+            # 不然 teardown 一開始：
+            #
+            # cancellation_token.is_cancelled == True
+            #
+            # Executor 又會立刻把 cleanup process cancel。
+            #
             execution_token = CancellationToken() if ignore_cancellation else cancellation_token
 
+            #
+            # ---------------------------------------------------------
+            # 2. 為這一次 Attempt 建立獨立 log
+            # ---------------------------------------------------------
+            #
             log_writer = self.artifact_manager.create_step_log_writer(
                 run_dir=run_dir,
                 stage=stage,
@@ -244,6 +277,22 @@ class DeviceTestRunner:
                 show_console=self.show_console_output,
             )
 
+            #
+            # ---------------------------------------------------------
+            # 3. 執行 Process
+            # ---------------------------------------------------------
+            #
+            # Executor 的責任：
+            #
+            # - start subprocess
+            # - stdout/stderr streaming
+            # - timeout
+            # - cancellation
+            # - terminate process tree
+            # - wait until process cleanup finished
+            #
+            # Runner 不直接碰 PID / process group。
+            #
             with log_writer:
                 process_result = self.executor.execute(
                     step=step,
@@ -254,14 +303,28 @@ class DeviceTestRunner:
                     cancellation_token=execution_token,
                 )
 
+            artifact_results: List[ArtifactValidationResult] = []
             #
-            # Cancelled 不做 Artifact Validation
+            # ---------------------------------------------------------
+            # 4. 如果 Process 被 Cancel
+            # ---------------------------------------------------------
             #
-            if process_result.canceled:
+            # Cancelled:
+            #
+            # - 不做 artifact validation
+            # - 不 retry
+            # - Step = CANCELLED
+            #
+            if process_result.cancelled:
+                attempt_results.append(process_result)
                 step_cancelled = True
                 break
 
-            artifact_results: List[ArtifactValidationResult] = []
+            #
+            # ---------------------------------------------------------
+            # 5. Process PASS 才做 Attempt-level Artifact Validation
+            # ---------------------------------------------------------
+            #
 
             # 只有 process 成功時，
             # artifact validation 才有意義。
@@ -270,14 +333,34 @@ class DeviceTestRunner:
                     rules=artifact_rules, base_dir=run_dir
                 )
 
+            #
+            # ---------------------------------------------------------
+            # 6. 只讓 required Artifact 影響 Attempt Success
+            # ---------------------------------------------------------
+            #
+            # optional artifact:
+            #
+            # validation FAIL
+            # → report 留著
+            # → 但不影響 step success
+            #
             required_artifact_results = self._get_required_artifact_results(artifact_results)
 
+            #
+            # ---------------------------------------------------------
+            # 7. Artifact Failure Classification
+            # ---------------------------------------------------------
+            #
             artifact_failure_type = self.failure_classifier.classify_artifact_failure(
                 artifact_results=required_artifact_results
             )
 
             #
-            # Failure priority:
+            # ---------------------------------------------------------
+            # 8. 決定這次 Attempt 的最終 FailureType
+            # ---------------------------------------------------------
+            #
+            # Priority:
             #
             # Process Failure
             #     >
@@ -292,11 +375,23 @@ class DeviceTestRunner:
             else:
                 final_failure_type = FailureType.NONE
 
+            #
+            # ---------------------------------------------------------
+            # 9. Attempt Success
+            # ---------------------------------------------------------
+            #
             attempt_success = final_failure_type == FailureType.NONE
 
+            #
+            # ---------------------------------------------------------
+            # 10. 建立完整 Attempt Result
+            # ---------------------------------------------------------
+            #
             attempt_result = StepAttemptResult(
                 attempt=attempt,
                 success=attempt_success,
+                timed_out=process_result.timed_out,
+                cancelled=False,
                 failure_type=(final_failure_type),
                 exit_code=process_result.exit_code,
                 duration_seconds=process_result.duration_seconds,
@@ -310,10 +405,33 @@ class DeviceTestRunner:
 
             attempt_results.append(attempt_result)
 
+            #
+            # ---------------------------------------------------------
+            # 11. PASS → Step 完成
+            # ---------------------------------------------------------
+            #
             if attempt_success:
                 step_success = True
                 break
 
+            #
+            # ---------------------------------------------------------
+            # 12. 再次檢查 Cancellation
+            # ---------------------------------------------------------
+            #
+            # 有可能 process 剛結束，
+            # 但使用者這時候按下 cancel。
+            #
+
+            if cancellation_token.is_cancelled and not ignore_cancellation:
+                step_cancelled = True
+                break
+
+            #
+            # ---------------------------------------------------------
+            # 13. Retry Policy
+            # ---------------------------------------------------------
+            #
             should_retry = retry_policy.should_retry(
                 attempt=attempt,
                 failure_type=(final_failure_type),
@@ -323,7 +441,36 @@ class DeviceTestRunner:
                 break
 
             #
-            # Retry delay 中也要能取消
+            # ---------------------------------------------------------
+            # 14. Retry 前 Cleanup Artifact
+            # ---------------------------------------------------------
+            #
+            # 這一步是為了避免：
+            #
+            # Attempt 1:
+            #   power.csv 產生
+            #   validation fail
+            #
+            # Attempt 2:
+            #   沒重新產生
+            #
+            # Validator 卻讀到 Attempt 1 的 stale file。
+            #
+            required_rules = [rule for rule in artifact_rules if rule.required]
+
+            if required_rules:
+                self.artifact_manager.cleanup_validation_targets(
+                    run_dir=run_dir, rules=required_rules
+                )
+
+            #
+            # ---------------------------------------------------------
+            # 15. Retry Delay
+            # ---------------------------------------------------------
+            #
+            # 不直接 time.sleep(delay_seconds)
+            #
+            # 因為 sleep 期間也要能被 cancel。
             #
             if retry_policy.delay_seconds > 0:
                 cancelled_during_delay = self._wait_retry_delay(
@@ -335,14 +482,15 @@ class DeviceTestRunner:
                     step_cancelled = True
                     break
 
-            required_rules = [rule for rule in artifact_rules if rule.required]
+            #
+            # loop 回到下一個 attempt
+            #
 
-            if required_rules:
-                self.artifact_manager.cleanup_validation_targets(
-                    run_dir=run_dir,
-                    rules=required_rules,
-                )
-
+        #
+        # -------------------------------------------------------------
+        # 16. Step Result
+        # -------------------------------------------------------------
+        #
         duration_seconds = time.perf_counter() - step_started_at
 
         return StepResult(
@@ -395,7 +543,7 @@ class DeviceTestRunner:
         cancelled_steps = sum(1 for result in step_results if result.cancelled)
 
         failed_steps = sum(
-            1 for result in step_results if not result.success and not result.cancelleds
+            1 for result in step_results if not result.success and not result.cancelled
         )
 
         skipped_steps = configured_steps - executed_steps
@@ -411,8 +559,6 @@ class DeviceTestRunner:
         failed_required_artifact_rules = sum(
             1 for result in artifact_results if (result.required and not result.passed)
         )
-
-        cancel_requested=( cancellation_token.is_cancelled )
 
         status = self._calculate_status(
             cancel_requested=cancel_requested,
@@ -432,6 +578,7 @@ class DeviceTestRunner:
             runner_version=self.VERSION,
             started_at=started_at.isoformat(),
             finished_at=finished_at.isoformat(),
+            cancel_requested=cancel_requested,
         )
 
         summary = ExecutionSummary(
@@ -440,6 +587,7 @@ class DeviceTestRunner:
             executed_steps=executed_steps,
             passed_steps=passed_steps,
             failed_steps=failed_steps,
+            cancelled_steps=cancelled_steps,
             skipped_steps=skipped_steps,
             configured_artifact_rules=(configured_artifact_rules),
             passed_artifact_rules=(passed_artifact_rules),

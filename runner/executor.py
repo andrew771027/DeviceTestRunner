@@ -9,7 +9,7 @@ from typing import TextIO
 from runner.artifact import StepLogWriter
 from runner.cancellation import CancellationToken
 from runner.failure import FailureClassifier
-from runner.models import LifecycleStepContent, StepAttemptResult
+from runner.models import FailureType, LifecycleStepContent, StepAttemptResult
 
 
 class SubprocessExecutor:
@@ -45,10 +45,12 @@ class SubprocessExecutor:
         start_time = time.perf_counter()
 
         process: subprocess.Popen[str] | None = None
-        
+
         error_message: str | None = None
-        
+
         timed_out: bool = False
+
+        cancelled: bool = False
 
         try:
             process = subprocess.Popen(
@@ -87,9 +89,9 @@ class SubprocessExecutor:
             while True:
 
                 # 1. process 已經正常結束
-                if process.pooll() is not None:
+                if process.poll() is not None:
                     break
-                
+
                 # 2. 外部要求取消
                 if cancellation_token.is_cancelled:
                     cancelled = True
@@ -99,7 +101,7 @@ class SubprocessExecutor:
                     self._stop_process(process)
 
                     break
-                
+
                 # 3. timeout
                 elapsed_seconds = time.perf_counter() - start_time
 
@@ -111,9 +113,8 @@ class SubprocessExecutor:
                     self._stop_process(process)
 
                     break
-                
-                time.sleep(self.POLL_INTERVAL_SECONDS)
 
+                time.sleep(self.POLL_INTERVAL_SECONDS)
 
             stdout_thread.join()
             stderr_thread.join()
@@ -121,13 +122,13 @@ class SubprocessExecutor:
             exit_code = process.returncode
 
             duration_seconds = time.perf_counter() - start_time
-            
+
             if cancelled:
-            
+
                 success = False
-                
+
                 failure_type = FailureType.CANCELLED
-            
+
             else:
 
                 success = not timed_out and exit_code == 0

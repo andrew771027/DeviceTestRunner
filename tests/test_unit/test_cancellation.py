@@ -13,6 +13,7 @@ def test_token_can_be_cancelled():
     token = CancellationToken()
 
     token.cancel()
+    assert token.is_cancelled is True
 
 
 def test_cancel_is_idempotent():

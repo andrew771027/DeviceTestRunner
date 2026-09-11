@@ -1,11 +1,12 @@
+import json
 from pathlib import Path
 from typing import List
 
 import pytest
-import thread
 
 from runner.artifact import ArtifactManager, StepLogWriter
 from runner.artifact_validator import ArtifactValidator
+from runner.cancellation import CancellationToken
 from runner.failure import FailureClassifier
 from runner.models import (
     ArtifactConfig,
@@ -46,6 +47,7 @@ class MockExecutor:
         attempt: int,
         log_writer: StepLogWriter,
         working_directory: str | Path,
+        cancellation_token: CancellationToken,
     ) -> StepAttemptResult:
 
         working_directory = Path(working_directory)
@@ -72,6 +74,8 @@ class MockExecutor:
         return StepAttemptResult(
             attempt=attempt,
             success=success,
+            timed_out=False,
+            cancelled=False,
             failure_type=FailureType.NONE if success else FailureType.PROCESS_ERROR,
             exit_code=0 if success else 1,
             duration_seconds=0.01,
@@ -87,6 +91,7 @@ class MockFailedOnceExecutor:
 
     def __init__(self):
         self.failed_once = False
+        self.executed_steps: list[str] = []
 
     def execute(
         self,
@@ -95,7 +100,10 @@ class MockFailedOnceExecutor:
         attempt: int,
         log_writer: StepLogWriter,
         working_directory: str | Path,
+        cancellation_token: CancellationToken,
     ) -> StepAttemptResult:
+
+        self.executed_steps.append(step.name)
 
         if not self.failed_once:
             self.failed_once = True
@@ -108,6 +116,8 @@ class MockFailedOnceExecutor:
         return StepAttemptResult(
             attempt=attempt,
             success=success,
+            timed_out=False,
+            cancelled=False,
             failure_type=FailureType.NONE if success else FailureType.PROCESS_ERROR,
             exit_code=(0 if success else 1),
             duration_seconds=0.01,
@@ -129,6 +139,7 @@ class MockAlwaysFailExecutor:
         attempt: int,
         log_writer: StepLogWriter,
         working_directory: str | Path,
+        cancellation_token: CancellationToken,
     ) -> StepAttemptResult:
 
         self.failed_once = True
@@ -138,6 +149,8 @@ class MockAlwaysFailExecutor:
         return StepAttemptResult(
             attempt=attempt,
             success=False,
+            timed_out=False,
+            cancelled=False,
             failure_type=FailureType.PROCESS_ERROR,
             exit_code=1,
             duration_seconds=0.01,
@@ -159,12 +172,19 @@ class MockFailureTypeExecutor:
         attempt: int,
         log_writer: StepLogWriter,
         working_directory: str | Path,
+        cancellation_token: CancellationToken,
     ) -> StepAttemptResult:
         log_writer.write_stderr(f"{self.failure_type.value}\n")
+
+        timed_out = True if self.failure_type == FailureType.TIMEOUT else False
+
+        cancelled = True if self.failure_type == FailureType.CANCELLED else False
 
         return StepAttemptResult(
             attempt=attempt,
             success=False,
+            timed_out=timed_out,
+            cancelled=cancelled,
             failure_type=self.failure_type,
             exit_code=1,
             duration_seconds=0.01,
@@ -186,6 +206,7 @@ class MockAlwaysPassExecutor:
         attempt: int,
         log_writer: StepLogWriter,
         working_directory: str | Path,
+        cancellation_token: CancellationToken,
     ) -> StepAttemptResult:
 
         self.failed_once = True
@@ -195,6 +216,8 @@ class MockAlwaysPassExecutor:
         return StepAttemptResult(
             attempt=attempt,
             success=True,
+            timed_out=False,
+            cancelled=False,
             failure_type=FailureType.NONE,
             exit_code=0,
             duration_seconds=0.01,
@@ -204,10 +227,13 @@ class MockAlwaysPassExecutor:
             stderr_log_path=str(log_writer.stderr_path),
         )
 
+
 class MockCancellingExecutor:
-    def __init__(self, token: CancellationToken):
+    def __init__(self, token: CancellationToken, cancelled_step_name: str | None = "scenario"):
         self.token = token
+        self.cancelled_step_name = cancelled_step_name
         self.executed_steps: list[str] = []
+        self.token_states: list[bool] = []
 
     def execute(
         self,
@@ -220,14 +246,17 @@ class MockCancellingExecutor:
     ) -> StepAttemptResult:
 
         self.executed_steps.append(step.name)
+        self.token_states.append(cancellation_token.is_cancelled)
 
-        if step.name == "scenario":
+        if step.name == self.cancelled_step_name:
 
             self.token.cancel()
-            
+
             return StepAttemptResult(
                 attempt=attempt,
                 success=False,
+                timed_out=False,
+                cancelled=True,
                 failure_type=FailureType.CANCELLED,
                 exit_code=None,
                 duration_seconds=0.01,
@@ -241,9 +270,9 @@ class MockCancellingExecutor:
         return StepAttemptResult(
             attempt=attempt,
             success=True,
-            failure_type=FailureType.NONE,
             timed_out=False,
             cancelled=False,
+            failure_type=FailureType.NONE,
             exit_code=0,
             duration_seconds=0.01,
             stdout="success\n",
@@ -251,6 +280,22 @@ class MockCancellingExecutor:
             stdout_log_path=str(log_writer.stdout_path),
             stderr_log_path=str(log_writer.stderr_path),
         )
+
+
+class MockRecordingArtifactValidator:
+    def __init__(self):
+        self.call_count = 0
+        self.received_rules = []
+        self.received_base_dir = None
+        self.validator = ArtifactValidator()
+
+    def validate_all(self, rules, base_dir):
+        self.call_count += 1
+        self.received_rules = rules
+        self.received_base_dir = base_dir
+
+        return self.validator.validate_all(rules=rules, base_dir=base_dir)
+
 
 class MockFailedOnceArtifactValidator:
     def __init__(self):
@@ -488,7 +533,7 @@ def test_runner_executes_all_stages_and_all_steps_success(tmp_path: Path):
         failure_classifier=FailureClassifier(),
         reporter=JsonReporter(),
     )
-    result = runner.run(config)
+    result = runner.run(config=config, cancellation_token=CancellationToken())
 
     assert result.metadata.test_case_name == "power_001"
     assert result_passed(result) is True
@@ -501,6 +546,7 @@ def test_runner_executes_all_stages_and_all_steps_success(tmp_path: Path):
     assert result.summary.executed_steps == 6
     assert result.summary.passed_steps == 6
     assert result.summary.failed_steps == 0
+    assert result.summary.cancelled_steps == 0
     assert result.summary.skipped_steps == 0
 
     assert executor.executed_attempts == [
@@ -558,6 +604,7 @@ def test_runner_terminate_when_step_failed(tmp_path, failed_step_name):
     assert result.summary.executed_steps == 6
     assert result.summary.passed_steps == 5
     assert result.summary.failed_steps == 1
+    assert result.summary.cancelled_steps == 0
     assert result.summary.skipped_steps == 0
 
     assert [step.name for step in result.step_results] == [
@@ -647,6 +694,7 @@ def test_global_setup_failure_only_run_global_teardown(tmp_path, failed_step_nam
     assert result.summary.executed_steps == 2
     assert result.summary.passed_steps == 1
     assert result.summary.failed_steps == 1
+    assert result.summary.cancelled_steps == 0
     assert result.summary.skipped_steps == 4
 
     assert executor.executed_attempts == [
@@ -706,6 +754,7 @@ def test_setup_failure_skips_scenario_but_runs_teardown_and_global_teardown(
     assert result.summary.executed_steps == 4
     assert result.summary.passed_steps == 3
     assert result.summary.failed_steps == 1
+    assert result.summary.cancelled_steps == 0
     assert result.summary.skipped_steps == 2
 
     assert [step.name for step in result.step_results if step.success is True] == [
@@ -872,6 +921,7 @@ def test_runner_passes_without_validation_rules(tmp_path: Path):
     assert result.summary.passed_steps == 6
     assert result.summary.executed_steps == 6
     assert result.summary.skipped_steps == 0
+    assert result.summary.cancelled_steps == 0
     assert result.summary.failed_steps == 0
 
     assert result.summary.configured_artifact_rules == 0
@@ -1002,11 +1052,15 @@ def test_retry_waits_between_attempts(tmp_path, monkeypatch):
     """
 
     sleep_calls = []
+    current_time = 0.0
 
     def fake_sleep(seconds):
+        nonlocal current_time
         sleep_calls.append(seconds)
+        current_time += seconds
 
     monkeypatch.setattr("runner.runner.time.sleep", fake_sleep)
+    monkeypatch.setattr("runner.runner.time.monotonic", lambda: current_time)
 
     config = mock_retry_config(tmp_path)
     executor = MockFailedOnceExecutor()
@@ -1020,7 +1074,8 @@ def test_retry_waits_between_attempts(tmp_path, monkeypatch):
 
     runner.run(config)
 
-    assert sleep_calls == [2]
+    assert sum(sleep_calls) == pytest.approx(config.retry.delay_seconds)
+    assert all(0 < seconds <= 0.1 for seconds in sleep_calls)
 
 
 @pytest.mark.artifact
@@ -1776,6 +1831,7 @@ def test_runner_does_not_retry_unconfigured_process_error(tmp_path: Path):
 
     assert result.step_results[0].attempts == 1
 
+
 def test_cancelled_scenario_still_runs_cleanup(tmp_path: Path):
 
     config = RunnerConfig(
@@ -1811,8 +1867,10 @@ def test_cancelled_scenario_still_runs_cleanup(tmp_path: Path):
 
     token = CancellationToken()
 
+    executor = MockCancellingExecutor(token)
+
     runner = DeviceTestRunner(
-        executor=MockCancellingExecutor(token),
+        executor=executor,
         artifact_manager=ArtifactManager(tmp_path),
         artifact_validator=ArtifactValidator(),
         failure_classifier=FailureClassifier(),
@@ -1820,13 +1878,14 @@ def test_cancelled_scenario_still_runs_cleanup(tmp_path: Path):
         show_console_output=False,
     )
 
-    result = runner.run(config=conifg, cancellation_token=token)
+    result = runner.run(config=config, cancellation_token=token)
 
     assert "scenario" in executor.executed_steps
     assert "teardown" in executor.executed_steps
     assert "global_teardown" in executor.executed_steps
 
     assert result.summary.status == "CANCELLED"
+
 
 def test_cancelled_step_is_not_retried(tmp_path: Path):
 
@@ -1847,7 +1906,7 @@ def test_cancelled_step_is_not_retried(tmp_path: Path):
             retry_on=[
                 FailureType.TIMEOUT,
                 FailureType.DEVICE_OFFLINE,
-            ].
+            ],
         ),
         lifecycle=LifecycleConfig(
             global_setup=LifecycleSteps(steps=[mock_step("global_setup")]),
@@ -1880,8 +1939,19 @@ def test_cancelled_step_is_not_retried(tmp_path: Path):
 
     scenario_result = next(result for result in result.step_results if result.name == "scenario")
 
+    assert scenario_result.success is False
+    assert scenario_result.cancelled is True
     assert scenario_result.attempts == 1
-    assert scenario_result.canceled is True
+
+    assert len(scenario_result.attempt_results) == 1
+
+    attempt_result = scenario_result.attempt_results[0]
+
+    assert attempt_result.attempt == 1
+    assert attempt_result.success is False
+    assert attempt_result.cancelled is True
+    assert attempt_result.failure_type == FailureType.CANCELLED
+
 
 def test_cancel_stops_remaining_scenario_steps(tmp_path: Path):
 
@@ -1920,8 +1990,10 @@ def test_cancel_stops_remaining_scenario_steps(tmp_path: Path):
 
     token = CancellationToken()
 
+    executor = MockCancellingExecutor(token)
+
     runner = DeviceTestRunner(
-        executor=MockCancellingExecutor(token),
+        executor=executor,
         artifact_manager=ArtifactManager(tmp_path),
         artifact_validator=ArtifactValidator(),
         failure_classifier=FailureClassifier(),
@@ -1929,14 +2001,14 @@ def test_cancel_stops_remaining_scenario_steps(tmp_path: Path):
         show_console_output=False,
     )
 
-    result = runner.run(config=config, token=token
-    )
+    result = runner.run(config=config, cancellation_token=token)
 
     assert "scenario" in executor.executed_steps
     assert "scenario_2" not in executor.executed_steps
     assert "scenario_3" not in executor.executed_steps
     assert "teardown" in executor.executed_steps
     assert "global_teardown" in executor.executed_steps
+
 
 def test_cancel_before_run_only_runs_global_teardown(tmp_path: Path):
 
@@ -1974,10 +2046,13 @@ def test_cancel_before_run_only_runs_global_teardown(tmp_path: Path):
     )
 
     token = CancellationToken()
+
+    executor = MockCancellingExecutor(token)
+
     token.cancel()
 
     runner = DeviceTestRunner(
-        executor=MockCancellingExecutor(token),
+        executor=executor,
         artifact_manager=ArtifactManager(tmp_path),
         artifact_validator=ArtifactValidator(),
         failure_classifier=FailureClassifier(),
@@ -1985,11 +2060,12 @@ def test_cancel_before_run_only_runs_global_teardown(tmp_path: Path):
         show_console_output=False,
     )
 
-    result = runner.run(config=config, token=token)
+    result = runner.run(config=config, cancellation_token=token)
 
     assert executor.executed_steps == ["global_teardown"]
 
-def test_cancel_during_retry_delay():
+
+def test_cancel_during_retry_delay(tmp_path: Path, monkeypatch):
 
     config = RunnerConfig(
         test_case=DeviceTestCase(
@@ -2023,7 +2099,6 @@ def test_cancel_during_retry_delay():
     )
 
     token = CancellationToken()
-    token.cancel()
 
     runner = DeviceTestRunner(
         executor=MockCancellingExecutor(token),
@@ -2034,16 +2109,221 @@ def test_cancel_during_retry_delay():
         show_console_output=False,
     )
 
-    def cancel():
-        time.sleep(0.1)
-        token.cancel()
-    
-    thread = threading.thread(target=cacnel)
+    current_time = 0.0
+    sleep_calls = []
 
-    thread.start()
+    def fake_sleep(seconds):
+        nonlocal current_time
+        assert not token.is_cancelled
+        sleep_calls.append(seconds)
+        current_time += seconds
+        token.cancel()
+
+    monkeypatch.setattr("runner.runner.time.monotonic", lambda: current_time)
+    monkeypatch.setattr("runner.runner.time.sleep", fake_sleep)
 
     cancelled = runner._wait_retry_delay(delay_seconds=5, cancellation_token=token)
 
-    thread.join()
-
     assert cancelled is True
+    assert sleep_calls == [0.1]
+    assert current_time < 5
+
+
+@pytest.mark.parametrize(
+    argnames="cancel_stage, expected_steps, expected_cancelled_steps, expected_skipped_steps",
+    argvalues=[
+        ("global_setup", ["global_setup", "global_teardown"], 1, 4),
+        ("setup", ["global_setup", "setup", "teardown", "global_teardown"], 1, 2),
+        (
+            "scenario_1",
+            ["global_setup", "setup", "scenario_1", "teardown", "global_teardown"],
+            1,
+            1,
+        ),
+        (None, ["global_teardown"], 0, 5),
+    ],
+)
+def test_cancellation_lifecycle_and_summary(
+    tmp_path: Path,
+    cancel_stage,
+    expected_steps,
+    expected_cancelled_steps,
+    expected_skipped_steps,
+):
+    config = RunnerConfig(
+        test_case=DeviceTestCase(
+            id="power_001",
+            name="power_001",
+            description="Description",
+        ),
+        device=DeviceInfo(
+            serial="device_001",
+            product="pixel",
+            build="build_001",
+        ),
+        retry=RetryConfig(max_attempts=3),
+        lifecycle=LifecycleConfig(
+            global_setup=LifecycleSteps(steps=[mock_step("global_setup")]),
+            setup=LifecycleSteps(steps=[mock_step("setup")]),
+            scenario=LifecycleSteps(steps=[mock_step("scenario_1"), mock_step("scenario_2")]),
+            teardown=LifecycleSteps(steps=[mock_step("teardown")]),
+            global_teardown=LifecycleSteps(steps=[mock_step("global_teardown")]),
+        ),
+        artifact=ArtifactConfig(output_dir=str(tmp_path)),
+    )
+
+    token = CancellationToken()
+
+    # 沒有指定取消的 step，代表在 run 開始前取消。
+    if cancel_stage is None:
+        token.cancel()
+
+    executor = MockCancellingExecutor(token, cancelled_step_name=cancel_stage)
+
+    runner = DeviceTestRunner(
+        executor=executor,
+        artifact_manager=ArtifactManager(tmp_path),
+        artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
+        reporter=JsonReporter(),
+        show_console_output=False,
+    )
+
+    result = runner.run(config=config, cancellation_token=token)
+
+    assert executor.executed_steps == expected_steps
+
+    # Cleanup 收到的 token 也必須是尚未取消的狀態。
+    for is_cancelled in executor.token_states:
+        assert is_cancelled is False
+
+    assert result.summary.cancelled_steps == expected_cancelled_steps
+    assert result.summary.failed_steps == 0
+    assert result.summary.executed_steps == len(expected_steps)
+    assert result.summary.skipped_steps == expected_skipped_steps
+    assert result.summary.status == "CANCELLED"
+    assert result.metadata.cancel_requested is True
+
+    if cancel_stage is not None:
+        cancelled_step = None
+
+        for step_result in result.step_results:
+            if step_result.name == cancel_stage:
+                cancelled_step = step_result
+                break
+
+        assert cancelled_step is not None
+        assert cancelled_step.cancelled is True
+        assert cancelled_step.attempts == 1
+
+        attempt_result = cancelled_step.attempt_results[0]
+        assert attempt_result.failure_type == FailureType.CANCELLED
+
+    report_path = Path(result.artifact_dir) / "result.json"
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+
+    assert report["metadata"]["cancel_requested"] is True
+    assert report["metadata"]["runner_version"] == "1.6.0"
+    assert report["summary"]["status"] == "CANCELLED"
+    assert report["summary"]["cancelled_steps"] == expected_cancelled_steps
+    assert report["summary"]["failed_steps"] == 0
+
+
+def test_cancelled_attempt_skips_validation_and_preserves_cancellation(tmp_path: Path):
+    rule = ArtifactValidationRule(
+        name="missing",
+        type="exists",
+        path="missing.txt",
+        after_step="scenario",
+    )
+
+    config = RunnerConfig(
+        test_case=DeviceTestCase(
+            id="power_001",
+            name="power_001",
+            description="Description",
+        ),
+        device=DeviceInfo(
+            serial="device_001",
+            product="pixel",
+            build="build_001",
+        ),
+        retry=RetryConfig(max_attempts=2, delay_seconds=2),
+        lifecycle=LifecycleConfig(
+            scenario=LifecycleSteps(steps=[mock_step("scenario")]),
+        ),
+        artifact=ArtifactConfig(
+            output_dir=str(tmp_path),
+            validation=ArtifactValidationConfig(rules=[rule]),
+        ),
+    )
+
+    token = CancellationToken()
+    executor = MockCancellingExecutor(token)
+    validator = MockRecordingArtifactValidator()
+
+    runner = DeviceTestRunner(
+        executor=executor,
+        artifact_manager=ArtifactManager(tmp_path),
+        artifact_validator=validator,
+        failure_classifier=FailureClassifier(),
+        reporter=JsonReporter(),
+        show_console_output=False,
+    )
+
+    result = runner.run(config=config, cancellation_token=token)
+
+    # 只執行最後的 run-level validation，取消的 attempt 不做 validation。
+    assert validator.call_count == 1
+    assert validator.received_rules == [rule]
+    assert validator.received_base_dir == Path(result.artifact_dir)
+
+    scenario_result = result.step_results[0]
+    assert scenario_result.attempts == 1
+
+    attempt_result = scenario_result.attempt_results[0]
+    assert attempt_result.artifact_validation_results == []
+    assert attempt_result.failure_type == FailureType.CANCELLED
+
+    # Run-level validation 可以記錄 missing，但不能蓋掉 CANCELLED 狀態。
+    artifact_result = result.artifact_validation_results[0]
+    assert artifact_result.failure_type == FailureType.ARTIFACT_MISSING
+    assert result.summary.failed_required_artifact_rules == 1
+    assert result.summary.failed_steps == 0
+    assert result.summary.status == "CANCELLED"
+
+
+def test_cancel_during_retry_delay_stops_next_attempt_and_runs_cleanup(tmp_path, monkeypatch):
+    config = mock_retry_config(tmp_path)
+    token = CancellationToken()
+    executor = MockFailedOnceExecutor()
+    current_time = 0.0
+
+    def fake_sleep(seconds):
+        nonlocal current_time
+        current_time += seconds
+        token.cancel()
+
+    def fake_monotonic():
+        return current_time
+
+    monkeypatch.setattr("runner.runner.time.monotonic", fake_monotonic)
+    monkeypatch.setattr("runner.runner.time.sleep", fake_sleep)
+    runner = DeviceTestRunner(
+        executor=executor,
+        artifact_manager=ArtifactManager(tmp_path),
+        artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
+        reporter=JsonReporter(),
+        show_console_output=False,
+    )
+    result = runner.run(config, cancellation_token=token)
+    assert executor.executed_steps == [
+        "global_setup",
+        "global_teardown",
+    ]
+    assert current_time == pytest.approx(0.1)
+    assert current_time < config.retry.delay_seconds
+    assert result.step_results[0].attempts == 1
+    assert result.step_results[0].cancelled is True
+    assert result.summary.status == "CANCELLED"

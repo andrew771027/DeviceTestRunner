@@ -192,6 +192,7 @@ class RunMetadata:
     runner_version: str
     started_at: str
     finished_at: str
+    cancel_requested: bool
 
 
 @dataclass(frozen=True)

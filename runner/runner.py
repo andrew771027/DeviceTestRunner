@@ -158,6 +158,7 @@ class DeviceTestRunner:
             started_at=started_at,
             finished_at=finished_at,
             duration_seconds=duration_deconds,
+            cancel_requested=cancellation_token.is_cancelled,
         )
 
         self.reporter.save(result=run_result, output_dir=str(run_dir))
@@ -382,6 +383,7 @@ class DeviceTestRunner:
         started_at: datetime,
         finished_at: datetime,
         duration_seconds: float,
+        cancel_requested: bool,
     ) -> RunResult:
 
         configured_steps = self._count_configured_steps(config)
@@ -410,7 +412,10 @@ class DeviceTestRunner:
             1 for result in artifact_results if (result.required and not result.passed)
         )
 
+        cancel_requested=( cancellation_token.is_cancelled )
+
         status = self._calculate_status(
+            cancel_requested=cancel_requested,
             failed_steps=failed_steps,
             cancelled_steps=cancelled_steps,
             skipped_steps=skipped_steps,
@@ -470,13 +475,14 @@ class DeviceTestRunner:
 
     @staticmethod
     def _calculate_status(
+        cancel_requested: bool,
         failed_steps: int,
         cancelled_steps: int,
         skipped_steps: int,
         failed_required_artifact_rules: int,
     ) -> str:
 
-        if cancelled_steps > 0:
+        if cancel_requested or cancelled_steps > 0:
             return "CANCELLED"
 
         if failed_steps > 0:

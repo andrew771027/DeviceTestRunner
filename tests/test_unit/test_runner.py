@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import List
 
 import pytest
+import thread
 
 from runner.artifact import ArtifactManager, StepLogWriter
 from runner.artifact_validator import ArtifactValidator
@@ -203,6 +204,53 @@ class MockAlwaysPassExecutor:
             stderr_log_path=str(log_writer.stderr_path),
         )
 
+class MockCancellingExecutor:
+    def __init__(self, token: CancellationToken):
+        self.token = token
+        self.executed_steps: list[str] = []
+
+    def execute(
+        self,
+        step: LifecycleStepContent,
+        stage: str,
+        attempt: int,
+        log_writer: StepLogWriter,
+        working_directory: str | Path,
+        cancellation_token: CancellationToken,
+    ) -> StepAttemptResult:
+
+        self.executed_steps.append(step.name)
+
+        if step.name == "scenario":
+
+            self.token.cancel()
+            
+            return StepAttemptResult(
+                attempt=attempt,
+                success=False,
+                failure_type=FailureType.CANCELLED,
+                exit_code=None,
+                duration_seconds=0.01,
+                stdout="",
+                stderr="",
+                stdout_log_path=str(log_writer.stdout_path),
+                stderr_log_path=str(log_writer.stderr_path),
+                error=("Execution cancelled."),
+            )
+
+        return StepAttemptResult(
+            attempt=attempt,
+            success=True,
+            failure_type=FailureType.NONE,
+            timed_out=False,
+            cancelled=False,
+            exit_code=0,
+            duration_seconds=0.01,
+            stdout="success\n",
+            stderr="",
+            stdout_log_path=str(log_writer.stdout_path),
+            stderr_log_path=str(log_writer.stderr_path),
+        )
 
 class MockFailedOnceArtifactValidator:
     def __init__(self):
@@ -1727,3 +1775,275 @@ def test_runner_does_not_retry_unconfigured_process_error(tmp_path: Path):
     result = runner.run(config)
 
     assert result.step_results[0].attempts == 1
+
+def test_cancelled_scenario_still_runs_cleanup(tmp_path: Path):
+
+    config = RunnerConfig(
+        test_case=DeviceTestCase(
+            id="power_001",
+            name="power_001",
+            description="Description",
+        ),
+        device=DeviceInfo(
+            serial="device_001",
+            product="pixel",
+            build="build_001",
+        ),
+        retry=RetryConfig(
+            max_attempts=3,
+            delay_seconds=1,
+        ),
+        lifecycle=LifecycleConfig(
+            global_setup=LifecycleSteps(steps=[mock_step("global_setup")]),
+            setup=LifecycleSteps(steps=[mock_step("setup")]),
+            scenario=LifecycleSteps(
+                steps=[
+                    mock_step("scenario"),
+                ]
+            ),
+            teardown=LifecycleSteps(steps=[mock_step("teardown")]),
+            global_teardown=LifecycleSteps(steps=[mock_step("global_teardown")]),
+        ),
+        artifact=ArtifactConfig(
+            output_dir=str(tmp_path),
+        ),
+    )
+
+    token = CancellationToken()
+
+    runner = DeviceTestRunner(
+        executor=MockCancellingExecutor(token),
+        artifact_manager=ArtifactManager(tmp_path),
+        artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
+        reporter=JsonReporter(),
+        show_console_output=False,
+    )
+
+    result = runner.run(config=conifg, cancellation_token=token)
+
+    assert "scenario" in executor.executed_steps
+    assert "teardown" in executor.executed_steps
+    assert "global_teardown" in executor.executed_steps
+
+    assert result.summary.status == "CANCELLED"
+
+def test_cancelled_step_is_not_retried(tmp_path: Path):
+
+    config = RunnerConfig(
+        test_case=DeviceTestCase(
+            id="power_001",
+            name="power_001",
+            description="Description",
+        ),
+        device=DeviceInfo(
+            serial="device_001",
+            product="pixel",
+            build="build_001",
+        ),
+        retry=RetryConfig(
+            max_attempts=3,
+            delay_seconds=1,
+            retry_on=[
+                FailureType.TIMEOUT,
+                FailureType.DEVICE_OFFLINE,
+            ].
+        ),
+        lifecycle=LifecycleConfig(
+            global_setup=LifecycleSteps(steps=[mock_step("global_setup")]),
+            setup=LifecycleSteps(steps=[mock_step("setup")]),
+            scenario=LifecycleSteps(
+                steps=[
+                    mock_step("scenario"),
+                ]
+            ),
+            teardown=LifecycleSteps(steps=[mock_step("teardown")]),
+            global_teardown=LifecycleSteps(steps=[mock_step("global_teardown")]),
+        ),
+        artifact=ArtifactConfig(
+            output_dir=str(tmp_path),
+        ),
+    )
+
+    token = CancellationToken()
+
+    runner = DeviceTestRunner(
+        executor=MockCancellingExecutor(token),
+        artifact_manager=ArtifactManager(tmp_path),
+        artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
+        reporter=JsonReporter(),
+        show_console_output=False,
+    )
+
+    result = runner.run(config=config, cancellation_token=token)
+
+    scenario_result = next(result for result in result.step_results if result.name == "scenario")
+
+    assert scenario_result.attempts == 1
+    assert scenario_result.canceled is True
+
+def test_cancel_stops_remaining_scenario_steps(tmp_path: Path):
+
+    config = RunnerConfig(
+        test_case=DeviceTestCase(
+            id="power_001",
+            name="power_001",
+            description="Description",
+        ),
+        device=DeviceInfo(
+            serial="device_001",
+            product="pixel",
+            build="build_001",
+        ),
+        retry=RetryConfig(
+            max_attempts=3,
+            delay_seconds=1,
+        ),
+        lifecycle=LifecycleConfig(
+            global_setup=LifecycleSteps(steps=[mock_step("global_setup")]),
+            setup=LifecycleSteps(steps=[mock_step("setup")]),
+            scenario=LifecycleSteps(
+                steps=[
+                    mock_step("scenario"),
+                    mock_step("scenario_2"),
+                    mock_step("scenario_3"),
+                ]
+            ),
+            teardown=LifecycleSteps(steps=[mock_step("teardown")]),
+            global_teardown=LifecycleSteps(steps=[mock_step("global_teardown")]),
+        ),
+        artifact=ArtifactConfig(
+            output_dir=str(tmp_path),
+        ),
+    )
+
+    token = CancellationToken()
+
+    runner = DeviceTestRunner(
+        executor=MockCancellingExecutor(token),
+        artifact_manager=ArtifactManager(tmp_path),
+        artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
+        reporter=JsonReporter(),
+        show_console_output=False,
+    )
+
+    result = runner.run(config=config, token=token
+    )
+
+    assert "scenario" in executor.executed_steps
+    assert "scenario_2" not in executor.executed_steps
+    assert "scenario_3" not in executor.executed_steps
+    assert "teardown" in executor.executed_steps
+    assert "global_teardown" in executor.executed_steps
+
+def test_cancel_before_run_only_runs_global_teardown(tmp_path: Path):
+
+    config = RunnerConfig(
+        test_case=DeviceTestCase(
+            id="power_001",
+            name="power_001",
+            description="Description",
+        ),
+        device=DeviceInfo(
+            serial="device_001",
+            product="pixel",
+            build="build_001",
+        ),
+        retry=RetryConfig(
+            max_attempts=3,
+            delay_seconds=1,
+        ),
+        lifecycle=LifecycleConfig(
+            global_setup=LifecycleSteps(steps=[mock_step("global_setup")]),
+            setup=LifecycleSteps(steps=[mock_step("setup")]),
+            scenario=LifecycleSteps(
+                steps=[
+                    mock_step("scenario"),
+                    mock_step("scenario_2"),
+                    mock_step("scenario_3"),
+                ]
+            ),
+            teardown=LifecycleSteps(steps=[mock_step("teardown")]),
+            global_teardown=LifecycleSteps(steps=[mock_step("global_teardown")]),
+        ),
+        artifact=ArtifactConfig(
+            output_dir=str(tmp_path),
+        ),
+    )
+
+    token = CancellationToken()
+    token.cancel()
+
+    runner = DeviceTestRunner(
+        executor=MockCancellingExecutor(token),
+        artifact_manager=ArtifactManager(tmp_path),
+        artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
+        reporter=JsonReporter(),
+        show_console_output=False,
+    )
+
+    result = runner.run(config=config, token=token)
+
+    assert executor.executed_steps == ["global_teardown"]
+
+def test_cancel_during_retry_delay():
+
+    config = RunnerConfig(
+        test_case=DeviceTestCase(
+            id="power_001",
+            name="power_001",
+            description="Description",
+        ),
+        device=DeviceInfo(
+            serial="device_001",
+            product="pixel",
+            build="build_001",
+        ),
+        retry=RetryConfig(
+            max_attempts=3,
+            delay_seconds=1,
+        ),
+        lifecycle=LifecycleConfig(
+            global_setup=LifecycleSteps(steps=[mock_step("global_setup")]),
+            setup=LifecycleSteps(steps=[mock_step("setup")]),
+            scenario=LifecycleSteps(
+                steps=[
+                    mock_step("scenario"),
+                ]
+            ),
+            teardown=LifecycleSteps(steps=[mock_step("teardown")]),
+            global_teardown=LifecycleSteps(steps=[mock_step("global_teardown")]),
+        ),
+        artifact=ArtifactConfig(
+            output_dir=str(tmp_path),
+        ),
+    )
+
+    token = CancellationToken()
+    token.cancel()
+
+    runner = DeviceTestRunner(
+        executor=MockCancellingExecutor(token),
+        artifact_manager=ArtifactManager(tmp_path),
+        artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
+        reporter=JsonReporter(),
+        show_console_output=False,
+    )
+
+    def cancel():
+        time.sleep(0.1)
+        token.cancel()
+    
+    thread = threading.thread(target=cacnel)
+
+    thread.start()
+
+    cancelled = runner._wait_retry_delay(delay_seconds=5, cancellation_token=token)
+
+    thread.join()
+
+    assert cancelled is True

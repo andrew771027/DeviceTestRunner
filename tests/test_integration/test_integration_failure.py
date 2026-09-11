@@ -44,6 +44,9 @@ def test_executor_classifies_timeout(tmp_path: Path):
         )
 
     assert result.success is False
+    assert result.canceled is False
+    assert result.timed_out is True
+    assert result.failure_type != FailureType.CANCELLED
     assert result.failure_type == FailureType.TIMEOUT
 
 

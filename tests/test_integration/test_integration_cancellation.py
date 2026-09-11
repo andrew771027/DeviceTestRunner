@@ -63,4 +63,6 @@ def test_executor_cancels_running_process(tmp_path: Path):
     assert result.cancelled is True
     assert result.timed_out is False
     assert result.failure_type == FailureType.CANCELLED
+    assert result.failure_type != FailureType.TIMEOUT
     assert "started" in result.stdout
+    

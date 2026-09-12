@@ -30,7 +30,29 @@ flowchart TD
 * `run(config, cancellation_token=None)` 未收到 token 時建立新 token。一般 stage 與 attempt 開始前檢查取消，避免繼續啟動工作。
 * Cleanup attempt 使用新的未取消 token，避免外部已取消的 token 立刻終止清理程序。
 
-## 3. Executor and Retry
+## 3. `subprocess` 定義、差異與應用
+
+Python 的 `subprocess` 模組用來建立並管理外部 OS process，例如 shell command、script 或裝置工具。它把 Python 程式與外部命令的生命週期連接起來，包含啟動 process、傳遞環境變數、讀取 stdout／stderr、取得 exit code，以及等待或停止 process。
+
+| API／物件 | 是否等待 | 回傳／用途 | 適合情境 |
+| --- | --- | --- | --- |
+| `subprocess.run()` | 是 | `CompletedProcess`；命令完成後取得 exit code、stdout、stderr | 短命令、一次性執行，不需要執行中監控 |
+| `subprocess.Popen` | 否；建立後立即回傳 process 控制物件 | 取得可操作的 process，可讀取串流、監控、等待、停止 | 長時間命令、即時 log、timeout 與 cancellation |
+| `Popen.wait()` | 是 | 等待指定的 process 結束並回傳 exit code | 已決定只需等待，不需要週期性檢查狀態 |
+| `Popen.poll()` | 否；非阻塞 | process 尚未結束時回傳 `None`，結束後回傳 exit code | polling、timeout、cancellation monitoring |
+
+`run()` 是較高階的便利 API，內部仍可建立 `Popen`，但會替呼叫端處理等待與結果收集；`CompletedProcess` 代表命令已經完成的結果，不是執行中的控制物件。相對地，`Popen` 代表仍可被監控與控制的 process。`wait()` 是單純等待，可能阻塞目前 thread；`poll()` 則適合在迴圈中檢查 process 是否已結束，同時處理取消與 timeout。
+
+在本專案中，`SubprocessExecutor` 選擇 `Popen` 而不是 `run()`，原因是 lifecycle step 可能是長時間裝置測試，需要：
+
+* 由 reader thread 即時保存 stdout／stderr，避免等到命令結束才取得 log。
+* 使用 `poll()` 每 0.1 秒檢查 process、`CancellationToken` 與 step timeout。
+* 取消或 timeout 時呼叫 `terminate()`，必要時再 `kill()`，最後以 `wait()` 確認 process 結束。
+* 將 exit code、輸出內容、duration、timeout 與 cancellation 狀態組合成 `StepAttemptResult`。
+
+因此，`Popen` 是本版本 cancellation／monitoring 的基礎；`run()` 適合不需要中途控制的短命令，而 `wait()` 與 `poll()` 是 `Popen` 生命週期控制中的不同等待策略，不是互相替代的執行 API。
+
+## 4. Executor and Retry
 
 Executor 使用 `shell=True` 在 run directory 執行 command，設定 `DEVICE_TEST_RUNNER_ROOT` 與 `RUN_ARTIFACT_DIR`，由兩個 thread 讀取 stdout／stderr。
 
@@ -42,7 +64,7 @@ Executor 使用 `shell=True` 在 run directory 執行 command，設定 `DEVICE_T
 
 Retry delay 使用 monotonic clock，以最多 0.1 秒的 sleep 檢查取消。若等待中取消，step 標記 `cancelled=true`，但已完成 attempt 保留原始 failure type。Cleanup 使用原始 token 等待 retry delay，因此取消後可以略過剩餘 delay 並繼續 cleanup retry；不保證取消後 cleanup 仍等待完整設定時間。
 
-## 4. Lifecycle Routing
+## 5. Lifecycle Routing
 
 | 取消時機 | 後續行為 |
 | --- | --- |
@@ -56,7 +78,7 @@ Retry delay 使用 monotonic clock，以最多 0.1 秒的 sleep 檢查取消。�
 
 Lifecycle 後仍對 **所有** artifact rules 做 final validation，包括有 `after_step` 的規則與被取消／跳過 step 的規則。因此取消 run 可以同時包含 missing required artifact 診斷。
 
-## 5. Report Contract and Compatibility
+## 6. Report Contract and Compatibility
 
 | 層級 | v1.6.0 欄位／行為 |
 | --- | --- |
@@ -73,7 +95,7 @@ Lifecycle 後仍對 **所有** artifact rules 做 final validation，包括有 `
 
 YAML 禁止 `retry_on: [cancelled]`，policy 即使收到直接 Python 建構且包含 `CANCELLED` 的清單也不重試。YAML 未指定 `retry_on` 時為空清單；直接 `RetryConfig()` 的預設包含五種一般 failure types，預設 `max_attempts=1`。呼叫端宜明確指定 retry policy。
 
-## 6. Remaining Work
+## 7. Remaining Work
 
 * Process-group／descendant termination 與可量測的 shutdown 上限。
 * CLI SIGINT／SIGTERM 接線與明確 exit code 策略。

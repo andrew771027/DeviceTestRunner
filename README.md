@@ -843,6 +843,36 @@ Device Validation Platform
 
 ---
 
+## Continuous Integration
+
+This project uses GitHub Actions for continuous integration.
+
+The CI workflow runs automatically on:
+
+- pushes to `main`
+- pull requests targeting `main`
+
+The workflow performs the following steps:
+
+1. Checkout the repository
+2. Setup Python
+3. Install Poetry
+4. Install project dependencies
+5. Run the pytest test suite
+
+Workflow:
+
+`.github/workflows/ci.yml`
+
+### Run the same checks locally
+
+```bash
+poetry install
+poetry run pytest
+```
+
+---
+
 ## Documentation
 
 * [Architecture v1.6.0](docs/architecture/architecture_v1.6.0.md)

@@ -2,6 +2,39 @@
 
 ## [Unreleased]
 
+## [1.6.0]
+
+Release theme: Cancellation Foundation. Runtime implementation is present; release tag and publication are not verified.
+
+### Added
+
+- Thread-safe `CancellationToken` with idempotent cancellation and `CancellationRequested` helper
+- Optional cancellation token on `DeviceTestRunner.run` and required token input on `SubprocessExecutor.execute`
+- `FailureType.CANCELLED`, attempt `timed_out`/`cancelled`, step `cancelled`, metadata `cancel_requested`, and summary `cancelled_steps`
+- Token, cancellation routing, retry-delay interruption, report and real subprocess cancellation coverage
+- Versioned architecture, test matrix, acceptance criteria and definition of done for v1.6.0
+
+### Changed
+
+- Executor polls completion, cancellation and timeout; direct-process termination waits two seconds before kill fallback
+- Cancelled attempts skip attempt validation and retry; final validation still evaluates all rules
+- Normal retry delays poll for cancellation; reachable cleanup uses fresh execution tokens
+- CANCELLED takes precedence over failure status; cancelled steps are excluded from failed_steps
+- YAML rejects `cancelled` in retry_on, and policy never retries cancellation even when Python configuration includes it
+- Runtime/report and distribution versions are synchronized to `1.6.0`
+- Audited all 150 test-function docstrings, adding or correcting 121 descriptions without changing executable test code
+
+### Fixed
+
+- Poetry explicitly includes the `runner` package, fixing wheel discovery for distribution name `devicetestrunner`
+- Manual documentation workflow removes conflicting sandbox flags and maps its API-key secret to `CODEX_API_KEY` for the CLI invocation
+
+### Verification and Limitations
+
+- Local Python 3.14: `.venv/bin/python -m pytest -q` — **153 passed in 39.39s**, observed 2026-09-12
+- Sample configuration with only its output directory redirected to a temporary location returned FAILED: one failed step, one skipped step and five failed required artifact rules
+- Full process-tree termination, bounded output-reader shutdown, CLI signal handling and exception-safe finalization remain unimplemented or unverified
+
 ## [1.5.3]
 
 ### Added

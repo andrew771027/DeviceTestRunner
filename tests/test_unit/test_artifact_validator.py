@@ -8,9 +8,9 @@ from runner.models import ArtifactValidationRule, FailureType
 def test_exists_rule_passes_when_file_exists(tmp_path: Path):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given an exists rule points to a present file.
     When the artifact validator evaluates the rule.
-    Then exists rule is accepted when file exists.
+    Then the result passes with NONE and the resolved file path.
     """
     target = tmp_path / "test_file.txt"
     target.write_text("Hello, world!", encoding="utf-8")
@@ -34,9 +34,9 @@ def test_exists_rule_passes_when_file_exists(tmp_path: Path):
 def test_exists_rule_fails_when_file_missing(tmp_path: Path):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given an exists rule points to an absent file.
     When the artifact validator evaluates the rule.
-    Then exists rule is rejected when file missing, with a diagnostic failure result.
+    Then the result fails with ARTIFACT_MISSING.
     """
     rule = ArtifactValidationRule(name="missing_file.txt", type="exists", path="missing_file.txt")
 
@@ -52,9 +52,9 @@ def test_exists_rule_fails_when_file_missing(tmp_path: Path):
 def test_file_size_rule_passes_within_range(tmp_path: Path):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given a ten-byte file is within the configured size bounds.
     When the artifact validator evaluates the rule.
-    Then file size rule passes within range.
+    Then the result passes and records ten bytes.
     """
     target = tmp_path / "test_file.txt"
     target.write_bytes(b"1234567890")  # 10 bytes
@@ -80,9 +80,9 @@ def test_file_size_rule_passes_within_range(tmp_path: Path):
 def test_file_size_rule_fails_below_minimum(tmp_path: Path):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given a four-byte file is below the configured minimum.
     When the artifact validator evaluates the rule.
-    Then file size rule rejects minimum and reports the applicable validation failure.
+    Then the result is ARTIFACT_INVALID and reports the measured size.
     """
     target = tmp_path / "test_file.txt"
     target.write_bytes(b"1234")  # 4 bytes
@@ -112,9 +112,9 @@ def test_file_size_rule_fails_below_minimum(tmp_path: Path):
 def test_file_size_rule_fails_above_maximum(tmp_path: Path):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given a thirty-byte file exceeds the configured maximum.
     When the artifact validator evaluates the rule.
-    Then file size rule rejects maximum and reports the applicable validation failure.
+    Then the result is ARTIFACT_INVALID and reports the measured size.
     """
     target = tmp_path / "test_file.txt"
     target.write_bytes(b"123456789012345678901234567890")  # 30 bytes
@@ -144,9 +144,9 @@ def test_file_size_rule_fails_above_maximum(tmp_path: Path):
 def test_file_size_rule_fails_when_missing(tmp_path: Path):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given a size rule points to an absent file.
     When the artifact validator evaluates the rule.
-    Then file size rule is rejected when missing, with a diagnostic failure result.
+    Then the result is ARTIFACT_MISSING.
     """
     rule = ArtifactValidationRule(
         name="test_file.txt",
@@ -167,9 +167,9 @@ def test_file_size_rule_fails_when_missing(tmp_path: Path):
 def test_file_size_rule_fails_for_directory(tmp_path: Path):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given a size rule points to a directory.
     When the artifact validator evaluates the rule.
-    Then file size rule rejects directory and reports the applicable validation failure.
+    Then the result is ARTIFACT_INVALID because the target is not a file.
     """
     directory = tmp_path / "test_output"
     directory.mkdir()
@@ -192,9 +192,9 @@ def test_file_size_rule_fails_for_directory(tmp_path: Path):
 def test_file_extension_rule_passes(tmp_path: Path):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given a file suffix is in the allowed extensions.
     When the artifact validator evaluates the rule.
-    Then file extension rule passes.
+    Then the result passes with NONE.
     """
     target = tmp_path / "test_file.txt"
     target.write_text("Hello, world!", encoding="utf-8")
@@ -219,9 +219,9 @@ def test_file_extension_rule_passes(tmp_path: Path):
 def test_file_extension_rule_fails(tmp_path: Path):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given a file suffix is outside the allowed extensions.
     When the artifact validator evaluates the rule.
-    Then file extension rule fails.
+    Then the result is ARTIFACT_INVALID and names the rejected suffix.
     """
     target = tmp_path / "test_file.pdf"
     target.write_text("Hello, world!", encoding="utf-8")
@@ -249,9 +249,9 @@ def test_file_extension_rule_fails(tmp_path: Path):
 def test_file_extension_rule_requires_extensions(tmp_path: Path):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given an extension rule has an empty allow-list.
     When the artifact validator evaluates the rule.
-    Then file extension rule requires extensions.
+    Then the result is ARTIFACT_INVALID and reports the empty setting.
     """
     target = tmp_path / "test_file.txt"
     target.write_text("Hello World!!", encoding="utf-8")
@@ -273,9 +273,9 @@ def test_file_extension_rule_requires_extensions(tmp_path: Path):
 def test_directory_not_empty_passes(tmp_path: Path):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given a directory contains a child entry.
     When the artifact validator evaluates the rule.
-    Then directory not empty passes.
+    Then the result passes with NONE.
     """
     directory = tmp_path / "test_directory"
     directory.mkdir()
@@ -298,9 +298,9 @@ def test_directory_not_empty_passes(tmp_path: Path):
 def test_directory_not_empty_fails_when_empty(tmp_path: Path):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given a directory contains no entries.
     When the artifact validator evaluates the rule.
-    Then directory not empty is rejected when empty, with a diagnostic failure result.
+    Then the result is ARTIFACT_MISSING with an empty-directory diagnostic.
     """
     directory = tmp_path / "test_directory"
     directory.mkdir()
@@ -322,9 +322,9 @@ def test_directory_not_empty_fails_when_empty(tmp_path: Path):
 def test_directory_not_empty_fails_for_file(tmp_path: Path):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given a directory rule points to a regular file.
     When the artifact validator evaluates the rule.
-    Then directory not empty rejects file and reports the applicable validation failure.
+    Then the result is ARTIFACT_INVALID because the target is not a directory.
     """
     target = tmp_path / "test_file"
     target.write_text("Hello World!", encoding="utf-8")
@@ -341,9 +341,9 @@ def test_directory_not_empty_fails_for_file(tmp_path: Path):
 def test_unsupported_validation_type_fails(tmp_path: Path):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given a rule has an unsupported type.
     When the artifact validator evaluates the rule.
-    Then unsupported validation type fails.
+    Then the result is ARTIFACT_INVALID and names the unknown type.
     """
     rule = ArtifactValidationRule(name="unknown_rule", type="unsupported_type", path="output.txt")
 
@@ -359,9 +359,9 @@ def test_unsupported_validation_type_fails(tmp_path: Path):
 def test_validate_all_returns_all_results(tmp_path: Path):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
-    When the artifact validator evaluates the rule.
-    Then validate all returns all results without altering the source data.
+    Given rules target one present and one absent artifact.
+    When validate_all evaluates the list.
+    Then both results are returned in order with NONE and ARTIFACT_MISSING.
     """
     target = tmp_path / "exists.txt"
     target.write_text("Hello world!", encoding="utf-8")
@@ -391,9 +391,9 @@ def test_validate_all_returns_all_results(tmp_path: Path):
 def test_csv_content(tmp_path: Path):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given a CSV contains the required columns and enough data rows.
     When the artifact validator evaluates the rule.
-    Then a CSV satisfying the required header, columns, and row count is accepted.
+    Then the result passes with a valid-content diagnostic.
     """
 
     target = tmp_path / "test_csv_file.csv"
@@ -419,9 +419,9 @@ def test_csv_content(tmp_path: Path):
 def test_csv_content_fails_when_header_missing(tmp_path: Path):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given a CSV has no header.
     When the artifact validator evaluates the rule.
-    Then CSV content is rejected when header missing, with a diagnostic failure result.
+    Then the result is ARTIFACT_INVALID with a missing-header diagnostic.
     """
 
     target = tmp_path / "test_csv_file.csv"
@@ -448,9 +448,9 @@ def test_csv_content_fails_when_header_missing(tmp_path: Path):
 def test_csv_content_fails_when_column_missing(tmp_path: Path):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given a CSV lacks the required power column.
     When the artifact validator evaluates the rule.
-    Then CSV content is rejected when column missing, with a diagnostic failure result.
+    Then the result is ARTIFACT_INVALID and names the missing column.
     """
 
     target = tmp_path / "test_csv_file.csv"
@@ -476,9 +476,9 @@ def test_csv_content_fails_when_column_missing(tmp_path: Path):
 def test_csv_content_fails_when_raw_too_few(tmp_path: Path):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given a CSV has one data row below the configured minimum.
     When the artifact validator evaluates the rule.
-    Then CSV content is rejected when raw too few, with a diagnostic failure result.
+    Then the result is ARTIFACT_INVALID and reports the row shortage.
     """
 
     target = tmp_path / "test_csv_file.csv"
@@ -507,9 +507,9 @@ def test_csv_content_fails_when_raw_too_few(tmp_path: Path):
 def test_csv_content_fails_when_only_header(tmp_path: Path):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given a CSV contains a header but no required data rows.
     When the artifact validator evaluates the rule.
-    Then CSV content is rejected when only header, with a diagnostic failure result.
+    Then the result is ARTIFACT_INVALID and reports zero data rows.
     """
 
     target = tmp_path / "test_csv_file.csv"
@@ -538,9 +538,9 @@ def test_csv_content_fails_when_only_header(tmp_path: Path):
 def test_csv_content_fails_when_file_missing(tmp_path: Path):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given a CSV rule points to an absent file.
     When the artifact validator evaluates the rule.
-    Then CSV content is rejected when file missing, with a diagnostic failure result.
+    Then the result is ARTIFACT_MISSING.
     """
 
     rule = ArtifactValidationRule(
@@ -563,9 +563,9 @@ def test_csv_content_fails_when_file_missing(tmp_path: Path):
 def test_csv_content_fails_when_encoding_not_utf8(tmp_path: Path):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given a CSV cannot be decoded as UTF-8.
     When the artifact validator evaluates the rule.
-    Then CSV content is rejected when encoding not UTF-8, with a diagnostic failure result.
+    Then the result is ARTIFACT_INVALID with a parse diagnostic.
     """
     target = tmp_path / "test_csv_file.csv"
     target.write_bytes(b"\xff\xfe\xfd\xfc")
@@ -589,9 +589,9 @@ def test_csv_content_fails_when_path_is_directory(
 ):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given a CSV rule points to a directory.
     When the artifact validator evaluates the rule.
-    Then CSV content is rejected when path is directory, with a diagnostic failure result.
+    Then the result is ARTIFACT_INVALID because the target is not a file.
     """
     target = tmp_path / "output"
     target.mkdir()
@@ -615,9 +615,9 @@ def test_csv_content_fails_when_path_is_directory(
 def test_json_content(tmp_path: Path):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given JSON satisfies the required paths and expected values.
     When the artifact validator evaluates the rule.
-    Then a JSON document satisfying the required paths and values is accepted.
+    Then the result passes with a valid-content diagnostic.
     """
 
     target = tmp_path / "test_json_file.json"
@@ -652,9 +652,9 @@ def test_json_content(tmp_path: Path):
 def test_json_content_fails_when_path_missing(tmp_path: Path):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given JSON lacks metrics.average_power required by the rule.
     When the artifact validator evaluates the rule.
-    Then JSON content is rejected when path missing, with a diagnostic failure result.
+    Then the result is ARTIFACT_INVALID and names the missing path.
     """
     target = tmp_path / "test_json_file.json"
     target.write_text(
@@ -691,9 +691,9 @@ def test_json_content_fails_when_file_missing(
 ):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given a JSON rule points to an absent file.
     When the artifact validator evaluates the rule.
-    Then JSON content is rejected when file missing, with a diagnostic failure result.
+    Then the result is ARTIFACT_MISSING.
     """
     rule = ArtifactValidationRule(
         name="json_content",
@@ -717,9 +717,9 @@ def test_json_content_fails_when_file_missing(
 def test_json_content_fails_when_value_mismatch(tmp_path: Path):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given JSON contains FAILED where the rule expects PASSED.
     When the artifact validator evaluates the rule.
-    Then JSON content is rejected when value mismatch, with a diagnostic failure result.
+    Then the result is ARTIFACT_INVALID and reports expected and actual values.
     """
     target = tmp_path / "test_json_file.json"
     target.write_text(
@@ -749,9 +749,9 @@ def test_json_content_fails_when_value_mismatch(tmp_path: Path):
 def test_json_content_fails_when_json_invalid(tmp_path: Path):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given a file contains malformed JSON.
     When the artifact validator evaluates the rule.
-    Then JSON content is rejected when JSON invalid, with a diagnostic failure result.
+    Then the result is ARTIFACT_INVALID with a parse diagnostic.
     """
     target = tmp_path / "test_json_file.json"
     target.write_text(""" { "status": "PASSED", } """, encoding="utf-8")
@@ -772,9 +772,9 @@ def test_json_expected_value_fails_when_path_missing(
 ):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given an expected-value rule references an absent JSON path.
     When the artifact validator evaluates the rule.
-    Then JSON expected value is rejected when path missing, with a diagnostic failure result.
+    Then the result is ARTIFACT_INVALID and reports the absent path.
     """
     target = tmp_path / "result.json"
 
@@ -811,9 +811,9 @@ def test_json_number_string_type_mismatch(
 ):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given a JSON value and its expected value differ in number versus string type.
     When the artifact validator evaluates the rule.
-    Then JSON number string type mismatch.
+    Then the result is ARTIFACT_INVALID.
     """
     target = tmp_path / "result.json"
 
@@ -849,9 +849,9 @@ def test_json_content_expected_boolean_matches(
 ):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given a JSON boolean matches its configured expected value.
     When the artifact validator evaluates the rule.
-    Then JSON content expected boolean matches.
+    Then the result passes with NONE.
     """
     target = tmp_path / "test_json_file.json"
 
@@ -886,9 +886,9 @@ def test_json_content_expected_boolean_matches(
 def test_get_json_path_value_returns_nested_value():
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
-    When the artifact validator evaluates the rule.
-    Then get JSON path value returns nested value without altering the source data.
+    Given a JSON object contains a nested numeric value.
+    When the dotted path is resolved.
+    Then the lookup returns true and 123.5.
     """
     data = {"metrics": {"power": {"average": 123.5}}}
 
@@ -903,9 +903,9 @@ def test_get_json_path_value_returns_nested_value():
 def test_get_json_path_value_returns_false_when_missing():
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
-    When the artifact validator evaluates the rule.
-    Then get JSON path value returns false when missing without altering the source data.
+    Given a JSON object lacks the requested nested path.
+    When the dotted path is resolved.
+    Then the lookup returns false and None.
     """
     data = {"metrics": {"power": {}}}
 
@@ -920,9 +920,9 @@ def test_get_json_path_value_returns_false_when_missing():
 def test_directory_missing_is_artifact_missing(tmp_path: Path):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given a directory rule points to an absent directory.
     When the artifact validator evaluates the rule.
-    Then directory missing is artifact missing.
+    Then the result is ARTIFACT_MISSING.
     """
     rule = ArtifactValidationRule(
         name="recorder",
@@ -945,9 +945,9 @@ def test_non_empty_directory_passes(
 ):
     """Acceptance scenario.
 
-    Given an artifact validation rule and its filesystem state are configured.
+    Given a directory rule points to a populated directory.
     When the artifact validator evaluates the rule.
-    Then non empty directory passes.
+    Then the result passes with NONE.
     """
     directory = tmp_path / "recorder"
 

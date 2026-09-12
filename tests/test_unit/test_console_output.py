@@ -14,9 +14,9 @@ def test_writer_displays_stdout_on_console(
 ):
     """Acceptance scenario.
 
-    Given a running test step emits process output.
-    When the step log writer handles the output stream.
-    Then writer displays stdout on console.
+    Given console output is enabled for a step writer.
+    When a stdout line is written.
+    Then only console stdout receives the line with stage, step and attempt prefix.
     """
 
     artifact_manager = ArtifactManager(output_dir=tmp_path)
@@ -52,9 +52,9 @@ def test_writer_displays_stderr_on_console(
 ):
     """Acceptance scenario.
 
-    Given a running test step emits process output.
-    When the step log writer handles the output stream.
-    Then writer displays stderr on console.
+    Given console output is enabled for a step writer.
+    When a stderr line is written.
+    Then only console stderr receives the line with stage, step and attempt prefix.
     """
 
     artifact_manager = ArtifactManager(output_dir=tmp_path)

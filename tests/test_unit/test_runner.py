@@ -520,9 +520,9 @@ def mock_retry_config(tmp_path: Path) -> RunnerConfig:
 def test_runner_executes_all_stages_and_all_steps_success(tmp_path: Path):
     """Acceptance scenario.
 
-    Given a device-test lifecycle and its retry or artifact rules are configured.
-    When the test runner executes the lifecycle.
-    Then runner executes all stages and all steps success.
+    Given all configured mock commands succeed.
+    When the runner executes the lifecycle.
+    Then all stages run in order and the summary reports PASSED.
     """
     config = mock_config(tmp_path)
     executor = MockExecutor()
@@ -580,9 +580,9 @@ def test_runner_executes_all_stages_and_all_steps_success(tmp_path: Path):
 def test_runner_terminate_when_step_failed(tmp_path, failed_step_name):
     """Acceptance scenario.
 
-    Given a device-test lifecycle and its retry or artifact rules are configured.
-    When the test runner executes the lifecycle.
-    Then runner terminate when step failed.
+    Given a scenario command fails in a multi-step lifecycle.
+    When the runner handles the failure.
+    Then the failed final scenario step is retained, cleanup executes and the run fails.
     """
     config = mock_config(tmp_path)
     executor = MockExecutor(failed_step_name=failed_step_name)
@@ -670,9 +670,9 @@ def test_runner_terminate_when_step_failed(tmp_path, failed_step_name):
 def test_global_setup_failure_only_run_global_teardown(tmp_path, failed_step_name):
     """Acceptance scenario.
 
-    Given a device-test lifecycle and its retry or artifact rules are configured.
-    When the test runner executes the lifecycle.
-    Then global setup failure only run global teardown.
+    Given global_setup fails.
+    When the runner routes the remaining lifecycle.
+    Then setup, scenario and teardown are skipped while global_teardown executes.
     """
     config = mock_config(tmp_path)
     executor = MockExecutor(failed_step_name=failed_step_name)
@@ -730,9 +730,9 @@ def test_setup_failure_skips_scenario_but_runs_teardown_and_global_teardown(
 ):
     """Acceptance scenario.
 
-    Given a device-test lifecycle and its retry or artifact rules are configured.
-    When the test runner executes the lifecycle.
-    Then setup failure skips scenario but runs teardown and global teardown.
+    Given global_setup succeeds and setup fails.
+    When the runner routes the remaining lifecycle.
+    Then scenario is skipped and both cleanup stages execute.
     """
     config = mock_config(tmp_path)
     executor = MockExecutor(failed_step_name=failed_step_name)
@@ -803,9 +803,9 @@ def test_setup_failure_skips_scenario_but_runs_teardown_and_global_teardown(
 def test_runner_passes_when_artifacts_are_valid(tmp_path: Path):
     """Acceptance scenario.
 
-    Given a device-test lifecycle and its retry or artifact rules are configured.
-    When the test runner executes the lifecycle.
-    Then runner is accepted when artifacts are valid.
+    Given commands succeed and final artifact rules pass.
+    When the runner aggregates results.
+    Then the run status is PASSED.
     """
     config = mock_config(tmp_path)
     executor = MockExecutor()
@@ -831,9 +831,9 @@ def test_runner_passes_when_artifacts_are_valid(tmp_path: Path):
 def test_runner_fails_when_artifacts_invalid(tmp_path: Path):
     """Acceptance scenario.
 
-    Given a device-test lifecycle and its retry or artifact rules are configured.
-    When the test runner executes the lifecycle.
-    Then runner is rejected when artifacts invalid, with a diagnostic failure result.
+    Given commands succeed but required final validation fails.
+    When the runner aggregates results.
+    Then the summary reports failed artifacts and status FAILED.
     """
     config = mock_config(tmp_path, min_size_bytes=10_000)
     executor = MockExecutor()
@@ -867,9 +867,9 @@ def test_runner_fails_when_artifacts_invalid(tmp_path: Path):
 def test_runner_passes_without_validation_rules(tmp_path: Path):
     """Acceptance scenario.
 
-    Given a device-test lifecycle and its retry or artifact rules are configured.
-    When the test runner executes the lifecycle.
-    Then runner passes without validation rules.
+    Given commands succeed and no artifact rules are configured.
+    When the runner completes final validation.
+    Then the run passes with no artifact validation results.
     """
 
     config = RunnerConfig(
@@ -932,9 +932,9 @@ def test_runner_passes_without_validation_rules(tmp_path: Path):
 def test_step_passes_after_retry(tmp_path: Path):
     """Acceptance scenario.
 
-    Given a device-test lifecycle and its retry or artifact rules are configured.
-    When the test runner executes the lifecycle.
-    Then step passes after retry.
+    Given a retryable command fails once and then succeeds.
+    When the runner retries the step.
+    Then two attempt results retain the failure and subsequent success and the run passes.
     """
     config = mock_retry_config(tmp_path)
     executor = MockFailedOnceExecutor()
@@ -961,9 +961,9 @@ def test_step_passes_after_retry(tmp_path: Path):
 def test_step_fails_after_max_attempts(tmp_path: Path):
     """Acceptance scenario.
 
-    Given a device-test lifecycle and its retry or artifact rules are configured.
-    When the test runner executes the lifecycle.
-    Then step fails after max attempts.
+    Given a command keeps failing with two attempts allowed.
+    When the runner exhausts retry capacity.
+    Then both failed attempts are retained and the run fails.
     """
     config = mock_retry_config(tmp_path)
     executor = MockAlwaysFailExecutor()
@@ -990,9 +990,9 @@ def test_step_fails_after_max_attempts(tmp_path: Path):
 def test_successful_step_is_not_retried(tmp_path: Path):
     """Acceptance scenario.
 
-    Given a device-test lifecycle and its retry or artifact rules are configured.
-    When the test runner executes the lifecycle.
-    Then successful step is not retried.
+    Given a command succeeds on its first attempt.
+    When the runner evaluates retry.
+    Then the step executes once and the run passes.
     """
 
     config = mock_retry_config(tmp_path)
@@ -1014,9 +1014,9 @@ def test_successful_step_is_not_retried(tmp_path: Path):
 def test_retry_creates_separate_log_files(tmp_path: Path):
     """Acceptance scenario.
 
-    Given a device-test lifecycle and its retry or artifact rules are configured.
-    When the test runner executes the lifecycle.
-    Then retry creates separate log files.
+    Given a command fails once before a successful retry.
+    When the runner records both attempts.
+    Then attempt one stderr and attempt two stdout use separate existing files.
     """
 
     config = mock_retry_config(tmp_path)
@@ -1046,9 +1046,9 @@ def test_retry_creates_separate_log_files(tmp_path: Path):
 def test_retry_waits_between_attempts(tmp_path, monkeypatch):
     """Acceptance scenario.
 
-    Given a device-test lifecycle and its retry or artifact rules are configured.
-    When the test runner executes the lifecycle.
-    Then retry waits between attempts.
+    Given a retry delay is configured and time is controlled by the test.
+    When the runner waits before retrying.
+    Then positive sleeps are at most 0.1 seconds and sum to the configured delay.
     """
 
     sleep_calls = []
@@ -1083,9 +1083,9 @@ def test_retry_waits_between_attempts(tmp_path, monkeypatch):
 def test_artifact_failure_triggers_retry(tmp_path: Path):
     """Acceptance scenario.
 
-    Given a device-test lifecycle and its retry or artifact rules are configured.
-    When the test runner executes the lifecycle.
-    Then artifact failure triggers retry.
+    Given a required step artifact is initially invalid and artifact retry is allowed.
+    When the runner validates each successful command attempt.
+    Then the affected step retries once and records invalid then valid results.
     """
 
     config = RunnerConfig(
@@ -1203,9 +1203,9 @@ def test_artifact_failure_triggers_retry(tmp_path: Path):
 def test_artifact_failure_exhausts_retry(tmp_path: Path):
     """Acceptance scenario.
 
-    Given a device-test lifecycle and its retry or artifact rules are configured.
-    When the test runner executes the lifecycle.
-    Then artifact failure exhausts retry.
+    Given a required step artifact stays invalid with three attempts allowed.
+    When the runner exhausts artifact retries.
+    Then the step retains three failures and the run is FAILED.
     """
     config = RunnerConfig(
         test_case=DeviceTestCase(
@@ -1305,9 +1305,9 @@ def test_artifact_failure_exhausts_retry(tmp_path: Path):
 def test_non_retryable_artifact_failure_does_not_retry(tmp_path: Path):
     """Acceptance scenario.
 
-    Given a device-test lifecycle and its retry or artifact rules are configured.
-    When the test runner executes the lifecycle.
-    Then non retryable artifact failure does not retry.
+    Given an optional artifact fails validation.
+    When the runner completes the lifecycle.
+    Then steps run once and pass while the summary records one nonblocking artifact failure.
     """
 
     config = RunnerConfig(
@@ -1409,9 +1409,9 @@ def test_non_retryable_artifact_failure_does_not_retry(tmp_path: Path):
 def test_retry_rules_are_filteredby_step(tmp_path: Path):
     """Acceptance scenario.
 
-    Given a device-test lifecycle and its retry or artifact rules are configured.
-    When the test runner executes the lifecycle.
-    Then retry rules are filtered by step.
+    Given artifact rules are bound to different step names.
+    When the runner selects rules for each step.
+    Then only the rule with a matching after_step is returned.
     """
 
     config = RunnerConfig(
@@ -1477,9 +1477,9 @@ def test_retry_rules_are_filteredby_step(tmp_path: Path):
 def test_artifact_missing_retries(tmp_path: Path):
     """Acceptance scenario.
 
-    Given a device-test lifecycle and its retry or artifact rules are configured.
-    When the test runner executes the lifecycle.
-    Then artifact missing causes another attempt while retry capacity remains.
+    Given a required artifact is missing on the first eligible attempt.
+    When the runner retries and the artifact becomes available.
+    Then the step records ARTIFACT_MISSING then NONE and succeeds.
     """
 
     config = RunnerConfig(
@@ -1833,7 +1833,12 @@ def test_runner_does_not_retry_unconfigured_process_error(tmp_path: Path):
 
 
 def test_cancelled_scenario_still_runs_cleanup(tmp_path: Path):
+    """Acceptance scenario.
 
+    Given a lifecycle whose mock executor cancels the scenario.
+    When the runner executes with the shared token.
+    Then teardown and global_teardown execute and the run is CANCELLED.
+    """
     config = RunnerConfig(
         test_case=DeviceTestCase(
             id="power_001",
@@ -1888,7 +1893,12 @@ def test_cancelled_scenario_still_runs_cleanup(tmp_path: Path):
 
 
 def test_cancelled_step_is_not_retried(tmp_path: Path):
+    """Acceptance scenario.
 
+    Given a scenario is cancelled with three attempts configured.
+    When the runner handles the cancelled result.
+    Then only one cancelled attempt is recorded and the step is unsuccessful.
+    """
     config = RunnerConfig(
         test_case=DeviceTestCase(
             id="power_001",
@@ -1954,7 +1964,12 @@ def test_cancelled_step_is_not_retried(tmp_path: Path):
 
 
 def test_cancel_stops_remaining_scenario_steps(tmp_path: Path):
+    """Acceptance scenario.
 
+    Given three scenario steps and both cleanup stages are configured.
+    When the first scenario step cancels the token.
+    Then later scenario steps are skipped and both cleanup stages execute.
+    """
     config = RunnerConfig(
         test_case=DeviceTestCase(
             id="power_001",
@@ -2011,7 +2026,12 @@ def test_cancel_stops_remaining_scenario_steps(tmp_path: Path):
 
 
 def test_cancel_before_run_only_runs_global_teardown(tmp_path: Path):
+    """Acceptance scenario.
 
+    Given the token is cancelled before a complete lifecycle starts.
+    When the runner receives that token.
+    Then only global_teardown is executed.
+    """
     config = RunnerConfig(
         test_case=DeviceTestCase(
             id="power_001",
@@ -2066,7 +2086,12 @@ def test_cancel_before_run_only_runs_global_teardown(tmp_path: Path):
 
 
 def test_cancel_during_retry_delay(tmp_path: Path, monkeypatch):
+    """Acceptance scenario.
 
+    Given a five-second retry delay and a fake clock are configured.
+    When the token is cancelled during the first polling sleep.
+    Then the wait returns true after one 0.1-second sleep.
+    """
     config = RunnerConfig(
         test_case=DeviceTestCase(
             id="power_001",
@@ -2150,6 +2175,12 @@ def test_cancellation_lifecycle_and_summary(
     expected_cancelled_steps,
     expected_skipped_steps,
 ):
+    """Acceptance scenario.
+
+    Given cancellation occurs before the run or in global_setup, setup or scenario.
+    When the runner completes reachable cleanup and saves its report.
+    Then cleanup receives active tokens and cancelled, failed and skipped counts match the route.
+    """
     config = RunnerConfig(
         test_case=DeviceTestCase(
             id="power_001",
@@ -2230,6 +2261,12 @@ def test_cancellation_lifecycle_and_summary(
 
 
 def test_cancelled_attempt_skips_validation_and_preserves_cancellation(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a cancelled scenario has a required missing artifact rule.
+    When the runner finishes the run.
+    Then only final validation runs and its artifact failure does not replace CANCELLED status.
+    """
     rule = ArtifactValidationRule(
         name="missing",
         type="exists",
@@ -2294,6 +2331,12 @@ def test_cancelled_attempt_skips_validation_and_preserves_cancellation(tmp_path:
 
 
 def test_cancel_during_retry_delay_stops_next_attempt_and_runs_cleanup(tmp_path, monkeypatch):
+    """Acceptance scenario.
+
+    Given global_setup fails once and a retry delay is configured.
+    When the token is cancelled during the first delay poll.
+    Then no second attempt starts and global_teardown runs with final status CANCELLED.
+    """
     config = mock_retry_config(tmp_path)
     token = CancellationToken()
     executor = MockFailedOnceExecutor()

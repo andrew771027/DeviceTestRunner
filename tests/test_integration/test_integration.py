@@ -156,9 +156,9 @@ artifact:
 def test_integration_stops_after_failed_step(tmp_path):
     """Acceptance scenario.
 
-    Given a complete YAML-defined device-test workflow is available.
-    When the workflow is executed through the real runner boundary.
-    Then integration stops after failed step.
+    Given YAML defines a scenario failure between successful lifecycle stages.
+    When the real runner executes the workflow.
+    Then the failure and logs are retained, cleanup runs and the saved report is FAILED.
     """
 
     config_file = tmp_path / "intergration.yaml"
@@ -388,9 +388,9 @@ def test_integration_steps_succeeds_after_party(tmp_path: Path):
 def test_real_subprocess_fails_after_retry_exhausted(tmp_path: Path):
     """Acceptance scenario.
 
-    Given a complete YAML-defined device-test workflow is available.
-    When the workflow is executed through the real runner boundary.
-    Then real subprocess fails after retry exhausted.
+    Given a real command keeps failing with three attempts allowed.
+    When the runner exhausts retries.
+    Then the step records three attempts and the run is FAILED.
     """
     output_dir = tmp_path / "artifacts"
     config_file = tmp_path / "config.yaml"

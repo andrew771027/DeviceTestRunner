@@ -112,9 +112,9 @@ from runner.models import (
 def test_config_contains_all_section(config: RunnerConfig):
     """Acceptance scenario.
 
-    Given runner model data is constructed from test configuration or execution results.
-    When the model exposes its derived state.
-    Then every configured lifecycle section and test-case field is represented by the runner model.
+    Given a RunnerConfig fixture contains device data and all lifecycle stages.
+    When its nested model fields are inspected.
+    Then commands, timeouts, metadata and artifact rules retain the fixture values.
     """
 
     assert config.test_case.id == "power_001"
@@ -206,9 +206,9 @@ def test_config_contains_all_section(config: RunnerConfig):
 def test_step_result_passed_when_exit_code_is_zero(result):
     """Acceptance scenario.
 
-    Given runner model data is constructed from test configuration or execution results.
-    When the model exposes its derived state.
-    Then step result passed when exit code is zero.
+    Given a step has success true and contains an attempt with zero exit code.
+    When its success field is read.
+    Then the explicitly supplied success value is true.
     """
     assert result.success is True
 
@@ -246,8 +246,8 @@ def test_step_result_passed_when_exit_code_is_zero(result):
 def test_step_result_failed_when_exit_code_is_not_zero(result):
     """Acceptance scenario.
 
-    Given runner model data is constructed from test configuration or execution results.
-    When the model exposes its derived state.
-    Then step result failed when exit code is not zero.
+    Given a step has success false and contains an attempt with nonzero exit code.
+    When its success field is read.
+    Then the explicitly supplied success value is false.
     """
     assert result.success is False

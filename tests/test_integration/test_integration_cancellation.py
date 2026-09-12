@@ -12,7 +12,12 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 
 
 def test_executor_cancels_running_process(tmp_path: Path):
+    """Acceptance scenario.
 
+    Given a real shell command prints started and sleeps with an active token.
+    When another thread cancels the token during execution.
+    Then the result preserves started output and reports CANCELLED with timed_out false.
+    """
     artifact_manager = ArtifactManager(tmp_path)
 
     run_dir = artifact_manager.create_run_directory("cancel_test")
@@ -65,4 +70,3 @@ def test_executor_cancels_running_process(tmp_path: Path):
     assert result.failure_type == FailureType.CANCELLED
     assert result.failure_type != FailureType.TIMEOUT
     assert "started" in result.stdout
-    

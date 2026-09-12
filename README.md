@@ -10,7 +10,7 @@
 
 Device Test Runner 是一個針對 **Device Validation Domain** 設計的測試流程執行器。
 
-它負責載入測試設定、執行測試生命週期、控制外部 commands 或 scripts、保存並驗證執行 artifacts，以及依照 policy 重試 command 或 artifact validation 失敗的步驟。後續將延伸至 timeout、recorder lifecycle，以及 controller／worker 架構。
+它負責載入測試設定、執行測試生命週期、控制外部 commands 或 scripts、保存並驗證執行 artifacts，以及依照 policy 重試 command 或 artifact validation 失敗的步驟。目前也支援 per-step timeout 與 Python API cancellation；後續將延伸至 recorder lifecycle，以及 controller／worker 架構。
 
 Device Test Runner 的定位不是取代既有的硬體測試腳本，而是在既有工具之上提供一層統一的 **orchestration layer**。
 
@@ -44,7 +44,7 @@ Device Test Runner 將這些既有工具組合成一致的測試生命週期，�
 * Cleanup
 * Execution summary
 
-目前 v1.5.3 已完成 lifecycle orchestration、artifact management、artifact validation、artifact-aware retry、failure classification、selective retry 與 required／optional artifact。Runner 只重試 `retry.retry_on` 明確列出的 failure type；optional artifact 失敗會保留診斷結果，但不影響 step 或 run 狀態。更完整的 cancellation guarantees、recorder lifecycle 和 distributed execution 仍在規劃中。
+目前 runtime v1.6.0 已完成 lifecycle orchestration、artifact validation、selective retry、required／optional artifact 與 cancellation foundation。呼叫端可透過 `CancellationToken` 取消一般工作及 retry delay，報告以 `CANCELLED` 區分取消與失敗。Process-tree cleanup、CLI signal 接線、例外下的完整 cleanup guarantees、recorder lifecycle 和 distributed execution 仍待完成。
 
 ---
 
@@ -109,6 +109,7 @@ RunnerConfig
         ↓
 DeviceTestRunner
         ├── Lifecycle Orchestration
+        ├── CancellationToken
         ├── RetryPolicy
         ├── SubprocessExecutor
         ├── ArtifactManager
@@ -136,9 +137,10 @@ RunResult / result.json
 
 詳細架構說明請參考：
 
-* [Architecture v1.5.3](docs/architecture/architecture_v1.5.3.md)
-* [Test Matrix v1.5.3](docs/test_matrix/test_matrix_v1.5.3.md)
-* [Acceptance Criteria v1.5.3](docs/acceptance_criteria/acceptance_criteria_v1.5.3.md)
+* [Architecture v1.6.0](docs/architecture/architecture_v1.6.0.md)
+* [Test Matrix v1.6.0](docs/test_matrix/test_matrix_v1.6.0.md)
+* [Acceptance Criteria v1.6.0](docs/acceptance_criteria/acceptance_criteria_v1.6.0.md)
+* [Definition of Done v1.6.0](docs/definition_of_done/definition_of_done_v1.6.0.md)
 * [Roadmap](docs/roadmap.md)
 
 ---
@@ -179,7 +181,9 @@ global_teardown
 | `teardown` | 記錄失敗但繼續執行該 stage 的剩餘 steps，之後執行 `global_teardown` |
 | `global_teardown` | 記錄失敗但繼續執行該 stage 的剩餘 steps |
 
-`teardown` 以 `global_setup` 成功為前提；`global_teardown` 則是整次 run 的最後清理保證，不受前置 stage 成敗影響。任一 step 失敗或因路由規則被跳過時，最終 run status 為 `FAILED`。此 cleanup 行為自 v1.5.2 起生效。
+上述為一般失敗路由。v1.6.0 進入 setup 區塊後，即使 setup／scenario 取消，仍執行兩個 cleanup stages；run 開始前或 global_setup 取消時只執行 global_teardown。如果 global_setup 成功後、進入 setup 區塊前已觀察到取消，也會跳過 teardown。Cleanup attempt 使用新的 token；這些是受控流程的 best effort，不涵蓋未處理 Python exception 或 KeyboardInterrupt。
+
+最終 `summary.status` 以 `CANCELLED` 優先；沒有取消時，failed step、skipped step 或 required artifact failure 任一存在即為 `FAILED`，其餘為 `PASSED`。
 
 未來 recorder lifecycle 會與 scenario 協作：
 
@@ -216,6 +220,7 @@ DeviceTestRunner/
 ├── runner/
 │   ├── artifact.py
 │   ├── artifact_validator.py
+│   ├── cancellation.py
 │   ├── config.py
 │   ├── executor.py
 │   ├── models.py
@@ -311,7 +316,7 @@ artifact:
         min_rows: 1
 ```
 
-`after_step` 將 validation rule 綁定到指定 step，runner 會在該 step 每次 command 成功後立即驗證。`required` 預設為 `true`：required rule 失敗會使 attempt 失敗，且只有 failure type 出現在 `retry.retry_on`、尚未達 `max_attempts` 時才重試；`required: false` 的失敗仍寫入 report，但不影響 step 或 run 狀態。沒有 `after_step` 的規則於 lifecycle 結束後執行 final validation。未設定 `retry_on` 時預設為空清單，因此任何失敗都不會重試。
+`after_step` 將 validation rule 綁定到指定 step，runner 會在該 step 每次 command 成功後立即驗證。`required` 預設為 `true`：required rule 失敗會使 attempt 失敗，且只有 failure type 出現在 `retry.retry_on`、尚未達 `max_attempts` 時才重試；`required: false` 的失敗仍寫入 report，但不影響 step 或 run 狀態。Lifecycle 結束後會再次對所有規則執行 final validation，包括有 `after_step` 的規則。YAML 未設定 `retry_on` 時預設為空清單，因此不重試；`none`、`cancelled` 與未知值會被拒絕。直接使用 Python `RetryConfig()` 的預設清單不同，詳見 v1.6.0 Architecture。
 
 ---
 
@@ -338,44 +343,24 @@ artifact:
 
 ## Installation
 
+先安裝 Python 3.10+ 與 Poetry 2.x。Poetry 安裝方式請參考 [官方安裝說明](https://python-poetry.org/docs/#installation)。
+
 Clone repository：
 
 ```bash
 git clone git@github.com:andrew771027/DeviceTestRunner.git
-cd DeviceTestRsunner
+cd DeviceTestRunner
 ```
 
-建立 virtual environment：
+使用 Poetry 安裝專案與 dependencies：
 
 ```bash
-python3 -m venv .venv
+poetry install
 ```
 
-啟用 virtual environment。
+Poetry 會管理 virtual environment，並依 `poetry.lock` 安裝鎖定版本的 dependencies。pytest、pytest-cov 與 pre-commit 會一併安裝。
 
-macOS／Linux：
-
-```bash
-source .venv/bin/activate
-```
-
-Windows PowerShell：
-
-```powershell
-.venv\Scripts\Activate.ps1
-```
-
-安裝 dependencies：
-
-```bash
-pip install -e .
-```
-
-安裝 development dependencies：
-
-```bash
-pip install -e ".[dev]"
-```
+後續指令透過 `poetry run` 在專案環境執行，無需手動啟用 virtual environment。詳見 [Poetry 使用說明](https://python-poetry.org/docs/basic-usage/)。
 
 ---
 
@@ -384,36 +369,46 @@ pip install -e ".[dev]"
 執行所有測試：
 
 ```bash
-pytest
+poetry run pytest
 ```
 
 顯示較完整輸出：
 
 ```bash
-pytest -v
+poetry run pytest -v
 ```
 
 只執行 retry 相關測試：
 
 ```bash
-pytest -m retry
+poetry run pytest -m retry
+```
+
+只執行 cancellation 標記測試（不等同完整 suite）：
+
+```bash
+poetry run pytest -m cancelled
 ```
 
 只執行 artifact 相關測試：
 
 ```bash
-pytest -m artifact
+poetry run pytest -m artifact
 ```
 
 ---
+
+本機驗證（2026-09-12，Python 3.14）：`.venv/bin/python -m pytest -q` → **153 passed in 39.39s**。150 個測試函式皆有 Given／When／Then 說明；參數化後共 153 個案例。
 
 ## Running Device Test Runner
 
 使用目前的 entry point 執行：
 
 ```bash
-python3 main.py --config configs/sample.yaml
+poetry run python main.py --config configs/sample.yaml
 ```
+
+`configs/sample.yaml` 是示範流程，目前不能視為全數通過的範例。2026-09-12 以暫存 output directory 執行得到 `FAILED`：`run_unstable_command` 的 process error 未列入 sample 的 `retry_on`，後續一步被跳過，且五項 required artifact rules 失敗。詳細結果見 [Definition of Done](docs/definition_of_done/definition_of_done_v1.6.0.md)。
 
 未來 CLI 預計提供：
 
@@ -422,6 +417,50 @@ device-test-runner run configs/sample.yaml
 device-test-runner validate configs/sample.yaml
 device-test-runner report show artifacts/<run-id>/result.json
 ```
+
+---
+
+## Cancellation (Python API)
+
+取消由呼叫端持有 token 並呼叫 `cancel()`；`main.py` 尚未將 Ctrl+C／SIGTERM 轉為 token cancellation。以下示範沿用載入的 configuration，在兩秒後提出取消請求：
+
+```python
+from pathlib import Path
+from threading import Timer
+
+from runner.artifact import ArtifactManager
+from runner.artifact_validator import ArtifactValidator
+from runner.cancellation import CancellationToken
+from runner.config import ConfigLoader
+from runner.executor import SubprocessExecutor
+from runner.failure import FailureClassifier
+from runner.reporter import JsonReporter
+from runner.runner import DeviceTestRunner
+
+config = ConfigLoader().load("configs/sample.yaml")
+classifier = FailureClassifier()
+runner = DeviceTestRunner(
+    executor=SubprocessExecutor(Path.cwd(), classifier),
+    artifact_manager=ArtifactManager(config.artifact.output_dir),
+    artifact_validator=ArtifactValidator(),
+    failure_classifier=classifier,
+    reporter=JsonReporter(),
+    show_console_output=False,
+)
+token = CancellationToken()
+timer = Timer(2.0, token.cancel)
+timer.start()
+try:
+    result = runner.run(config, cancellation_token=token)
+    print(result.summary.status)
+finally:
+    timer.cancel()
+    timer.join()
+```
+
+Executor 以 0.1 秒 polling 檢查取消與 timeout，對直接子程序 terminate、等待兩秒後必要時 kill。尚未處理整棵 process tree，後代程序持有 stdout／stderr pipe 時，完成時間可能延長；上述 timer 不是兩秒內返回的保證。Cancelled attempt 不做 attempt validation 或 retry，但 run 最後仍驗證所有 artifacts。
+
+Python 呼叫端需調整 `SubprocessExecutor.execute(..., cancellation_token=...)`，以及手動建構 result dataclasses 時的新欄位。`run(config)` 仍可不傳 token。完整差異見 [Architecture](docs/architecture/architecture_v1.6.0.md)。
 
 ---
 
@@ -461,7 +500,8 @@ artifacts/
 * stdout and stderr artifact paths
 * Validation results
 * Retry information
-* Per-attempt failure type and failure summary
+* Per-attempt failure type, `timed_out` and `cancelled`
+* Metadata `cancel_requested` and summary `cancelled_steps`
 
 相對路徑的 artifact validation rule 會以該次 run directory 為基準解析。每一次 retry 都有獨立的 stdout／stderr log，避免後一次 attempt 覆蓋先前的診斷資訊。
 
@@ -469,18 +509,21 @@ artifacts/
 
 ## Example Report
 
+以下是單一步驟、無 artifact rules 的示意資料，並非 sample.yaml 的實際執行報告。
+
 ```json
 {
   "metadata": {
-    "test_case_id": "power_idle_test",
-    "test_case_name": "Power Idle Test",
-    "test_case_description": "Measure device power consumption during idle state.",
-    "device_serial": "ABC123",
-    "device_product": "pixel",
-    "device_build": "build_12345",
-    "runner_version": "1.5.3",
-    "started_at": "2026-07-22T22:30:00+00:00",
-    "finished_at": "2026-07-22T22:32:05+00:00"
+    "test_case_id": "example_001",
+    "test_case_name": "Example",
+    "test_case_description": "Print one line.",
+    "device_serial": "demo",
+    "device_product": "demo",
+    "device_build": "demo",
+    "runner_version": "1.6.0",
+    "started_at": "2026-09-12T00:00:00+00:00",
+    "finished_at": "2026-09-12T00:00:01+00:00",
+    "cancel_requested": false
   },
   "summary": {
     "status": "PASSED",
@@ -488,87 +531,48 @@ artifacts/
     "executed_steps": 1,
     "passed_steps": 1,
     "failed_steps": 0,
+    "cancelled_steps": 0,
     "skipped_steps": 0,
-    "configured_artifact_rules": 1,
-    "passed_artifact_rules": 1,
+    "configured_artifact_rules": 0,
+    "passed_artifact_rules": 0,
     "failed_artifact_rules": 0,
     "failed_required_artifact_rules": 0,
-    "duration_seconds": 2.1
+    "duration_seconds": 1.0
   },
   "step_results": [
     {
       "stage": "scenario",
-      "name": "run_idle_scenario",
-      "command": "printf \"timestamp,power\\n1,110\\n\" > result.csv\n",
-      "attempts": 2,
+      "name": "hello",
+      "command": "echo hello",
+      "attempts": 1,
       "success": true,
+      "cancelled": false,
       "attempt_results": [
         {
           "attempt": 1,
-          "success": false,
-          "failure_type": "process_error",
-          "exit_code": 1,
-          "duration_seconds": 0.5,
-          "stdout": "",
-          "stderr": "temporary failure\n",
-          "stdout_log_path": ".../attempt_1.stdout.log",
-          "stderr_log_path": ".../attempt_1.stderr.log",
-          "error": "",
-          "artifact_validation_results": [
-            {
-              "name": "check_result_content",
-              "type": "csv_content",
-              "path": ".../result.csv",
-              "passed": false,
-              "failure_type": "artifact_invalid",
-              "message": "Required CSV column is missing.",
-              "actual_size_bytes": null
-            }
-          ]
-        },
-        {
-          "attempt": 2,
           "success": true,
           "failure_type": "none",
+          "timed_out": false,
+          "cancelled": false,
           "exit_code": 0,
-          "duration_seconds": 0.5,
-          "stdout": "completed\n",
+          "duration_seconds": 0.1,
+          "stdout": "hello\n",
           "stderr": "",
-          "stdout_log_path": ".../attempt_2.stdout.log",
-          "stderr_log_path": ".../attempt_2.stderr.log",
-          "error": "",
-          "artifact_validation_results": [
-            {
-              "name": "check_result_content",
-              "type": "csv_content",
-              "path": ".../result.csv",
-              "passed": true,
-              "failure_type": "none",
-              "message": "CSV content is valid.",
-              "actual_size_bytes": null
-            }
-          ]
+          "stdout_log_path": "artifacts/example/scenario/hello/attempt_1.stdout.log",
+          "stderr_log_path": "artifacts/example/scenario/hello/attempt_1.stderr.log",
+          "error": null,
+          "artifact_validation_results": []
         }
       ],
-      "duration_seconds": 2.0
+      "duration_seconds": 0.2
     }
   ],
-  "artifact_validation_results": [
-    {
-      "name": "check_result_exists",
-      "type": "exists",
-      "path": "artifacts/power_idle_test_20260722_223000/result.csv",
-      "passed": true,
-      "failure_type": "none",
-      "message": "Artifact exists.",
-      "actual_size_bytes": null
-    }
-  ],
-  "artifact_dir": "artifacts/power_idle_test_20260722_223000"
+  "artifact_dir": "artifacts/example",
+  "artifact_validation_results": []
 }
 ```
 
-Report schema 會隨專案版本逐步擴充。
+結果消費端應以 `summary.status` 判斷 run；`RunResult.passed` 目前只檢查 step success，無法完整反映取消請求或 final artifact failure。`StepAttemptResult.passed` 也只檢查 exit code，請使用 `success` 與 failure flags。
 
 ---
 
@@ -587,15 +591,21 @@ Report schema 會隨專案版本逐步擴充。
 | v1.5.1  | Artifact-Aware Retry          | Completed   |
 | v1.5.2  | Failure Classification        | Completed   |
 | v1.5.3  | Selective Retry and Artifact Criticality | Completed   |
-| v1.6    | Timeout and Cancellation     | Planned     |
-| v1.7    | Recorder Lifecycle           | Planned     |
-| v1.8    | Hook and Teardown Guarantees | Planned     |
-| v1.9    | Execution Summary            | Planned     |
-| v1.10   | Job Model                    | Planned     |
-| v1.11   | Batch Runner                 | Planned     |
-| v1.12   | Multi-Process Execution      | Planned     |
-| v1.13   | Concurrency Limit            | Planned     |
-| v1.14   | Resource / Device Lock       | Planned     |
+| v1.6.0  | Cancellation Foundation      | Completed |
+| v1.6.1  | Safe Process Termination     | Planned     |
+| v1.6.2  | Run-level Timeout            | Planned     |
+| v1.6.3  | Cancellation-aware Cleanup   | Planned     |
+| v1.7.0  | Static Variables             | Planned     |
+| v1.7.1  | Environment                  | Planned     |
+| v1.7.2  | Runtime Context              | Planned     |
+| v1.8    | Recorder Lifecycle           | Planned     |
+| v1.9    | Hook and Teardown Guarantees | Planned     |
+| v1.10    | Execution Summary            | Planned     |
+| v1.11   | Job Model                    | Planned     |
+| v1.12   | Batch Runner                 | Planned     |
+| v1.13   | Multi-Process Execution      | Planned     |
+| v1.14   | Concurrency Limit            | Planned     |
+| v1.15   | Resource / Device Lock       | Planned     |
 | v2.0    | Controller and Worker        | Future      |
 
 完整版本規劃請參考：
@@ -665,8 +675,11 @@ v1.5.0
 v1.5.1
 v1.5.2
 v1.5.3
+v1.6.0
 v2.0.0
 ```
+
+目前 `DeviceTestRunner.VERSION`、report 與 `pyproject.toml` distribution version 均為 `1.6.0`。
 
 版本規則：
 
@@ -682,6 +695,7 @@ v2.0.0
 * `v1.5.1`：加入 step-scoped Artifact-Aware Retry
 * `v1.5.2`：加入可追蹤且可驅動 retry decision 的 Failure Classification
 * `v1.5.3`：加入 `retry_on` selective retry 與 required／optional artifact semantics
+* `v1.6.0`：加入 cancellation token、可中斷 retry delay 與取消結果
 * `v2.0.0`：加入 Controller／Worker architecture
 
 ---
@@ -761,15 +775,19 @@ docs/update-roadmap
 5. v1.5.1 Artifact-Aware Retry 與 per-attempt validation results
 6. v1.5.2 Failure Classification 與 failure-aware retry decision
 7. v1.5.3 Selective Retry 與 Artifact Criticality
+8. v1.6.0 Cancellation Foundation
 
 接下來的優先事項：
 
-1. v1.6 Timeout and Cancellation
-2. v1.7 Recorder Lifecycle
-3. v1.8 Hook and Teardown Guarantees
-4. v1.9 Execution Summary
-5. Job、batch、concurrency 與 device lock
-6. 單機 execution model 穩定後進入 Controller／Worker
+1. v1.6.1 Safe Process Termination：process group／child cleanup、stdout／stderr 收尾、retry 前程序清理與 Ctrl+C／SIGINT
+2. v1.6.2 Run-level Timeout：`run_timeout_seconds`、逾時轉為取消請求，區分 step 與 run timeout
+3. v1.6.3 Cancellation-aware Cleanup：取消後 teardown、獨立 cleanup scope／timeout 與 partial artifact／report policy
+4. v1.7.0～v1.7.2 Static Variables、Environment 與 Runtime Context
+5. v1.8 Recorder Lifecycle
+6. v1.9 Hook and Teardown Guarantees
+7. v1.10 Execution Summary
+8. Job、batch、concurrency 與 device lock
+9. 單機 execution model 穩定後進入 Controller／Worker
 
 目前不優先處理：
 
@@ -827,10 +845,10 @@ Device Validation Platform
 
 ## Documentation
 
-* [Architecture v1.5.3](docs/architecture/architecture_v1.5.3.md)
-* [Definition of Done v1.5.3](docs/definition_of_done/definition_of_done_v1.5.3.md)
-* [Test Matrix v1.5.3](docs/test_matrix/test_matrix_v1.5.3.md)
-* [Acceptance Criteria v1.5.3](docs/acceptance_criteria/acceptance_criteria_v1.5.3.md)
+* [Architecture v1.6.0](docs/architecture/architecture_v1.6.0.md)
+* [Definition of Done v1.6.0](docs/definition_of_done/definition_of_done_v1.6.0.md)
+* [Test Matrix v1.6.0](docs/test_matrix/test_matrix_v1.6.0.md)
+* [Acceptance Criteria v1.6.0](docs/acceptance_criteria/acceptance_criteria_v1.6.0.md)
 * [Roadmap](docs/roadmap.md)
 * [Changelog](CHANGELOG.md)
 
@@ -841,3 +859,12 @@ Device Validation Platform
 Device Test Runner 目前仍在持續開發中。
 
 現階段專案重點是建立一個清楚、可靠、可測試的單機 Device Test Runner，並逐步加入實際 Device Validation 所需的 lifecycle、artifact、recorder 與 failure handling 能力。
+
+
+## Manual Release Documentation Workflow
+
+`.github/workflows/manual.yml` 的 `workflow_dispatch` 接受 `release_version`（如 `1.6.0`，不含 v）、`target_branch`（實際 checkout 與 push 的既有分支）及 `model`。GitHub Actions 的 Use workflow from 選項決定讀取哪個分支的 workflow 定義。
+
+流程先安裝專案、跑 baseline tests，再請 Codex 更新文件與測試說明；驗證 `pytest -q`、`git diff --check` 與 Given／When／Then 行數後，有變更才 commit 並直接 push 到目標分支。這個流程不建立 PR、tag 或 GitHub Release。
+
+Repository secret 名稱為 `OPENAI_API_KEY`，在 CLI invocation 映射成 `CODEX_API_KEY`；`--approve-for-me` 與 `--sandbox` 不同時使用。目標分支需允許這次 push，API 帳戶需有可用額度及模型存取權。

@@ -36,9 +36,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 def test_subprocess_executor_return_success(tmp_path, test_case_id, step, stage, attempt):
     """Acceptance scenario.
 
-    Given a test step is configured for subprocess execution.
-    When the subprocess executor runs the step and captures its outcome.
-    Then a zero exit code is reported as a successful step with captured output and timing.
+    Given a command prints Hello World and exits zero.
+    When the executor runs it with an active token.
+    Then success is true, cancellation and timeout are false, and stdout matches its log.
     """
     executor = SubprocessExecutor(
         project_directory=PROJECT_ROOT, failure_classifier=FailureClassifier()
@@ -101,9 +101,9 @@ def test_subprocess_executor_return_success(tmp_path, test_case_id, step, stage,
 def test_subprocess_executor_failure(tmp_path, test_case_id, step, stage, attempt):
     """Acceptance scenario.
 
-    Given a test step is configured for subprocess execution.
-    When the subprocess executor runs the step and captures its outcome.
-    Then a non-zero exit code is retained and reported as a process failure.
+    Given a command exits with code one.
+    When the executor runs it.
+    Then the unsuccessful result retains the exit code and captured logs.
     """
     executor = SubprocessExecutor(
         project_directory=PROJECT_ROOT, failure_classifier=FailureClassifier()
@@ -166,9 +166,9 @@ def test_subprocess_executor_polls_completed_subprocess(
 ):
     """Acceptance scenario.
 
-    Given a test step is configured for subprocess execution.
-    When the subprocess executor runs the step and captures its outcome.
-    Then subprocess executor detects completion through polling and captures output.
+    Given a mocked process is already complete and supplies stdout.
+    When the executor starts and polls it.
+    Then shell options, environment, working directory and captured output match the contract.
     """
     mocked_process = Mock()
 
@@ -256,9 +256,9 @@ def test_subprocess_executor_raised_timeout_error(
 ):
     """Acceptance scenario.
 
-    Given a test step is configured for subprocess execution.
-    When the subprocess executor runs the step and captures its outcome.
-    Then subprocess executor terminates the process and reports a timeout.
+    Given a mocked process remains running past the configured timeout.
+    When the executor polls it.
+    Then the unsuccessful result records TIMEOUT, timed_out true and cancelled false.
     """
 
     mocked_process = Mock()

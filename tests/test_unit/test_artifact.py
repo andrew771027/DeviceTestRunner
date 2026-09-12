@@ -14,9 +14,9 @@ def test_save_log_writer_step_stdout_and_stderr(
 ):
     """Acceptance scenario.
 
-    Given a test run has an identified stage, step, and attempt.
-    When the step log writer records process output.
-    Then stdout and stderr are persisted under the correct test, stage, step, and attempt.
+    Given a writer has separate stdout and stderr paths for an attempt.
+    When two lines are written to each stream.
+    Then memory and attempt log files contain the same ordered output.
     """
     artifact_manager = ArtifactManager(output_dir=tmp_path)
 
@@ -43,14 +43,8 @@ def test_save_log_writer_step_stdout_and_stderr(
     assert writer.stdout_path.exists() and writer.stdout_path.is_file()
     assert writer.stderr_path.exists() and writer.stderr_path.is_file()
 
-    assert (
-        writer.stdout_path.read_text(encoding="utf-8") == "stdout line1\n"
-        "stdout line2\n"
-    )
-    assert (
-        writer.stderr_path.read_text(encoding="utf-8") == "stderr line1\n"
-        "stderr line2\n"
-    )
+    assert writer.stdout_path.read_text(encoding="utf-8") == "stdout line1\n" "stdout line2\n"
+    assert writer.stderr_path.read_text(encoding="utf-8") == "stderr line1\n" "stderr line2\n"
 
     assert writer.stdout_path.parent.name == step_name
     assert writer.stdout_path.name == f"attempt_{attempt}.stdout.log"
@@ -68,9 +62,9 @@ def test_step_log_writer_creates_stage_dictionary(
 ):
     """Acceptance scenario.
 
-    Given a test run has an identified stage, step, and attempt.
-    When the step log writer records process output.
-    Then the log structure creates the requested stage entry without losing step identity.
+    Given a stage, step name and attempt identify a log writer.
+    When stdout is written.
+    Then the file is placed under the step directory with the attempt number in its name.
     """
     artifact_manager = ArtifactManager(output_dir=tmp_path)
 
@@ -96,14 +90,12 @@ def test_step_log_writer_creates_stage_dictionary(
     argnames="test_case_id, stage, step_name, attempt",
     argvalues=[("test_case_001", "test_stage", "test_step", 1)],
 )
-def test_step_log_writer_flushes_immediately(
-    tmp_path, test_case_id, stage, step_name, attempt
-):
+def test_step_log_writer_flushes_immediately(tmp_path, test_case_id, stage, step_name, attempt):
     """Acceptance scenario.
 
-    Given a test run has an identified stage, step, and attempt.
-    When the step log writer records process output.
-    Then new output is immediately visible to readers without waiting for close.
+    Given an open step log writer.
+    When one stdout line is written and the file is read before closing.
+    Then the line is already present on disk.
     """
 
     artifact_manager = ArtifactManager(output_dir=tmp_path)

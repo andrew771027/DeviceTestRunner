@@ -9,7 +9,7 @@ def test_cleanup_retry_artifact(tmp_path: Path):
 
     Given a previous attempt left retryable artifacts in the run directory.
     When retry cleanup is performed before the next attempt.
-    Then the stale retry artifact file is removed while unrelated run data remains intact.
+    Then the stale required artifact file is removed.
     """
     run_dir = tmp_path / "run"
     run_dir.mkdir()

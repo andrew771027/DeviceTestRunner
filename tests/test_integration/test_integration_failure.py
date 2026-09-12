@@ -12,9 +12,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 def test_executor_classifies_timeout(tmp_path: Path):
     """Acceptance scenario.
 
-    Given a real subprocess exhibits a known device-test failure mode.
-    When the executor runs it and classifies the observed failure.
-    Then executor classifies timeout.
+    Given a real command exceeds its timeout with an active token.
+    When the executor stops it.
+    Then the result is TIMEOUT with timed_out true and cancelled false.
     """
     artifat_manager = ArtifactManager(output_dir=tmp_path)
 
@@ -57,9 +57,9 @@ def test_executor_classifies_timeout(tmp_path: Path):
 def test_executor_classifies_device_offline(tmp_path: Path):
     """Acceptance scenario.
 
-    Given a real subprocess exhibits a known device-test failure mode.
-    When the executor runs it and classifies the observed failure.
-    Then executor classifies device offline.
+    Given a real failing command emits a device-offline message.
+    When the executor classifies the failure.
+    Then the result is DEVICE_OFFLINE.
     """
     artifact_manager = ArtifactManager(output_dir=tmp_path)
 
@@ -104,9 +104,9 @@ def test_executor_classifies_device_offline(tmp_path: Path):
 def test_executor_classifies_process_error(tmp_path: Path):
     """Acceptance scenario.
 
-    Given a real subprocess exhibits a known device-test failure mode.
-    When the executor runs it and classifies the observed failure.
-    Then executor classifies process error.
+    Given a real command exits with code 42.
+    When the executor classifies the failure.
+    Then the result retains code 42 and PROCESS_ERROR.
     """
     artifact_manager = ArtifactManager(output_dir=tmp_path)
 

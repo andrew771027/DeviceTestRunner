@@ -18,9 +18,9 @@ from runner.models import (
 def test_config_loader_loads_device_test_config(tmp_path: Path):
     """Acceptance scenario.
 
-    Given a device-test YAML configuration defines the requested options.
-    When the runner configuration is loaded.
-    Then config loader loads device test config.
+    Given YAML defines device metadata and all five lifecycle stages.
+    When ConfigLoader loads the file.
+    Then typed models preserve metadata, commands, stage order and artifact output directory.
     """
     config_file = tmp_path / "sample.yaml"
     config_file.write_text(
@@ -134,9 +134,9 @@ def test_config_loader_loads_device_test_config(tmp_path: Path):
 def test_load_artifact_validation_config(tmp_path: Path):
     """Acceptance scenario.
 
-    Given a device-test YAML configuration defines the requested options.
-    When the runner configuration is loaded.
-    Then load artifact validation config.
+    Given YAML defines existence, size and extension rules.
+    When ConfigLoader loads the file.
+    Then rule paths, size bounds and allowed extensions are preserved.
     """
     config_file = tmp_path / "config.yaml"
     config_file.write_text(
@@ -207,9 +207,9 @@ def test_load_artifact_validation_config(tmp_path: Path):
 def test_artifact_validation_is_optional(tmp_path: Path):
     """Acceptance scenario.
 
-    Given a device-test YAML configuration defines the requested options.
-    When the runner configuration is loaded.
-    Then artifact validation is optional.
+    Given YAML provides an artifact directory without validation rules.
+    When ConfigLoader loads the file.
+    Then the validation rule list is empty.
     """
     config_file = tmp_path / "config.yaml"
     config_file.write_text(
@@ -273,9 +273,9 @@ def test_artifact_validation_is_optional(tmp_path: Path):
 def test_artifact_retry_defaults_to_false(tmp_path: Path):
     """Acceptance scenario.
 
-    Given a device-test YAML configuration defines the requested options.
-    When the runner configuration is loaded.
-    Then artifact retry defaults to false.
+    Given an artifact rule sets required false and omits after_step.
+    When ConfigLoader loads the rule.
+    Then the rule remains optional and has no step binding.
     """
     config_file = tmp_path / "config.yaml"
     config_file.write_text(
@@ -332,9 +332,9 @@ def test_artifact_retry_defaults_to_false(tmp_path: Path):
 def test_load_csv_and_json_validation_rules(tmp_path: Path):
     """Acceptance scenario.
 
-    Given a device-test YAML configuration defines the requested options.
-    When the runner configuration is loaded.
-    Then load CSV and JSON validation rules.
+    Given YAML defines CSV columns and rows plus JSON paths and expected values.
+    When ConfigLoader loads the file.
+    Then both content-validation contracts are preserved.
     """
     config_file = tmp_path / "config.yaml"
     config_file.write_text(
@@ -411,9 +411,9 @@ def test_load_csv_and_json_validation_rules(tmp_path: Path):
 def test_load_retry_config(tmp_path: Path):
     """Acceptance scenario.
 
-    Given a device-test YAML configuration defines the requested options.
-    When the runner configuration is loaded.
-    Then load retry config.
+    Given YAML requests three attempts and a three-second delay.
+    When ConfigLoader loads the file.
+    Then both retry values equal three.
     """
     config_file = tmp_path / "config.yaml"
     config_file.write_text(
@@ -456,9 +456,9 @@ def test_load_retry_config(tmp_path: Path):
 def test_load_artifact_aware_retry_rule(tmp_path: Path):
     """Acceptance scenario.
 
-    Given a device-test YAML configuration defines the requested options.
-    When the runner configuration is loaded.
-    Then load artifact aware retry rule.
+    Given a required CSV rule is bound to run_power_test.
+    When ConfigLoader loads the rule.
+    Then the step binding, required flag, columns and minimum row count are preserved.
     """
     config_file = tmp_path / "config.yaml"
     config_file.write_text(
@@ -518,9 +518,9 @@ def test_load_artifact_aware_retry_rule(tmp_path: Path):
 def test_retry_config_uses_default_values(tmp_path: Path):
     """Acceptance scenario.
 
-    Given a device-test YAML configuration defines the requested options.
-    When the runner configuration is loaded.
-    Then retry config uses default values.
+    Given YAML omits retry settings.
+    When ConfigLoader loads the file.
+    Then max_attempts is one and delay_seconds is zero.
     """
     config_file = tmp_path / "config.yaml"
     config_file.write_text(
@@ -559,9 +559,9 @@ def test_retry_config_uses_default_values(tmp_path: Path):
 def test_retry_max_attempts_must_be_positive(tmp_path: Path):
     """Acceptance scenario.
 
-    Given a device-test YAML configuration defines the requested options.
-    When the runner configuration is loaded.
-    Then retry max attempts must be positive.
+    Given YAML sets max_attempts below one.
+    When ConfigLoader loads the file.
+    Then ValueError reports that max_attempts must be at least one.
     """
     config_file = tmp_path / "config.yaml"
     config_file.write_text(
@@ -600,9 +600,9 @@ def test_retry_max_attempts_must_be_positive(tmp_path: Path):
 def test_retry_delay_seconds_must_be_positive(tmp_path: Path):
     """Acceptance scenario.
 
-    Given a device-test YAML configuration defines the requested options.
-    When the runner configuration is loaded.
-    Then retry delay seconds must be positive.
+    Given YAML sets a negative retry delay.
+    When ConfigLoader loads the file.
+    Then ValueError reports that delay_seconds must be nonnegative.
     """
     config_file = tmp_path / "config.yaml"
     config_file.write_text(
@@ -768,7 +768,12 @@ def test_duplicate_retry_on_values_are_removed():
 
 
 def test_retry_on_cancelled_is_invalid():
+    """Acceptance scenario.
 
+    Given retry_on contains cancelled.
+    When the retry configuration is loaded.
+    Then ValueError rejects cancellation as a retry target.
+    """
     raw = {
         "retry": {
             "max_attempts": 3,

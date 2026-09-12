@@ -1,6 +1,6 @@
 [project]
 name = "devicetestrunner"
-version = "0.1.0"
+version = "1.6.0"
 description = ""
 authors = [
     {name = "Andrew Wang",email = "andew771027@gmail.com"}

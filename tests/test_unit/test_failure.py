@@ -5,9 +5,9 @@ from runner.models import ArtifactValidationResult, FailureType
 def test_classifies_success_as_none():
     """Acceptance scenario.
 
-    Given process and artifact outcomes are available for a completed attempt.
-    When the failure classifier determines the attempt's failure type.
-    Then a successful process with valid artifacts has no failure classification.
+    Given a process reports success.
+    When the process failure classifier evaluates it.
+    Then the classification is NONE.
     """
     classifier = FailureClassifier()
 
@@ -21,9 +21,9 @@ def test_classifies_success_as_none():
 def test_classifies_timeout():
     """Acceptance scenario.
 
-    Given process and artifact outcomes are available for a completed attempt.
-    When the failure classifier determines the attempt's failure type.
-    Then classifies timeout.
+    Given a failed process has timed_out set.
+    When the process failure classifier evaluates it.
+    Then the classification is TIMEOUT.
     """
     classifier = FailureClassifier()
 
@@ -37,9 +37,9 @@ def test_classifies_timeout():
 def test_classifies_device_offline():
     """Acceptance scenario.
 
-    Given process and artifact outcomes are available for a completed attempt.
-    When the failure classifier determines the attempt's failure type.
-    Then classifies device offline.
+    Given a failed process reports device offline.
+    When the process failure classifier evaluates the messages.
+    Then the classification is DEVICE_OFFLINE.
     """
     classifier = FailureClassifier()
 
@@ -53,9 +53,9 @@ def test_classifies_device_offline():
 def test_classifies_process_error():
     """Acceptance scenario.
 
-    Given process and artifact outcomes are available for a completed attempt.
-    When the failure classifier determines the attempt's failure type.
-    Then classifies process error.
+    Given a failed process has no timeout or device-offline signature.
+    When the process failure classifier evaluates it.
+    Then the classification is PROCESS_ERROR.
     """
     classifier = FailureClassifier()
 
@@ -69,9 +69,9 @@ def test_classifies_process_error():
 def test_classifies_artifact_missing():
     """Acceptance scenario.
 
-    Given process and artifact outcomes are available for a completed attempt.
-    When the failure classifier determines the attempt's failure type.
-    Then classifies artifact missing.
+    Given validation reports a missing artifact.
+    When the artifact failure classifier evaluates the results.
+    Then the classification is ARTIFACT_MISSING.
     """
     classifier = FailureClassifier()
 
@@ -95,9 +95,9 @@ def test_classifies_artifact_missing():
 def test_classifies_artifact_invalid():
     """Acceptance scenario.
 
-    Given process and artifact outcomes are available for a completed attempt.
-    When the failure classifier determines the attempt's failure type.
-    Then classifies artifact invalid.
+    Given validation reports an invalid artifact.
+    When the artifact failure classifier evaluates the results.
+    Then the classification is ARTIFACT_INVALID.
     """
     classifier = FailureClassifier()
 
@@ -121,9 +121,9 @@ def test_classifies_artifact_invalid():
 def test_artifact_missing_has_priority():
     """Acceptance scenario.
 
-    Given process and artifact outcomes are available for a completed attempt.
-    When the failure classifier determines the attempt's failure type.
-    Then a missing required artifact takes precedence over other artifact-invalid outcomes.
+    Given missing and invalid artifact results coexist.
+    When the artifact failure classifier evaluates the results.
+    Then ARTIFACT_MISSING takes priority.
     """
     classifier = FailureClassifier()
 

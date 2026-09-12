@@ -86,7 +86,6 @@ jobs:
 
           codex exec \
             --model "$CODEX_MODEL" \
-            --sandbox workspace-write \
             --approve-for-me \
             --ephemeral \
             "You are maintaining Device Test Runner release v${RELEASE_VERSION}.

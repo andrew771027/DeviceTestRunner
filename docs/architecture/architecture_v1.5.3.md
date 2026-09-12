@@ -4,9 +4,25 @@
 
 v1.5.3 在 v1.5.2 的 failure classification 上增加兩個 policy input：`retry.retry_on` 決定哪些 failure type 可重試；artifact rule 的 `required` 決定 validation failure 是否影響 attempt 與 run status。
 
-```text
-Process / Artifact Result → FailureType → retry_on membership → retry / stop
-Artifact Rule → required? → blocking failure / diagnostic-only result
+```mermaid
+flowchart TD
+    subgraph RetryDecision[Retry Decision]
+        Result[Process / Artifact Result] --> Failure[FailureType]
+        Failure --> Success{FailureType is NONE?}
+        Success -- Yes --> Passed[Complete successful step]
+        Success -- No --> Eligible{Listed in retry_on?}
+        Eligible -- No --> Stop[Stop retrying]
+        Eligible -- Yes --> Capacity{Attempts remaining?}
+        Capacity -- Yes --> Retry[Retry step]
+        Capacity -- No --> Stop
+    end
+    subgraph ArtifactCriticality[Artifact Criticality]
+        Rule[Artifact Rule] --> Valid{Validation passed?}
+        Valid -- Yes --> Record[Record passing result]
+        Valid -- No --> Required{required?}
+        Required -- Yes --> Blocking[Failure affects attempt or run status]
+        Required -- No --> Diagnostic[Record diagnostic failure without failing status]
+    end
 ```
 
 ## 2. Configuration Contract
@@ -79,3 +95,46 @@ Process failure 仍優先於 artifact failure；artifact failure 中 `ARTIFACT_M
 ## 7. Out of Scope
 
 本版本不包含 regex／plugin-based classifier、per-step retry policy、process-group cancellation、recorder lifecycle 或 distributed execution。
+
+
+## 8. Selective Retry Sequence — Git tag v1.5.3
+
+依據 `runner/runner.py` 的 attempt loop、`runner/retry.py` 與 `runner/artifact.py`。Optional results 仍保存在 attempt 中，但只有 required results 參與 artifact failure classification。
+
+```mermaid
+sequenceDiagram
+    participant R as DeviceTestRunner
+    participant E as SubprocessExecutor
+    participant V as ArtifactValidator
+    participant F as FailureClassifier
+    participant P as RetryPolicy
+    participant A as ArtifactManager
+    R->>E: execute(step, attempt)
+    E-->>R: process_result
+    opt Process succeeded and after_step rules exist
+        R->>V: validate_all(bound rules)
+        V-->>R: required and optional results
+    end
+    R->>F: classify_artifact_failure(required results only)
+    F-->>R: artifact failure type
+    R->>R: Process failure takes priority, retain all validation results
+    alt Final failure type is NONE
+        R->>R: Complete step without retry
+    else Attempt failed
+        R->>P: should_retry(attempt, failure_type)
+        P->>P: Check max_attempts and retry_on membership
+        P-->>R: retry decision
+        alt Retry allowed
+            opt Required bound rules exist
+                R->>A: cleanup_validation_targets(required rules)
+                A->>A: Resolve targets, remove only inside run directory
+            end
+            R->>R: Wait delay, then next attempt
+        else Retry denied
+            R->>R: Complete failed step
+        end
+    end
+    Note over R,V: After lifecycle completion, final validation evaluates all rules
+```
+
+只有 optional artifact 失敗且 command 成功時會走成功分支。Cleanup 不等同 process-tree cleanup；此版本尚未提供 cancellation token。

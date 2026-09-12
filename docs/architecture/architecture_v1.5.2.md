@@ -160,3 +160,85 @@ v1.5.2 不包含：
 - distributed controller／worker execution
 
 上述能力保留給後續版本。
+
+
+## 10. Implementation UML — Git tag v1.5.2
+
+### Classification Relationships
+
+依據 `runner/failure.py`、`runner/retry.py` 與 `runner/models.py`；僅列出和 failure classification 相關的介面。ArtifactValidator 產生每筆 failure type，合併分類由 Runner 呼叫 FailureClassifier。
+
+```mermaid
+classDiagram
+    class DeviceTestRunner
+    class SubprocessExecutor
+    class ArtifactValidator
+    class FailureClassifier {
+        +classify_process_failure() FailureType
+        +classify_artifact_failure() FailureType
+    }
+    class RetryPolicy {
+        +should_retry(attempt, failure_type) bool
+    }
+    class RetryConfig {
+        +int max_attempts
+        +float delay_seconds
+    }
+    class StepAttemptResult {
+        +bool success
+        +FailureType failure_type
+    }
+    class ArtifactValidationResult {
+        +bool passed
+        +FailureType failure_type
+    }
+    DeviceTestRunner --> SubprocessExecutor
+    DeviceTestRunner --> ArtifactValidator
+    DeviceTestRunner --> FailureClassifier
+    DeviceTestRunner ..> RetryPolicy
+    SubprocessExecutor --> FailureClassifier
+    RetryPolicy --> RetryConfig
+    SubprocessExecutor ..> StepAttemptResult : returns
+    ArtifactValidator ..> ArtifactValidationResult : returns
+    StepAttemptResult *-- ArtifactValidationResult : validation results
+```
+
+### Attempt Classification Sequence
+
+```mermaid
+sequenceDiagram
+    participant R as DeviceTestRunner
+    participant E as SubprocessExecutor
+    participant V as ArtifactValidator
+    participant F as FailureClassifier
+    participant P as RetryPolicy
+    participant A as ArtifactManager
+    R->>E: execute(step, attempt)
+    E->>F: classify_process_failure(outcome)
+    F-->>E: process FailureType
+    E-->>R: process_result
+    opt Process succeeded and bound retry rules exist
+        R->>V: validate_all(retry_rules)
+        V-->>R: artifact results with failure types
+    end
+    R->>F: classify_artifact_failure(results)
+    F-->>R: artifact FailureType
+    R->>R: Select process failure first, otherwise artifact failure
+    R->>R: Append StepAttemptResult
+    alt Final failure type is NONE
+        R->>R: Complete successful step
+    else Attempt failed
+        R->>P: should_retry(attempt, failure_type)
+        P-->>R: retry decision
+        alt Retry allowed
+            opt Bound retry rules exist
+                R->>A: cleanup_validation_targets(retry_rules)
+            end
+            R->>R: Wait configured delay, then next attempt
+        else Retry denied
+            R->>R: Complete failed step
+        end
+    end
+```
+
+此版本尚無 `retry_on` allow-list 與 `CANCELLED`；兩者不可回填為 v1.5.2 的既有能力。

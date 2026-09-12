@@ -4,7 +4,7 @@
 
 v1.6.0 在 v1.5.3 的 selective retry 與 artifact criticality 上加入 cooperative cancellation。`DeviceTestRunner.VERSION` 為 `1.6.0`；呼叫端可傳入 `CancellationToken`，在一般 lifecycle step 或 retry delay 期間要求取消。
 
-本文件以 Git tag `v1.5.3` 為比較基準，依據目前 `runner/`、`tests/`、`configs/` 的變更描述 v1.6.0；目標 tag `v1.6.0` 尚待建立。這是 cancellation foundation，不代表完整 process-tree、signal 或 exception cleanup guarantees 已完成。
+本文件以 Git tag `v1.6.0` 的實作為依據，並以 tag `v1.5.3` 為比較基準。這是 cancellation foundation，不代表完整 process-tree、signal 或 exception cleanup guarantees 已完成。
 
 ## 2. Components and Data Flow
 
@@ -101,4 +101,158 @@ YAML 禁止 `retry_on: [cancelled]`，policy 即使收到直接 Python 建構且
 * CLI SIGINT／SIGTERM 接線與明確 exit code 策略。
 * 未處理例外時的 teardown／report finalization。
 * Cancellation boundary race 與 cleanup retry-delay semantics 的更完整測試。
-* Sample happy path 修正、release tag 與 GitHub Release 驗證。
+* Sample happy path 修正與 GitHub Release 驗證；Git tag `v1.6.0` 已存在。
+
+
+## 8. Implementation UML — Git tag v1.6.0
+
+### Cancellation and Result Relationships
+
+依據 `runner/cancellation.py`、`runner/runner.py`、`runner/executor.py` 與 `runner/models.py`，省略未改變的設定欄位。Token 由呼叫端傳入，或由 Runner 在未傳入時建立；Executor 不持有永久的 token 欄位，而是每次 execute 接收它。
+
+```mermaid
+classDiagram
+    class CancellationToken {
+        +cancel()
+        +bool is_cancelled
+        +raise_if_cancelled()
+    }
+    class Event
+    class CancellationRequested
+    class DeviceTestRunner {
+        +run(config, cancellation_token) RunResult
+    }
+    class SubprocessExecutor {
+        +execute(step, stage, attempt, log_writer, working_directory, cancellation_token) StepAttemptResult
+    }
+    class RunResult
+    class RunMetadata {
+        +bool cancel_requested
+    }
+    class ExecutionSummary {
+        +str status
+        +int cancelled_steps
+        +int failed_steps
+        +int skipped_steps
+    }
+    class StepResult {
+        +bool success
+        +bool cancelled
+    }
+    class StepAttemptResult {
+        +bool success
+        +bool timed_out
+        +bool cancelled
+        +FailureType failure_type
+    }
+    class ArtifactValidationResult
+    CancellationToken *-- Event : threading event
+    CancellationToken ..> CancellationRequested : helper raises
+    DeviceTestRunner ..> CancellationToken : accepts or creates
+    DeviceTestRunner --> SubprocessExecutor : executor
+    SubprocessExecutor ..> CancellationToken : reads per invocation
+    SubprocessExecutor ..> StepAttemptResult : returns
+    DeviceTestRunner ..> RunResult : builds
+    RunResult *-- RunMetadata : metadata
+    RunResult *-- ExecutionSummary : summary
+    RunResult *-- StepResult : step_results
+    RunResult *-- ArtifactValidationResult : final validation
+    StepResult *-- StepAttemptResult : attempt_results
+    StepAttemptResult *-- ArtifactValidationResult : attempt validation
+```
+
+`raise_if_cancelled()` 是輔助 API；Runner／Executor 的正常取消流程讀取 `is_cancelled`，不依靠拋出 `CancellationRequested`。
+
+### Running Process Cancellation Sequence
+
+此圖描述程序仍在執行時，呼叫端從另一個 thread 提出取消的路徑。stdout 與 stderr reader 是兩個 thread，圖中合併顯示。
+
+```mermaid
+sequenceDiagram
+    participant C as Caller
+    participant T as CancellationToken
+    participant R as DeviceTestRunner
+    participant E as SubprocessExecutor
+    participant P as Direct Popen process
+    participant L as stdout and stderr readers
+    R->>E: execute(..., cancellation_token)
+    E->>P: Popen(shell=True, pipes)
+    E->>L: Start two stream readers
+    C->>T: cancel()
+    E->>P: poll()
+    P-->>E: None (still running)
+    E->>T: is_cancelled
+    T-->>E: true
+    E->>P: poll() before stopping
+    alt Process already exited at stop check
+        Note over E,P: No termination signal needed
+    else Process still running
+        E->>P: terminate()
+        E->>P: wait(timeout=2)
+        alt Exited during grace period
+            P-->>E: return code
+        else Wait raises TimeoutExpired
+            E->>P: kill()
+            E->>P: wait()
+            P-->>E: return code
+        end
+    end
+    E->>L: join both readers
+    L-->>E: Readers finished
+    E-->>R: StepAttemptResult(cancelled=true, timed_out=false)
+    R->>R: Retain attempt, skip attempt validation and retry
+```
+
+最外層 polling 先檢查程序完成，再檢查取消，最後檢查 timeout。圖中僅為直接程序 termination，沒有 process-group kill；reader join 無 timeout，後代程序仍持有 pipe 時可能持續等待。Caller 的 cancel 也不表示 CLI 已接上 SIGINT。
+
+### Cancellation Cleanup Sequence
+
+以下為 Runner 可正常返回結果的受控路徑；沒有宣稱未處理 exception／KeyboardInterrupt 也能完成 cleanup。
+
+```mermaid
+sequenceDiagram
+    participant C as Caller
+    participant R as DeviceTestRunner
+    participant T as Run token
+    participant E as SubprocessExecutor
+    participant V as ArtifactValidator
+    participant J as JsonReporter
+    C->>R: run(config, token)
+    R->>R: Create run artifact directory
+    alt Token cancelled before run
+        R->>R: Skip global_setup, setup, scenario and teardown
+    else Token initially active
+        R->>E: Execute global_setup with run token
+        E-->>R: Stage results
+        alt global_setup failed or token cancelled before setup block
+            R->>R: Skip setup, scenario and teardown
+        else global_setup succeeded and setup block entered
+            R->>E: Execute setup with run token
+            E-->>R: Stage results
+            opt setup succeeded and token remains active
+                R->>E: Execute scenario with run token
+                E-->>R: Stage results (may include cancellation)
+            end
+            loop Each reachable teardown attempt
+                R->>R: Create fresh execution token
+                R->>E: Execute teardown with fresh token
+                E-->>R: Cleanup attempt result
+            end
+        end
+    end
+    loop Each global_teardown attempt
+        R->>R: Create fresh execution token
+        R->>E: Execute global_teardown with fresh token
+        E-->>R: Cleanup attempt result
+    end
+    R->>V: validate_all(all configured rules)
+    V-->>R: Final artifact results
+    R->>T: Read cancel_requested
+    T-->>R: Current cancellation state
+    R->>R: Build summary, cancellation takes priority
+    R->>J: save(RunResult)
+    J-->>R: Report path
+    R-->>C: RunResult
+```
+
+每個 cleanup attempt 有新的 execution token，但 retry delay 仍讀原始 run token；這不是完整獨立的 cleanup scope。若一般 retry delay 期間取消，step 可標記 cancelled，而先前 attempt 保留原 failure type。這些差異應保留於結果，不將所有 attempt 都改寫成 CANCELLED。

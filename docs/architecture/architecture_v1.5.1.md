@@ -858,7 +858,9 @@ class LifecycleStepContent:
 
 ---
 
-# 22. Step Model Architecture
+# 22. Step Model Architecture（設計提案）
+
+以下延續第 21 節的建議設計，不代表 Git tag `v1.5.1` 的實作。實作中的 retry 位於 RunnerConfig，validation rules 位於 ArtifactConfig，以 after_step 關聯 step。
 
 ```mermaid
 classDiagram
@@ -3941,3 +3943,49 @@ Fresh Attempt Directory
 ```
 
 這就是 Device Test Runner v1.5.1 **Artifact-aware Retry** 的核心架構。
+
+
+## Git tag v1.5.1 — Implemented Model UML
+
+以下僅列出 `runner/models.py` 與 `runner/retry.py` 的核心關係。`LifecycleStepContent` 沒有 retry／validations 欄位；`after_step` 是名稱關聯，不是 step 持有 rule 物件。
+
+```mermaid
+classDiagram
+    class RunnerConfig
+    class LifecycleConfig
+    class LifecycleSteps
+    class LifecycleStepContent {
+        +str name
+        +str command
+        +int timeout_second
+    }
+    class RetryConfig {
+        +int max_attempts
+        +float delay_seconds
+    }
+    class RetryPolicy
+    class ArtifactConfig
+    class ArtifactValidationConfig
+    class ArtifactValidationRule {
+        +str name
+        +str path
+        +str after_step
+        +bool retry_on_failure
+    }
+    class StepResult
+    class StepAttemptResult
+    class ArtifactValidationResult
+    RunnerConfig *-- LifecycleConfig : lifecycle
+    LifecycleConfig *-- LifecycleSteps : five stages
+    LifecycleSteps *-- LifecycleStepContent : steps
+    RunnerConfig *-- RetryConfig : retry
+    RetryPolicy --> RetryConfig : config
+    RunnerConfig *-- ArtifactConfig : artifact
+    ArtifactConfig *-- ArtifactValidationConfig : validation
+    ArtifactValidationConfig *-- ArtifactValidationRule : rules
+    ArtifactValidationRule ..> LifecycleStepContent : after_step matches name
+    StepResult *-- StepAttemptResult : attempt_results
+    StepAttemptResult *-- ArtifactValidationResult : artifact_validation_results
+```
+
+`after_step` 可為 None。圖中的包含關係表達資料結構，不表示額外的程序生命週期管理。第 21～22 節保留作為設計歷史，實際介面以此 tag 的程式為準。

@@ -1,6 +1,6 @@
 # Device Test Runner v1.0.0 Definition of Done
 
-Baseline: Git tag `v1.0.0`
+Version baseline: Git tag `v1.0.0`
 
 - [x] YAML contract and loader are implemented.
 - [x] Basic subprocess execution and runner orchestration are implemented.

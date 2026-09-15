@@ -1,81 +1,14 @@
 # Device Test Runner Architecture v1.4.0
 
-## 1. 版本定位
+本文件說明 v1.4.0 的架構、資料流與設計限制。範例與介面以該版本為準；目前使用方式請見 [README](../../README.md)。
 
-Device Test Runner v1.4.0 延續 v1.3.5 已完成的：
+## 版本範圍
 
-```text
-Test Lifecycle
-+
-Process Lifecycle
-+
-Streaming stdout / stderr
-+
-Artifact Collection
-```
+v1.4.0 加入 artifact validation，將命令執行結果與輸出檔案的驗證結果分開記錄。
 
-v1.4.0 開始加入：
+例如，`run_scenario.sh` 回傳 `exit_code = 0`，但預期的 `power.csv` 不存在或大小為 0，仍需要依驗證規則判斷測試結果。命令成功只表示程序正常結束，輸出檔案是否符合要求由 validator 檢查。
 
-```text
-Artifact Validation
-```
-
-v1.3.5 關心的是：
-
-> Command 有沒有正確執行？Process 有沒有正常結束？stdout / stderr 有沒有完整保存？
-
-v1.4.0 開始進一步回答：
-
-> 測試執行後，應該產生的 Artifact 是否真的存在，而且內容是否符合最基本的有效條件？
-
-例如 Power Test 執行成功：
-
-```text
-run_scenario.sh
-exit_code = 0
-```
-
-但實際上：
-
-```text
-power.csv 不存在
-```
-
-或者：
-
-```text
-power.csv size = 0 bytes
-```
-
-此時不能只因為：
-
-```text
-exit_code == 0
-```
-
-就把整個 Test Run 判定為：
-
-```text
-PASSED
-```
-
-v1.4.0 因此正式將：
-
-```text
-Execution Result
-```
-
-與：
-
-```text
-Artifact Validation Result
-```
-
-分離。
-
----
-
-# 2. v1.4.0 的核心問題
+## v1.4.0 的核心問題
 
 在 v1.3.5 中，成功通常來自：
 
@@ -113,17 +46,11 @@ power_result.csv
 不存在
 ```
 
-這代表：
-
-```text
-Process Success != Test Success
-```
+這代表：`Process Success != Test Success`
 
 v1.4.0 開始正式處理這個差異。
 
----
-
-# 3. v1.4.0 的核心概念
+## v1.4.0 的核心概念
 
 完整 Test Run 可以拆成兩條判定線：
 
@@ -133,7 +60,7 @@ Execution Validation
 Artifact Validation
 ```
 
-也就是：
+具體規則：
 
 ```mermaid
 flowchart TD
@@ -171,15 +98,11 @@ Artifact Validation Passed
 Run Passed
 ```
 
----
+## v1.3.5 → v1.4.0 架構演進
 
-# 4. v1.3.5 → v1.4.0 架構演進
+### v1.3
 
-## v1.3
-
-```text
-Lifecycle-aware Test Runner
-```
+`Lifecycle-aware Test Runner`
 
 解決：
 
@@ -191,13 +114,9 @@ teardown
 global_teardown
 ```
 
----
+### v1.3.5
 
-## v1.3.5
-
-```text
-Process-aware Execution Engine
-```
+`Process-aware Execution Engine`
 
 解決：
 
@@ -210,13 +129,9 @@ Timeout
 Process lifecycle
 ```
 
----
+### v1.4.0
 
-## v1.4.0
-
-```text
-Artifact-aware Test Runner
-```
+`Artifact-aware Test Runner`
 
 解決：
 
@@ -250,9 +165,7 @@ flowchart LR
     V14 --> A[Did execution produce valid output?]
 ```
 
----
-
-# 5. 為什麼 Artifact Validation 應該在 Runner
+## 為什麼 Artifact Validation 應該在 Runner
 
 Artifact Validation 不應全部塞進原本的 Google Scripts Repo。
 
@@ -296,9 +209,7 @@ Reporting
 
 因此可以保留原本 Script Repo 的功能邊界。
 
----
-
-# 6. Artifact Validation 的第一版範圍
+## Artifact Validation 的第一版範圍
 
 v1.4.0 建議先做最基本且通用的 validation：
 
@@ -327,19 +238,13 @@ v1.4.0 的定位應該是：
 
 > Artifact infrastructure validation，而不是完整 Domain correctness validation。
 
----
+## Execution Validation 與 Artifact Validation
 
-# 7. Execution Validation 與 Artifact Validation
+這兩層分別處理設定與執行結果。
 
-這兩層非常重要。
+### Execution Validation
 
-## Execution Validation
-
-檢查：
-
-```text
-Command 是否正常執行
-```
+檢查：`Command 是否正常執行`
 
 來源：
 
@@ -354,15 +259,9 @@ success=True
 exit_code=0
 ```
 
----
+### Artifact Validation
 
-## Artifact Validation
-
-檢查：
-
-```text
-執行後產生的 Output 是否符合要求
-```
+檢查：`執行後產生的 Output 是否符合要求`
 
 例如：
 
@@ -371,23 +270,13 @@ power.csv exists
 power.csv size > 1 KB
 ```
 
-因此：
+因此：`StepResult`
 
-```text
-StepResult
-```
-
-和：
-
-```text
-ArtifactValidationResult
-```
+和：`ArtifactValidationResult`
 
 不應混在同一個概念裡。
 
----
-
-# 8. v1.4.0 高階架構
+## v1.4.0 高階架構
 
 ```mermaid
 flowchart TD
@@ -434,9 +323,7 @@ flowchart TD
     Reporter --> Report
 ```
 
----
-
-# 9. 建議新增的 Artifact Validation Model
+## 建議新增的 Artifact Validation Model
 
 v1.3 的 Model 已經穩定，因此 v1.4.0 可以在旁邊新增 Validation Domain Model。
 
@@ -472,13 +359,11 @@ power.csv 必須存在
 而且至少 1024 bytes
 ```
 
----
-
-# 10. Validation Config
+## Validation Config
 
 可以讓 `ArtifactConfig` 開始包含 Validation Rules。
 
-概念上：
+設計概念：
 
 ```python
 @dataclass(frozen=True)
@@ -499,9 +384,7 @@ ArtifactConfig
 
 這是 v1.4.0 第一個真正擴充 `ArtifactConfig` 語意的版本。
 
----
-
-# 11. YAML 設計
+## YAML 設計
 
 可以從簡單版本開始：
 
@@ -539,9 +422,7 @@ ArtifactConfig(
 )
 ```
 
----
-
-# 12. 為什麼 Rule 應該是資料
+## 為什麼 Rule 應該是資料
 
 不建議寫成：
 
@@ -571,11 +452,7 @@ validations:
     min_size_bytes: 1024
 ```
 
-Runner 不需要知道：
-
-```text
-什麼叫 Power Test
-```
+Runner 不需要知道：`什麼叫 Power Test`
 
 Runner 只需要知道：
 
@@ -586,9 +463,7 @@ Runner 只需要知道：
 
 這維持了 Device Test Runner 的 generic runner 定位。
 
----
-
-# 13. ArtifactValidationResult
+## ArtifactValidationResult
 
 每條 Rule 應產生自己的 Result。
 
@@ -628,9 +503,7 @@ ArtifactValidationResult(
 )
 ```
 
----
-
-# 14. Validation Rule 與 Validation Result
+## Validation Rule 與 Validation Result
 
 這是一組很重要的 Input / Output 關係：
 
@@ -688,9 +561,7 @@ Validator
 ArtifactValidationResult
 ```
 
----
-
-# 15. ArtifactValidator
+## ArtifactValidator
 
 `ArtifactValidator` 應是一個獨立 Component。
 
@@ -724,15 +595,9 @@ Artifact Directory
 Validation Rule
 ```
 
-然後回傳：
+然後回傳：`Validation Result`
 
-```text
-Validation Result
-```
-
----
-
-# 16. ArtifactValidator Responsibility
+## ArtifactValidator Responsibility
 
 ArtifactValidator 負責：
 
@@ -791,9 +656,7 @@ flowchart TD
     Max -- Yes --> Passed
 ```
 
----
-
-# 17. Existence Validation
+## Existence Validation
 
 最基本規則：
 
@@ -808,11 +671,7 @@ path.exists()
   required: true
 ```
 
-如果不存在：
-
-```text
-validation FAILED
-```
+如果不存在：`validation FAILED`
 
 如果：
 
@@ -820,27 +679,13 @@ validation FAILED
 required: false
 ```
 
-Artifact 不存在可以視為：
+Artifact 不存在可以視為：`validation PASSED`
 
-```text
-validation PASSED
-```
+或者未來引入：`SKIPPED`
 
-或者未來引入：
+v1.4.0 可以先維持 bool：`success=True`
 
-```text
-SKIPPED
-```
-
-v1.4.0 可以先維持 bool：
-
-```text
-success=True
-```
-
----
-
-# 18. File Size Validation
+## File Size Validation
 
 檔案存在不代表有效。
 
@@ -864,17 +709,11 @@ power.csv
 min_size_bytes: 1024
 ```
 
-可以避免：
-
-```text
-空 Artifact
-```
+可以避免：`空 Artifact`
 
 被判定成功。
 
----
-
-# 19. Minimum Size Validation
+## Minimum Size Validation
 
 概念：
 
@@ -899,9 +738,7 @@ Result:
 FAILED
 ```
 
----
-
-# 20. Maximum Size Validation
+## Maximum Size Validation
 
 有些 Artifact 過大也可能表示異常。
 
@@ -930,9 +767,7 @@ max_size_bytes: 524288000
 
 但這是 optional rule。
 
----
-
-# 21. Validation Pipeline
+## Validation Pipeline
 
 執行順序建議：
 
@@ -952,7 +787,7 @@ RunResult
 Report
 ```
 
-重要的是：
+設計要求：
 
 > 不應該在 Artifact 還正在產生時就驗證。
 
@@ -968,43 +803,21 @@ recorder flushes power.csv
 validate power.csv
 ```
 
-所以 Artifact Validation 應該通常放在：
-
-```text
-Lifecycle execution 完成後
-```
+所以 Artifact Validation 應該通常放在：`Lifecycle execution 完成後`
 
 而不是 Scenario 剛結束時。
 
----
+## Validation 應該是 Lifecycle Stage 嗎？
 
-# 22. Validation 應該是 Lifecycle Stage 嗎？
-
-不建議在 v1.4.0 直接新增：
-
-```text
-validation
-```
+不建議在 v1.4.0 直接新增：`validation`
 
 成為第六個 Lifecycle Stage。
 
-目前 Lifecycle 的語意是：
+目前 Lifecycle 的語意是：`執行 Test Environment / Scenario 的 Command Lifecycle`
 
-```text
-執行 Test Environment / Scenario 的 Command Lifecycle
-```
+而 Artifact Validation 是：`Runner 內部對執行結果的檢查`
 
-而 Artifact Validation 是：
-
-```text
-Runner 內部對執行結果的檢查
-```
-
-它比較像：
-
-```text
-Post-execution Result Processing
-```
+它比較像：`Post-execution Result Processing`
 
 因此較好的分層是：
 
@@ -1031,9 +844,7 @@ validation
 
 這樣可以保持 Lifecycle Domain 的純度。
 
----
-
-# 23. Runner 高階流程
+## Runner 高階流程
 
 v1.4.0 的 `DeviceTestRunner.run()` 可以開始變成：
 
@@ -1073,7 +884,7 @@ def run(self, config: RunnerConfig) -> RunResult:
     return result
 ```
 
-高階流程變得非常清楚：
+高階流程：
 
 ```text
 Prepare
@@ -1083,9 +894,7 @@ Aggregate
 Report
 ```
 
----
-
-# 24. v1.4.0 Runner Activity Diagram
+## v1.4.0 Runner Activity Diagram
 
 ```mermaid
 flowchart TD
@@ -1125,15 +934,9 @@ flowchart TD
     Report --> End
 ```
 
----
+## Execution 失敗後還要不要做 Artifact Validation？
 
-# 25. Execution 失敗後還要不要做 Artifact Validation？
-
-建議：
-
-```text
-要。
-```
+建議：`要。`
 
 因為即使 Scenario Failed，也可能產生有用的 Debug Artifact。
 
@@ -1155,19 +958,13 @@ crash_dump       VALID
 power.csv        TOO SMALL
 ```
 
-所以：
-
-```text
-Execution failure
-```
+所以：`Execution failure`
 
 不應直接跳過所有 Validation。
 
-這對 Debug 非常重要。
+保留這些資訊可協助定位失敗原因。
 
----
-
-# 26. Teardown 後再 Validate
+## Teardown 後再 Validate
 
 v1.4.0 的推薦順序：
 
@@ -1191,9 +988,7 @@ flowchart LR
 
 因為 Cleanup Stage 很可能本身就是 Artifact Finalization 的一部分。
 
----
-
-# 27. Execution Result 與 Validation Result 的四種組合
+## Execution Result 與 Validation Result 的四種組合
 
 這是 v1.4.0 很重要的概念。
 
@@ -1214,9 +1009,7 @@ AND
 Artifact Validation PASS
 ```
 
----
-
-# 28. 為什麼 Execution PASS + Artifact FAIL 必須算 FAIL
+## 為什麼 Execution PASS + Artifact FAIL 必須算 FAIL
 
 例如：
 
@@ -1225,35 +1018,17 @@ run_power_test.sh
 exit_code = 0
 ```
 
-但是：
+但是：`power.csv missing`
 
-```text
-power.csv missing
-```
-
-如果仍判定：
-
-```text
-PASSED
-```
+如果仍判定：`PASSED`
 
 Test Runner 的結果就沒有意義。
 
-因為真正測試的目的不是：
+因為真正測試的目的不是：`bash 有沒有正常離開`
 
-```text
-bash 有沒有正常離開
-```
+而是：`這次測試有沒有產生可用的測試結果`
 
-而是：
-
-```text
-這次測試有沒有產生可用的測試結果
-```
-
----
-
-# 29. ValidationSummary
+## ValidationSummary
 
 如果 v1.4.0 開始有多個 Artifact Rule，建議不要把全部統計塞進原本 `ExecutionSummary`。
 
@@ -1275,35 +1050,17 @@ passed = 2
 failed = 1
 ```
 
-這樣：
+這樣：`ExecutionSummary`
 
-```text
-ExecutionSummary
-```
+專門描述：`Process / Step execution`
 
-專門描述：
+而：`ValidationSummary`
 
-```text
-Process / Step execution
-```
-
-而：
-
-```text
-ValidationSummary
-```
-
-專門描述：
-
-```text
-Artifact validation
-```
+專門描述：`Artifact validation`
 
 責任比較清楚。
 
----
-
-# 30. 建議的 Result 結構
+## 建議的 Result 結構
 
 v1.4.0 可以開始演進成：
 
@@ -1338,9 +1095,7 @@ validation_results
 
 但從 architecture cleanliness 來看，獨立 Summary 會比較漂亮。
 
----
-
-# 31. 建議不要把 Artifact Validation 塞進 StepResult
+## 建議不要把 Artifact Validation 塞進 StepResult
 
 不建議：
 
@@ -1351,11 +1106,7 @@ StepResult(
 )
 ```
 
-因為：
-
-```text
-一個 Step
-```
+因為：`一個 Step`
 
 可能：
 
@@ -1364,25 +1115,13 @@ StepResult(
 * Artifact 在 teardown 才完成
 * 多個 Step 共同產生一個 Artifact
 
-因此：
+因此：`StepResult`
 
-```text
-StepResult
-```
-
-和：
-
-```text
-ArtifactValidationResult
-```
+和：`ArtifactValidationResult`
 
 應該是平行關係。
 
-不是：
-
-```text
-StepResult contains validation
-```
+不是：`StepResult contains validation`
 
 而是：
 
@@ -1392,9 +1131,7 @@ RunResult
 └── ArtifactValidationResult[]
 ```
 
----
-
-# 32. Result Domain Diagram
+## Result Domain Diagram
 
 ```mermaid
 classDiagram
@@ -1444,9 +1181,7 @@ classDiagram
     RunResult *-- ValidationSummary
 ```
 
----
-
-# 33. Final Run Status
+## Final Run Status
 
 v1.3 的：
 
@@ -1482,9 +1217,7 @@ status = (
 )
 ```
 
----
-
-# 34. ExecutionSummary.status 的語意問題
+## ExecutionSummary.status 的語意問題
 
 這裡會出現一個架構問題。
 
@@ -1494,17 +1227,9 @@ status = (
 ExecutionSummary.status
 ```
 
-其實被當成：
+其實被當成：`整體 Run Status`
 
-```text
-整體 Run Status
-```
-
-但到了 v1.4：
-
-```text
-Execution Summary
-```
+但到了 v1.4：`Execution Summary`
 
 只應該代表 Execution。
 
@@ -1520,7 +1245,7 @@ Final Run Status
 
 簡單，但語意開始變得不純。
 
-### 方案 B：RunResult 新增 status
+#### 方案 B：RunResult 新增 status
 
 更乾淨：
 
@@ -1549,9 +1274,7 @@ ValidationSummary
 
 從長期架構來看，方案 B 更適合。
 
----
-
-# 35. 建議 v1.4.0 RunResult
+## 建議 v1.4.0 RunResult
 
 如果願意在 v1.4 做一次 Result Model cleanup，可以是：
 
@@ -1571,11 +1294,7 @@ class RunResult:
         return self.status == "PASSED"
 ```
 
-這樣建立：
-
-```text
-Single Source of Truth
-```
+這樣建立：`Single Source of Truth`
 
 最終狀態只有：
 
@@ -1583,9 +1302,7 @@ Single Source of Truth
 RunResult.status
 ```
 
----
-
-# 36. Status Aggregator
+## Status Aggregator
 
 可以建立 private builder：
 
@@ -1619,9 +1336,7 @@ TIMEOUT
 
 時，這個 Aggregator 就會成為統一決策點。
 
----
-
-# 37. Validation Summary Invariants
+## Validation Summary Invariants
 
 ValidationSummary 應符合：
 
@@ -1657,11 +1372,9 @@ skipped_steps
 
 形成對稱。
 
----
+## Execution 與 Validation 的對稱性
 
-# 38. Execution 與 Validation 的對稱性
-
-v1.4.0 會出現非常漂亮的架構：
+v1.4.0 的元件關係：
 
 ```text
 CONFIG
@@ -1713,13 +1426,11 @@ flowchart TD
     ValidationSummary --> Status
 ```
 
----
+## Validator 與 Parser 不一樣
 
-# 39. Validator 與 Parser 不一樣
+實作時需維持此責任邊界。
 
-這個邊界非常重要。
-
-## Validator
+### Validator
 
 回答：
 
@@ -1730,21 +1441,11 @@ Artifact 是否存在？
 格式是否基本符合要求？
 ```
 
----
+### Parser
 
-## Parser
+回答：`Artifact 裡面的資料代表什麼？`
 
-回答：
-
-```text
-Artifact 裡面的資料代表什麼？
-```
-
-例如：
-
-```text
-power.csv
-```
+例如：`power.csv`
 
 Validator：
 
@@ -1760,11 +1461,7 @@ average_power = 2.3 W
 peak_power = 4.8 W
 ```
 
-再進一步的 Domain Validator：
-
-```text
-average_power < expected threshold
-```
+再進一步的 Domain Validator：`average_power < expected threshold`
 
 因此未來可以演進：
 
@@ -1780,9 +1477,7 @@ Domain Validator
 
 v1.4.0 先做第一層即可。
 
----
-
-# 40. Artifact Validation Pipeline 的長期演進
+## Artifact Validation Pipeline 的長期演進
 
 ```mermaid
 flowchart LR
@@ -1801,33 +1496,15 @@ flowchart LR
     Domain --> C[Threshold / Expected Behavior]
 ```
 
-v1.4.0：
+v1.4.0：`Basic Validation`
 
-```text
-Basic Validation
-```
+後續版本才考慮：`Parser / Domain Validation`
 
-後續版本才考慮：
+## Artifact Validator 與 Google Script Repo 的界線
 
-```text
-Parser / Domain Validation
-```
+假設 Google Script 產生：`power_data.csv`
 
----
-
-# 41. Artifact Validator 與 Google Script Repo 的界線
-
-假設 Google Script 產生：
-
-```text
-power_data.csv
-```
-
-Google Script Repo：
-
-```text
-負責如何產生 power_data.csv
-```
+Google Script Repo：`負責如何產生 power_data.csv`
 
 Device Test Runner：
 
@@ -1837,11 +1514,7 @@ Device Test Runner：
 負責保存與報告 validation result
 ```
 
-Power Domain Parser：
-
-```text
-負責解析 power_data.csv 裡面的數值
-```
+Power Domain Parser：`負責解析 power_data.csv 裡面的數值`
 
 因此三層可以清楚分離：
 
@@ -1857,9 +1530,7 @@ flowchart LR
     Parser -->|understand domain data| Artifact
 ```
 
----
-
-# 42. Optional Artifact
+## Optional Artifact
 
 不是每個 Artifact 都一定要存在。
 
@@ -1879,17 +1550,11 @@ crash_dump.txt
 
 這不應讓 Test Failure。
 
-因此：
-
-```text
-required = false
-```
+因此：`required = false`
 
 是很重要的 Validation Rule。
 
----
-
-# 43. Required / Optional Decision
+## Required / Optional Decision
 
 ```mermaid
 flowchart TD
@@ -1910,35 +1575,19 @@ flowchart TD
     Required -- No --> PassOptional
 ```
 
----
-
-# 44. Validation Error Message
+## Validation Error Message
 
 Validation Result 應該提供清楚的 error。
 
-不建議：
+不建議：`error="failed"`
 
-```text
-error="failed"
-```
+建議：`Required artifact does not exist: power.csv`
 
-建議：
-
-```text
-Required artifact does not exist: power.csv
-```
-
-或者：
-
-```text
-Artifact size below minimum: expected >= 1024 bytes, actual=128 bytes
-```
+或者：`Artifact size below minimum: expected >= 1024 bytes, actual=128 bytes`
 
 這會讓 `report.json` 本身具備 Debug 價值。
 
----
-
-# 45. Artifact Path Resolution
+## Artifact Path Resolution
 
 Validation Rule 的：
 
@@ -1946,11 +1595,7 @@ Validation Rule 的：
 path: power.csv
 ```
 
-建議是相對於：
-
-```text
-artifact_dir
-```
+建議是相對於：`artifact_dir`
 
 而不是 Repository Working Directory。
 
@@ -1962,17 +1607,9 @@ artifact_dir
 artifact/sample/power_001_20260807_150000
 ```
 
-Rule：
+Rule：`power.csv`
 
-```text
-power.csv
-```
-
-最終：
-
-```text
-artifact/sample/power_001_20260807_150000/power.csv
-```
+最終：`artifact/sample/power_001_20260807_150000/power.csv`
 
 概念：
 
@@ -1985,9 +1622,7 @@ artifact_path = (
 
 這能避免工作目錄不同造成 Validation 找錯位置。
 
----
-
-# 46. Path Traversal 注意事項
+## Path Traversal 注意事項
 
 如果 Rule 來自 YAML：
 
@@ -2008,9 +1643,7 @@ Side Project v1.4.0 不一定要做完整 Security Hardening，但可以建立�
 * symlink
 * sandbox
 
----
-
-# 47. Validator 不應修改 Artifact
+## Validator 不應修改 Artifact
 
 ArtifactValidator 應該是 read-only。
 
@@ -2031,15 +1664,9 @@ ArtifactValidator 應該是 read-only。
 重新產生 Artifact
 ```
 
-這符合：
+這符合：`Validation should observe, not mutate.`
 
-```text
-Validation should observe, not mutate.
-```
-
----
-
-# 48. v1.4.0 Sequence Diagram
+## v1.4.0 Sequence Diagram
 
 ```mermaid
 sequenceDiagram
@@ -2077,9 +1704,7 @@ sequenceDiagram
     Runner-->>User: RunResult
 ```
 
----
-
-# 49. Component Architecture
+## Component Architecture
 
 ```mermaid
 flowchart LR
@@ -2148,9 +1773,7 @@ flowchart LR
     Reporter --> JSON
 ```
 
----
-
-# 50. report.json 的變化
+## report.json 的變化
 
 v1.3.5：
 
@@ -2182,9 +1805,7 @@ v1.4.0：
 }
 ```
 
----
-
-# 51. report.json 範例
+## report.json 範例
 
 ```json
 {
@@ -2246,29 +1867,15 @@ v1.4.0：
 }
 ```
 
-最值得注意：
+最值得注意：`execution failed_steps = 0`
 
-```text
-execution failed_steps = 0
-```
+但是：`validation failed_validations = 1`
 
-但是：
+所以：`status = FAILED`
 
-```text
-validation failed_validations = 1
-```
+v1.4.0 以此區分命令結果與檔案驗證結果。
 
-所以：
-
-```text
-status = FAILED
-```
-
-這就是 v1.4.0 的核心價值。
-
----
-
-# 52. Unit Test 架構
+## Unit Test 架構
 
 v1.4.0 新增的測試主要集中在：
 
@@ -2301,65 +1908,45 @@ flowchart TD
     RunnerTests --> Integration
 ```
 
----
-
-# 53. ArtifactValidator Tests
+## ArtifactValidator Tests
 
 應至少涵蓋：
 
 ### Required file exists
 
-```text
-expected: PASS
-```
+`expected: PASS`
 
-### Required file missing
+#### Required file missing
 
-```text
-expected: FAIL
-```
+`expected: FAIL`
 
-### Optional file missing
+#### Optional file missing
 
-```text
-expected: PASS
-```
+`expected: PASS`
 
-### File size equals minimum
+#### File size equals minimum
 
-```text
-expected: PASS
-```
+`expected: PASS`
 
-### File below minimum
+#### File below minimum
 
-```text
-expected: FAIL
-```
+`expected: FAIL`
 
-### File above maximum
+#### File above maximum
 
-```text
-expected: FAIL
-```
+`expected: FAIL`
 
-### Empty file with min_size=1
+#### Empty file with min_size=1
 
-```text
-expected: FAIL
-```
+`expected: FAIL`
 
-### Unicode filename
+#### Unicode filename
 
-```text
-expected: supported
-```
+`expected: supported`
 
----
+## 使用 tmp_path 測 Artifact Validation
 
-# 54. 使用 tmp_path 測 Artifact Validation
-
-這一版非常適合 pytest 的：
+此版本的測試可使用 pytest 的：
 
 ```python
 tmp_path
@@ -2391,9 +1978,7 @@ def test_required_artifact_exists(tmp_path):
     assert result.size_bytes > 0
 ```
 
----
-
-# 55. Missing Artifact Test
+## Missing Artifact Test
 
 ```python
 def test_required_artifact_missing(tmp_path):
@@ -2414,17 +1999,11 @@ def test_required_artifact_missing(tmp_path):
 
 這種測試不需要 Mock File System。
 
-直接用：
-
-```text
-tmp_path
-```
+直接用：`tmp_path`
 
 通常會比 Mock `Path.exists()` 更直觀。
 
----
-
-# 56. Size Validation Test
+## Size Validation Test
 
 ```python
 def test_artifact_below_minimum_size(tmp_path):
@@ -2453,35 +2032,25 @@ domain rule
 result object
 ```
 
----
-
-# 57. Status Aggregation Tests
+## Status Aggregation Tests
 
 應該特別測四種狀況。
 
-## Execution PASS + Validation PASS
+### Execution PASS + Validation PASS
 
-```text
-RUN PASSED
-```
+`RUN PASSED`
 
-## Execution PASS + Validation FAIL
+### Execution PASS + Validation FAIL
 
-```text
-RUN FAILED
-```
+`RUN FAILED`
 
-## Execution FAIL + Validation PASS
+### Execution FAIL + Validation PASS
 
-```text
-RUN FAILED
-```
+`RUN FAILED`
 
-## Execution FAIL + Validation FAIL
+### Execution FAIL + Validation FAIL
 
-```text
-RUN FAILED
-```
+`RUN FAILED`
 
 這可以 parameterize：
 
@@ -2507,9 +2076,7 @@ def test_run_status(
     ...
 ```
 
----
-
-# 58. Runner Tests
+## Runner Tests
 
 Runner Test 應使用：
 
@@ -2530,9 +2097,7 @@ tmp_path Artifact
 * Final Run Status 正確
 * Reporter 收到完整結果
 
----
-
-# 59. Integration Test
+## Integration Test
 
 完整 E2E-like Integration Test：
 
@@ -2581,9 +2146,7 @@ flowchart TD
     Result --> Report
 ```
 
----
-
-# 60. 一個很好的 Integration Test
+## 一個很好的 Integration Test
 
 可以建立：
 
@@ -2606,7 +2169,7 @@ artifact:
       min_size_bytes: 10
 ```
 
-Expected：
+預期結果：
 
 ```text
 Execution: PASS
@@ -2624,7 +2187,7 @@ touch "$ARTIFACT_DIR/power.csv"
 exit 0
 ```
 
-Expected：
+預期結果：
 
 ```text
 Execution: PASS
@@ -2634,13 +2197,11 @@ Validation: FAIL
 Final: FAIL
 ```
 
-這個案例可以非常清楚地證明：
+此案例驗證：
 
 > exit code 0 並不足以代表 Test Run Passed。
 
----
-
-# 61. v1.4.0 的 Dependency Structure
+## v1.4.0 的 Dependency Structure
 
 ```mermaid
 flowchart TD
@@ -2664,17 +2225,9 @@ flowchart TD
     Runner --> Reporter
 ```
 
-建議新增：
+建議新增：`runner/validator.py`
 
-```text
-runner/validator.py
-```
-
-不要將 Validation 塞進：
-
-```text
-artifact.py
-```
+不要將 Validation 塞進：`artifact.py`
 
 因為：
 
@@ -2690,9 +2243,7 @@ ArtifactValidator
 
 兩個責任不同。
 
----
-
-# 62. 建議目錄
+## 建議目錄
 
 ```text
 device-test-runner/
@@ -2736,11 +2287,9 @@ device-test-runner/
     └── architecture_v1.4.0.md
 ```
 
----
+## ArtifactManager 與 ArtifactValidator
 
-# 63. ArtifactManager 與 ArtifactValidator
-
-兩個類別的責任可以直接用一句話區分：
+兩個類別的責任：
 
 ```text
 ArtifactManager：
@@ -2770,9 +2319,7 @@ flowchart LR
 
 Validator 不應透過 Manager 去修改 Artifact。
 
----
-
-# 64. v1.4.0 的架構邊界
+## v1.4.0 的架構邊界
 
 現在 DTR 已經出現幾個相當清楚的 Boundary。
 
@@ -2822,9 +2369,7 @@ flowchart TD
     Runner --> Reporting
 ```
 
----
-
-# 65. v1.4.0 不應做的事
+## v1.4.0 不應做的事
 
 為了控制版本範圍，v1.4.0 不建議加入：
 
@@ -2853,17 +2398,11 @@ Artifact usable?
 Run status reflects artifact validity?
 ```
 
----
+## v1.4.0 的設計價值
 
-# 66. v1.4.0 的設計價值
+v1.3.5 之前，Runner 大部分依賴：`Process-level truth`
 
-v1.3.5 之前，Runner 大部分依賴：
-
-```text
-Process-level truth
-```
-
-也就是：
+具體規則：
 
 ```text
 exit code
@@ -2872,13 +2411,9 @@ stderr
 timeout
 ```
 
-v1.4.0 開始引入：
+v1.4.0 開始引入：`Test-output-level truth`
 
-```text
-Test-output-level truth
-```
-
-也就是：
+具體規則：
 
 ```text
 expected artifact
@@ -2887,23 +2422,11 @@ validation rule
 validation result
 ```
 
-這表示 Test Runner 開始不再完全相信：
+這表示 Test Runner 開始不再完全相信：`Process 說自己成功`
 
-```text
-Process 說自己成功
-```
+而是會確認：`成功的證據到底有沒有產生`
 
-而是會確認：
-
-```text
-成功的證據到底有沒有產生
-```
-
-這非常接近真正 Testing Infrastructure 的思維。
-
----
-
-# 67. v1.3.5 與 v1.4.0 比較
+## v1.3.5 與 v1.4.0 比較
 
 | 架構項目                          | v1.3.5               | v1.4.0                 |
 | ----------------------------- | -------------------- | ---------------------- |
@@ -2925,9 +2448,7 @@ Process 說自己成功
 | Final status                  | 主要由 Step 判定          | Execution + Validation |
 | Runner 定位                     | Process-aware Runner | Artifact-aware Runner  |
 
----
-
-# 68. Version Evolution
+## Version Evolution
 
 ```mermaid
 flowchart LR
@@ -2952,9 +2473,7 @@ flowchart LR
     V14 --> F[Validate Test Outputs]
 ```
 
----
-
-# 69. v1.4.0 架構摘要
+## v1.4.0 架構摘要
 
 ```mermaid
 flowchart TD
@@ -3025,16 +2544,8 @@ Device Test Runner v1.4.0 的核心架構可以濃縮為：
 
 > `DeviceTestRunner` 仍使用 v1.3.5 的 Lifecycle 與 Popen Execution Engine 執行測試；Lifecycle 完成並讓 Artifact finalized 後，再由 `ArtifactValidator` 根據 `ArtifactValidationRule` 對 Artifact 進行存在性、required/optional 與檔案大小等基礎驗證，產生獨立的 `ArtifactValidationResult`。最後 Runner 分別聚合 `ExecutionSummary` 與 `ValidationSummary`，只有 Execution 與 Artifact Validation 同時通過時，整次 `RunResult` 才能被判定為 `PASSED`。
 
-v1.4.0 因此標誌著 Device Test Runner 從：
+v1.4.0 因此標誌著 Device Test Runner 從：`「Script 有沒有成功跑完？」`
 
-```text
-「Script 有沒有成功跑完？」
-```
-
-開始進入：
-
-```text
-「Script 跑完後，有沒有真的產生有效的測試成果？」
-```
+開始進入：`「Script 跑完後，有沒有真的產生有效的測試成果？」`
 
 這也是從單純 Execution Engine 走向真正 Test Infrastructure 很關鍵的一步。

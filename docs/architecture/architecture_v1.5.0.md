@@ -1,68 +1,14 @@
 # Device Test Runner Architecture v1.5.0
 
-## 1. 版本定位
+本文件說明 v1.5.0 的架構、資料流與設計限制。範例與介面以該版本為準；目前使用方式請見 [README](../../README.md)。
 
-Device Test Runner v1.5.0 延續目前已建立的架構：
+## 版本範圍
 
-```text
-v1.3
-Test Lifecycle
+v1.5.0 加入可設定的重試策略。步驟失敗後，Runner 先詢問 `RetryPolicy` 是否還能重試；可以重試時再次執行，否則記錄最終失敗並依 lifecycle 規則停止或清理。
 
-v1.3.5
-Process Lifecycle + Streaming Log
+此版本延續既有的測試生命週期、即時 log、artifact validation 與 run 狀態彙整，並保存各次 attempt 的結果。
 
-v1.4.x
-Artifact Validation + Run Status Aggregation
-
-v1.5.0
-Retry Policy
-```
-
-v1.4.1 已經可以回答：
-
-```text
-Step 有沒有成功？
-Artifact 有沒有成功？
-整個 Run 有沒有成功？
-```
-
-v1.5.0 開始回答另一個問題：
-
-> Step 執行失敗時，是不是應該立刻判定失敗，還是可以重新嘗試？
-
-過去：
-
-```text
-Execute Step
-    ↓
-FAILED
-    ↓
-Stop / Cleanup
-```
-
-v1.5.0：
-
-```text
-Execute Step
-    ↓
-FAILED
-    ↓
-RetryPolicy
-    ↓
-Retry?
- ┌──┴──┐
-YES    NO
- ↓      ↓
-再次執行 Final Failure
-```
-
-因此 v1.5.0 可以定位為：
-
-> **Policy-aware Execution Engine**
-
----
-
-# 2. v1.5.0 的核心問題
+## v1.5.0 的核心問題
 
 Device Test / Hardware Validation 很容易遇到 transient failure。
 
@@ -77,17 +23,9 @@ recorder startup race condition
 shell command temporary failure
 ```
 
-如果一遇到：
+如果一遇到：`exit_code != 0`
 
-```text
-exit_code != 0
-```
-
-就立刻：
-
-```text
-FAILED
-```
+就立刻：`FAILED`
 
 會造成：
 
@@ -109,9 +47,7 @@ Retry 的目的不是：
 
 > 對具有暫時性的失敗，允許有限且受控制的重新執行。
 
----
-
-# 3. Retry 不是 while True
+## Retry 不是 while True
 
 最危險的實作是：
 
@@ -148,9 +84,7 @@ Retry Decision
 Final StepResult
 ```
 
----
-
-# 4. v1.5.0 高階架構
+## v1.5.0 高階架構
 
 ```mermaid
 flowchart TD
@@ -187,21 +121,13 @@ flowchart TD
     StepResult --> Runner
 ```
 
-這裡最重要的是：
-
-```text
-CommandStepExecutor
-```
+這裡設計要求：`CommandStepExecutor`
 
 仍然只負責：
 
 > 執行一次 Command。
 
-而：
-
-```text
-Retry Policy
-```
+而：`Retry Policy`
 
 負責：
 
@@ -209,9 +135,7 @@ Retry Policy
 
 不要把 Retry loop 塞進最底層 subprocess code。
 
----
-
-# 5. Execution Layer 的兩個層次
+## Execution Layer 的兩個層次
 
 v1.5.0 之後，Execution Layer 可以拆成：
 
@@ -221,7 +145,7 @@ Retry Execution
 Single Attempt Execution
 ```
 
-也就是：
+具體規則：
 
 ```text
 Retry-aware Executor / Runner
@@ -250,11 +174,9 @@ flowchart TD
 
 這樣可以保持 v1.3.5 已經建立好的 Popen Executor 不被破壞。
 
----
+## Single Responsibility
 
-# 6. Single Responsibility
-
-## DeviceTestRunner
+### DeviceTestRunner
 
 負責：
 
@@ -266,7 +188,7 @@ Artifact validation
 Final aggregation
 ```
 
-## Retry Policy
+### Retry Policy
 
 負責：
 
@@ -277,7 +199,7 @@ Retry 間隔多久？
 目前是否還可以 retry？
 ```
 
-## CommandStepExecutor
+### CommandStepExecutor
 
 負責：
 
@@ -289,7 +211,7 @@ timeout
 process cleanup
 ```
 
-也就是：
+具體規則：
 
 ```text
 Runner
@@ -305,9 +227,7 @@ CommandStepExecutor
 How to execute once
 ```
 
----
-
-# 7. 建議新增 RetryPolicy Model
+## 建議新增 RetryPolicy Model
 
 v1.5.0 可以先使用簡單 Policy：
 
@@ -348,17 +268,11 @@ Attempt 3
 Final FAILED
 ```
 
----
-
-# 8. `max_attempts` 而不是 `retry_count`
+## `max_attempts` 而不是 `retry_count`
 
 這個命名值得統一。
 
-例如：
-
-```text
-retry_count = 3
-```
+例如：`retry_count = 3`
 
 容易產生歧義：
 
@@ -374,13 +288,9 @@ retry_count = 3
 max_attempts = 3
 ```
 
-語意明確：
+語意明確：`最多執行三次`
 
-```text
-最多執行三次
-```
-
-也就是：
+具體規則：
 
 ```text
 Attempt #1
@@ -400,9 +310,7 @@ max_attempts
 retry_count
 ```
 
----
-
-# 9. RetryPolicy 的基本 Invariant
+## RetryPolicy 的基本 Invariant
 
 至少應成立：
 
@@ -421,21 +329,15 @@ RetryPolicy(
 
 應該在 Configuration Loading 時就拒絕。
 
-因為：
-
-```text
-0 attempts
-```
+因為：`0 attempts`
 
 對 Step execution 沒有合理語意。
 
----
-
-# 10. Retry 放在哪裡設定？
+## Retry 放在哪裡設定？
 
 v1.5.0 有兩種設計。
 
-## Global Retry
+### Global Retry
 
 例如：
 
@@ -448,9 +350,7 @@ execution:
 
 代表所有 Step 都使用相同 Retry Policy。
 
----
-
-## Step-level Retry
+### Step-level Retry
 
 例如：
 
@@ -469,53 +369,29 @@ scenario:
 
 每個 Step 可以有不同 Policy。
 
----
-
-# 11. v1.5.0 建議先從 Global Retry 開始
+## v1.5.0 建議先從 Global Retry 開始
 
 因為不同 Step 的 Retry semantic 差很多。
 
-例如：
-
-```text
-adb get-state
-```
+例如：`adb get-state`
 
 Retry 很合理。
 
-但：
+但：`flash device`
 
-```text
-flash device
-```
+設定重試前需確認命令能否安全地重複執行。
 
-Retry 可能需要非常謹慎。
-
-又例如：
-
-```text
-start recorder
-```
+又例如：`start recorder`
 
 可以 retry。
 
-但是：
-
-```text
-payment / destructive command
-```
+但是：`payment / destructive command`
 
 理論上可能不具 idempotency。
 
-因此 Retry Policy 最自然的歸屬是：
+因此 Retry Policy 最自然的歸屬是：`LifecycleStepContent`
 
-```text
-LifecycleStepContent
-```
-
----
-
-# 12. LifecycleStepContent 的演進
+## LifecycleStepContent 的演進
 
 v1.4：
 
@@ -551,17 +427,11 @@ RetryPolicy(
 )
 ```
 
-等同於：
-
-```text
-Retry Disabled
-```
+等同於：`Retry Disabled`
 
 因此舊 YAML 不需要全部修改。
 
----
-
-# 13. Backward Compatibility
+## Backward Compatibility
 
 假設舊 YAML：
 
@@ -584,7 +454,7 @@ LifecycleStepContent(
 )
 ```
 
-也就是：
+具體規則：
 
 ```text
 沒有 retry config
@@ -592,11 +462,9 @@ LifecycleStepContent(
 只執行一次
 ```
 
-這是一個非常乾淨的 backward-compatible 設計。
+此預設值保留既有設定的行為。
 
----
-
-# 14. YAML Example
+## YAML Example
 
 ```yaml
 lifecycle:
@@ -651,9 +519,7 @@ run_scenario
 → no retry
 ```
 
----
-
-# 15. Attempt 是 v1.5.0 的新概念
+## Attempt 是 v1.5.0 的新概念
 
 以前：
 
@@ -677,21 +543,11 @@ Attempt #2
 Final StepResult
 ```
 
-所以要開始區分：
+所以要開始區分：`Attempt Result`
 
-```text
-Attempt Result
-```
+和：`Step Result`
 
-和：
-
-```text
-Step Result
-```
-
----
-
-# 16. 建議新增 AttemptResult
+## 建議新增 AttemptResult
 
 概念 Model：
 
@@ -738,9 +594,7 @@ AttemptResult(
 )
 ```
 
----
-
-# 17. StepResult 的角色變化
+## StepResult 的角色變化
 
 v1.3.x：
 
@@ -758,17 +612,11 @@ StepResult
 一個 Step 完整執行結果
 ```
 
-其中可能包含：
-
-```text
-1..N Attempts
-```
+其中可能包含：`1..N Attempts`
 
 這是很重要的 Domain Model 演進。
 
----
-
-# 18. 建議 StepResult
+## 建議 StepResult
 
 概念上可以演進為：
 
@@ -802,11 +650,9 @@ class StepResult:
 attempt_count: int
 ```
 
----
+## Full Model vs Minimal Model
 
-# 19. Full Model vs Minimal Model
-
-## Minimal v1.5
+### Minimal v1.5
 
 ```python
 StepResult(
@@ -815,21 +661,11 @@ StepResult(
 )
 ```
 
-優點：
+優點：`改動小`
 
-```text
-改動小
-```
+缺點：`不知道第一輪為什麼失敗`
 
-缺點：
-
-```text
-不知道第一輪為什麼失敗
-```
-
----
-
-## Complete v1.5
+### Complete v1.5
 
 ```python
 StepResult(
@@ -848,19 +684,13 @@ Retry history 可追蹤
 report.json 可分析 flaky failure
 ```
 
-對 Device Test Runner 這種 Infra-learning side project，我會比較推薦完整版本：
-
-```text
-AttemptResult[]
-```
+對 Device Test Runner 這種 Infra-learning side project，我會比較推薦完整版本：`AttemptResult[]`
 
 因為 Retry 最大的學習價值之一就是：
 
 > 不要把第一次失敗吃掉。
 
----
-
-# 20. Retry 不能掩蓋失敗歷史
+## Retry 不能掩蓋失敗歷史
 
 例如：
 
@@ -877,17 +707,9 @@ Attempt 3
 PASSED
 ```
 
-最終：
+最終：`StepResult.success = True`
 
-```text
-StepResult.success = True
-```
-
-但 Report 不應只寫：
-
-```text
-PASSED
-```
+但 Report 不應只寫：`PASSED`
 
 應該保留：
 
@@ -901,15 +723,9 @@ Attempts = 3
 
 因為這本身就是重要的 Reliability Signal。
 
----
+## Retry 與 Flakiness
 
-# 21. Retry 與 Flakiness
-
-假設一個 Step：
-
-```text
-100 Runs
-```
+假設一個 Step：`100 Runs`
 
 其中：
 
@@ -921,11 +737,7 @@ Attempts = 3
 2 次全部失敗
 ```
 
-如果只看 Final Result：
-
-```text
-98% PASS
-```
+如果只看 Final Result：`98% PASS`
 
 但實際上：
 
@@ -942,17 +754,11 @@ Transient Failure
 Flakiness
 ```
 
-因此 Attempt history 未來可以支援：
-
-```text
-Flaky Step Detection
-```
+因此 Attempt history 未來可以支援：`Flaky Step Detection`
 
 這是 Retry 與 Observability 很重要的連結。
 
----
-
-# 22. Retry-aware Execution Architecture
+## Retry-aware Execution Architecture
 
 ```mermaid
 flowchart TD
@@ -996,15 +802,9 @@ flowchart TD
     A2 --> Check1
 ```
 
----
+## Retry Controller
 
-# 23. Retry Controller
-
-這個 component 不一定要真的叫：
-
-```text
-RetryController
-```
+這個 component 不一定要真的叫：`RetryController`
 
 可以先實作成 Runner private method：
 
@@ -1025,17 +825,11 @@ def _execute_step_with_retry(
 
 v1.5.0 不需要為每個概念都建立 class。
 
-只有：
-
-```text
-RetryPolicy
-```
+只有：`RetryPolicy`
 
 值得成為正式 Domain Model。
 
----
-
-# 24. Retry Algorithm
+## Retry Algorithm
 
 概念：
 
@@ -1075,9 +869,7 @@ def _execute_step_with_retry(
     )
 ```
 
----
-
-# 25. Retry Decision
+## Retry Decision
 
 最基本的 v1.5.0 判斷：
 
@@ -1089,7 +881,7 @@ Attempt Number < max_attempts
 Retry
 ```
 
-也就是：
+具體規則：
 
 ```python
 should_retry = (
@@ -1100,9 +892,7 @@ should_retry = (
 
 這是最簡單的 RetryPolicy。
 
----
-
-# 26. 所有 Failure 都 Retry 嗎？
+## 所有 Failure 都 Retry 嗎？
 
 這是 v1.5.0 很重要的設計問題。
 
@@ -1115,11 +905,7 @@ should_retry = (
 
 但長期不夠好。
 
-例如：
-
-```text
-device offline
-```
+例如：`device offline`
 
 可能值得 retry。
 
@@ -1134,15 +920,9 @@ permission denied
 
 通常 retry 沒有意義。
 
-所以 Retry 最後會需要：
+所以 Retry 最後會需要：`Error Classification`
 
-```text
-Error Classification
-```
-
----
-
-# 27. Error Classification
+## Error Classification
 
 可以將 Failure 分成：
 
@@ -1179,9 +959,7 @@ Unknown
 → Policy Decision
 ```
 
----
-
-# 28. v1.5.0 是否需要完整 Error Classification？
+## v1.5.0 是否需要完整 Error Classification？
 
 不一定。
 
@@ -1195,23 +973,13 @@ v1.5.x
 retryable exit codes / error categories
 ```
 
-也就是 v1.5.0 先建立：
+也就是 v1.5.0 先建立：`Retry Framework`
 
-```text
-Retry Framework
-```
-
-之後再豐富：
-
-```text
-Retry Decision Rules
-```
+之後再豐富：`Retry Decision Rules`
 
 這樣比較符合版本演進。
 
----
-
-# 29. Retryable Exit Codes
+## Retryable Exit Codes
 
 如果要在 v1.5.0 稍微加入條件，可以：
 
@@ -1234,35 +1002,17 @@ retry:
     - 124
 ```
 
-但需要定義：
+但需要定義：`empty retryable_exit_codes`
 
-```text
-empty retryable_exit_codes
-```
+到底代表：`all failures retryable`
 
-到底代表：
-
-```text
-all failures retryable
-```
-
-還是：
-
-```text
-no failures retryable
-```
+還是：`no failures retryable`
 
 因此第一版其實可以先不加入，避免語意變複雜。
 
----
+## Retry Delay
 
-# 30. Retry Delay
-
-最基本：
-
-```text
-Fixed Delay
-```
+最基本：`Fixed Delay`
 
 例如：
 
@@ -1292,9 +1042,7 @@ Jitter
 Adaptive Retry
 ```
 
----
-
-# 31. 未來 Backoff
+## 未來 Backoff
 
 長期可能：
 
@@ -1312,25 +1060,15 @@ Attempt 3
 4 sec
 ```
 
-也就是：
-
-```text
-Exponential Backoff
-```
+具體規則：`Exponential Backoff`
 
 在 Distributed System / API Client 中很常見。
 
-但 Device Test Runner v1.5.0 使用：
-
-```text
-Fixed Delay
-```
+但 Device Test Runner v1.5.0 使用：`Fixed Delay`
 
 已經足夠。
 
----
-
-# 32. Retry 與 Timeout 的關係
+## Retry 與 Timeout 的關係
 
 這兩個概念不能混在一起。
 
@@ -1370,11 +1108,7 @@ Delay:      5 sec
 Attempt 3: 30 sec
 ```
 
-總計：
-
-```text
-100 sec
-```
+總計：`100 sec`
 
 所以：
 
@@ -1382,21 +1116,11 @@ Attempt 3: 30 sec
 
 這也正好為 v1.6 Timeout / Cancellation 留下議題。
 
----
+## Timeout Failure 是否應 Retry？
 
-# 33. Timeout Failure 是否應 Retry？
+從架構上：`Timeout`
 
-從架構上：
-
-```text
-Timeout
-```
-
-只是其中一種：
-
-```text
-Attempt Failure
-```
+只是其中一種：`Attempt Failure`
 
 所以完全可以交給 RetryPolicy 決定。
 
@@ -1426,9 +1150,7 @@ New Recorder Process
 
 這也是 v1.5 與 v1.6/v1.7 之間的重要連結。
 
----
-
-# 34. Retry 必須在 Process Cleanup 後
+## Retry 必須在 Process Cleanup 後
 
 正確：
 
@@ -1462,21 +1184,11 @@ Timeout
 
 > `CommandStepExecutor.execute()` 必須保證單次 Attempt 已完全結束，才把 Result 回傳給 Retry Layer。
 
----
+## Retry 與 Lifecycle 的關係
 
-# 35. Retry 與 Lifecycle 的關係
+Retry 發生在：`單一 Lifecycle Step 內部`
 
-Retry 發生在：
-
-```text
-單一 Lifecycle Step 內部
-```
-
-不是：
-
-```text
-整個 Lifecycle 重新開始
-```
+不是：`整個 Lifecycle 重新開始`
 
 例如：
 
@@ -1491,7 +1203,7 @@ scenario
 ...
 ```
 
-也就是：
+具體規則：
 
 ```mermaid
 flowchart TD
@@ -1514,15 +1226,9 @@ flowchart TD
     B2 -->|success| Scenario
 ```
 
-Step B 最終成功後：
+Step B 最終成功後：`setup stage 可以繼續。`
 
-```text
-setup stage 可以繼續。
-```
-
----
-
-# 36. Retry Exhausted
+## Retry Exhausted
 
 如果：
 
@@ -1532,11 +1238,7 @@ Attempt 2 FAILED
 Attempt 3 FAILED
 ```
 
-則：
-
-```text
-Retry Exhausted
-```
+則：`Retry Exhausted`
 
 最終：
 
@@ -1560,17 +1262,11 @@ global_teardown
 
 Retry 不改變 Lifecycle failure policy。
 
-它只是延後：
-
-```text
-Step 最終成功 / 失敗
-```
+它只是延後：`Step 最終成功 / 失敗`
 
 的判定。
 
----
-
-# 37. Retry 成功
+## Retry 成功
 
 例如：
 
@@ -1579,41 +1275,23 @@ Attempt 1 FAILED
 Attempt 2 PASSED
 ```
 
-最終：
-
-```text
-StepResult.success = True
-```
+最終：`StepResult.success = True`
 
 Lifecycle 可以繼續。
 
-但：
-
-```text
-attempt_count = 2
-```
+但：`attempt_count = 2`
 
 應保留下來。
 
-未來可以將這種 Step 標記成：
-
-```text
-FLAKY
-```
+未來可以將這種 Step 標記成：`FLAKY`
 
 但 v1.5.0 不需要立即增加第三種 Step Status。
 
----
-
-# 38. Artifact Log 與 Retry
+## Artifact Log 與 Retry
 
 Retry 後會有多份 stdout / stderr。
 
-不能全部寫到：
-
-```text
-scenario/run_scenario_stdout.log
-```
+不能全部寫到：`scenario/run_scenario_stdout.log`
 
 否則無法區分 Attempt。
 
@@ -1639,9 +1317,7 @@ artifact/
 
 這是 v1.5.0 Artifact Structure 很值得做的改進。
 
----
-
-# 39. Attempt-aware Artifact
+## Attempt-aware Artifact
 
 以前：
 
@@ -1693,9 +1369,7 @@ flowchart TD
     Attempt2 --> Err2
 ```
 
----
-
-# 40. StepLogWriter 的演進
+## StepLogWriter 的演進
 
 v1.3.5：
 
@@ -1728,9 +1402,7 @@ log_writer = artifact_manager.create_step_log_writer(
 
 這樣 Retry 不會覆寫上一輪 log。
 
----
-
-# 41. AttemptResult 與 Artifact
+## AttemptResult 與 Artifact
 
 AttemptResult 可以進一步保存：
 
@@ -1750,9 +1422,7 @@ attempt_1/stderr.log
 
 避免將巨大 stdout 全部寫進 JSON。
 
----
-
-# 42. Retry 與 Artifact Validation
+## Retry 與 Artifact Validation
 
 這兩條 pipeline 仍應保持分離。
 
@@ -1796,9 +1466,7 @@ Retry
 
 至少 v1.5.0 應保持這麼簡單。
 
----
-
-# 43. Artifact-based Retry
+## Artifact-based Retry
 
 但是未來可以出現一個有趣的需求：
 
@@ -1808,51 +1476,25 @@ BUT
 expected artifact missing
 ```
 
-此時：
+此時：`要不要 Retry Scenario？`
 
-```text
-要不要 Retry Scenario？
-```
+此設計稱為：`Result-based Retry`
 
-這叫做：
+或：`Artifact-aware Retry`
 
-```text
-Result-based Retry
-```
+但這會讓：`Execution Policy`
 
-或：
-
-```text
-Artifact-aware Retry
-```
-
-但這會讓：
-
-```text
-Execution Policy
-```
-
-與：
-
-```text
-Validation Pipeline
-```
+與：`Validation Pipeline`
 
 開始產生依賴。
 
 因此不建議在基礎 v1.5.0 立即做。
 
-先完成：
-
-```text
-Execution Failure Retry
-```
+先完成：`Execution Failure Retry`
 
 比較乾淨。
 
----
-
-# 44. 為 Artifact-aware Retry 預留空間
+## 為 Artifact-aware Retry 預留空間
 
 未來架構可能：
 
@@ -1874,21 +1516,11 @@ Execution Result
 Retry Decision
 ```
 
-v1.5.0 不需要過早耦合：
+v1.5.0 不需要過早耦合：`ArtifactValidator`
 
-```text
-ArtifactValidator
-```
+與：`RetryPolicy`
 
-與：
-
-```text
-RetryPolicy
-```
-
----
-
-# 45. Retry Policy 與 Idempotency
+## Retry Policy 與 Idempotency
 
 這是 Retry 最重要的工程風險之一。
 
@@ -1906,37 +1538,21 @@ Attempt 1：
 但最後 command exit 1
 ```
 
-Attempt 2：
-
-```text
-再次 install
-```
+Attempt 2：`再次 install`
 
 是否安全？
 
-取決於 Step 是否：
+取決於 Step 是否：`Idempotent`
 
-```text
-Idempotent
-```
-
-也就是：
+具體規則：
 
 > 同一個操作執行多次，是否仍能得到合理且相同的狀態？
 
-例如：
-
-```text
-adb get-state
-```
+例如：`adb get-state`
 
 通常是 read-only，Retry 安全。
 
-但：
-
-```text
-start recorder
-```
+但：`start recorder`
 
 可能：
 
@@ -1953,9 +1569,7 @@ Attempt 2 又啟動第二個 recorder
 
 > Retry 不是所有 Step 都應該預設開啟。
 
----
-
-# 46. v1.5.0 建議 Default
+## v1.5.0 建議 Default
 
 最安全：
 
@@ -1966,17 +1580,9 @@ RetryPolicy(
 )
 ```
 
-也就是：
+具體規則：`Retry Opt-in`
 
-```text
-Retry Opt-in
-```
-
-而不是：
-
-```text
-所有 Step 預設 retry 3 次
-```
+而不是：`所有 Step 預設 retry 3 次`
 
 需要明確設定：
 
@@ -1987,9 +1593,7 @@ retry:
 
 才開 Retry。
 
----
-
-# 47. Retry Execution Sequence
+## Retry Execution Sequence
 
 ```mermaid
 sequenceDiagram
@@ -2029,9 +1633,7 @@ sequenceDiagram
     Policy-->>Runner: StepResult
 ```
 
----
-
-# 48. Retry State Machine
+## Retry State Machine
 
 ```mermaid
 stateDiagram-v2
@@ -2055,21 +1657,11 @@ stateDiagram-v2
     FINISHED --> [*]
 ```
 
----
+## Retry Delay 是否算進 Step Duration？
 
-# 49. Retry Delay 是否算進 Step Duration？
+建議：`要。`
 
-建議：
-
-```text
-要。
-```
-
-因為：
-
-```text
-Step Duration
-```
+因為：`Step Duration`
 
 應表示：
 
@@ -2083,11 +1675,7 @@ Delay = 5 sec
 Attempt 2 = 8 sec
 ```
 
-Step duration：
-
-```text
-23 sec
-```
+Step duration：`23 sec`
 
 而 AttemptResult 各自仍保留：
 
@@ -2098,31 +1686,19 @@ Step duration：
 
 這兩個 metric 都有價值。
 
----
+## ExecutionSummary 的 Duration
 
-# 50. ExecutionSummary 的 Duration
-
-同樣：
-
-```text
-ExecutionSummary.duration_seconds
-```
+同樣：`ExecutionSummary.duration_seconds`
 
 應包含 Retry Delay。
 
 因為這就是整個 Run 真正消耗的時間。
 
-未來做：
-
-```text
-Lab Usage Optimization
-```
+未來做：`Lab Usage Optimization`
 
 時，Retry overhead 就可以被量化。
 
----
-
-# 51. Retry Metrics
+## Retry Metrics
 
 v1.5.0 可以先不新增正式 Summary，但 report 中至少可推導：
 
@@ -2155,9 +1731,7 @@ class RetrySummary:
 
 但若要控制 v1.5.0 範圍，可以留到 v1.5.x 或 v1.9 Summary。
 
----
-
-# 52. 不要立刻建立 RetrySummary 也合理
+## 不要立刻建立 RetrySummary 也合理
 
 目前已有：
 
@@ -2176,11 +1750,7 @@ RecorderSummary
 
 RunResult 可能快速膨脹。
 
-所以 v1.5.0 可以先：
-
-```text
-AttemptResult[]
-```
+所以 v1.5.0 可以先：`AttemptResult[]`
 
 讓資訊完整存在。
 
@@ -2188,9 +1758,7 @@ AttemptResult[]
 
 這是比較保守的版本策略。
 
----
-
-# 53. RunResult 在 v1.5.0 的角色
+## RunResult 在 v1.5.0 的角色
 
 v1.4.1：
 
@@ -2207,11 +1775,7 @@ RunResult
 
 v1.5.0 不需要再加新的 Run-level status。
 
-Retry 只影響：
-
-```text
-StepResult
-```
+Retry 只影響：`StepResult`
 
 然後：
 
@@ -2225,9 +1789,7 @@ RunResult.status
 
 原本的 aggregation pipeline 可以繼續使用。
 
----
-
-# 54. Retry Recovery 對 ExecutionSummary 的影響
+## Retry Recovery 對 ExecutionSummary 的影響
 
 例如：
 
@@ -2237,11 +1799,7 @@ Attempt 1 FAILED
 Attempt 2 PASSED
 ```
 
-最終：
-
-```text
-Step A = PASSED
-```
+最終：`Step A = PASSED`
 
 因此：
 
@@ -2250,29 +1808,15 @@ ExecutionSummary.passed_steps += 1
 ExecutionSummary.failed_steps += 0
 ```
 
-Attempt failure 不應直接計入：
+Attempt failure 不應直接計入：`failed_steps`
 
-```text
-failed_steps
-```
+因為 ExecutionSummary 計算的是：`Final Step Outcome`
 
-因為 ExecutionSummary 計算的是：
+而不是：`Attempt Outcome`
 
-```text
-Final Step Outcome
-```
+## Attempt Failure 與 Step Failure
 
-而不是：
-
-```text
-Attempt Outcome
-```
-
----
-
-# 55. Attempt Failure 與 Step Failure
-
-非常重要：
+注意：
 
 ```text
 Attempt failure
@@ -2287,23 +1831,11 @@ Attempt #1 FAILED
 Attempt #2 PASSED
 ```
 
-代表：
+代表：`Step PASSED`
 
-```text
-Step PASSED
-```
+只有：`所有 Attempts 都失敗`
 
-只有：
-
-```text
-所有 Attempts 都失敗
-```
-
-才是：
-
-```text
-Step FAILED
-```
+才是：`Step FAILED`
 
 圖：
 
@@ -2321,9 +1853,7 @@ flowchart TD
     A2 --> StepPass
 ```
 
----
-
-# 56. Result Hierarchy
+## Result Hierarchy
 
 v1.5.0 之後 Result 層次可以理解為：
 
@@ -2371,11 +1901,9 @@ flowchart TD
 
 這是 v1.5.0 最大的 Result Domain 演進。
 
----
+## Recommended Model Structure
 
-# 57. Recommended Model Structure
-
-概念上：
+設計概念：
 
 ```python
 @dataclass(frozen=True)
@@ -2427,9 +1955,7 @@ class StepResult:
 
 這是架構概念，不代表一定要在單一 commit 全部改完。
 
----
-
-# 58. Class Diagram
+## Class Diagram
 
 ```mermaid
 classDiagram
@@ -2472,19 +1998,13 @@ classDiagram
     StepResult *-- AttemptResult
 ```
 
----
-
-# 59. CommandStepExecutor 的介面變化
+## CommandStepExecutor 的介面變化
 
 有兩種選擇。
 
-## 方案 A
+### 方案 A
 
-Executor 回傳：
-
-```text
-AttemptResult
-```
+Executor 回傳：`AttemptResult`
 
 ```python
 def execute(
@@ -2494,45 +2014,23 @@ def execute(
 
 這在 Domain 上最乾淨。
 
-因為 Executor 每次真的只執行：
+因為 Executor 每次真的只執行：`one attempt`
 
-```text
-one attempt
-```
+### 方案 B
 
----
-
-## 方案 B
-
-Executor 仍回傳：
-
-```text
-StepResult
-```
+Executor 仍回傳：`StepResult`
 
 外層再組 Retry。
 
-但這樣：
+但這樣：`StepResult`
 
-```text
-StepResult
-```
+同時代表：`Attempt`
 
-同時代表：
-
-```text
-Attempt
-```
-
-和：
-
-```text
-Final Step
-```
+和：`Final Step`
 
 語意會開始混亂。
 
-因此 v1.5.0 比較推薦：
+因此 v1.5.0 比較建議：
 
 ```text
 CommandStepExecutor
@@ -2546,9 +2044,7 @@ AttemptResult[]
 → StepResult
 ```
 
----
-
-# 60. Execution Pipeline 演進
+## Execution Pipeline 演進
 
 v1.3.5：
 
@@ -2578,9 +2074,7 @@ StepResult
 
 這是 v1.5.0 最核心的 Architecture Change。
 
----
-
-# 61. CommandStepExecutor 仍然保持單純
+## CommandStepExecutor 仍然保持單純
 
 Executor 不應知道：
 
@@ -2600,17 +2094,11 @@ previous attempt result
 回傳 AttemptResult
 ```
 
-這符合：
-
-```text
-Single Responsibility Principle
-```
+這符合：`Single Responsibility Principle`
 
 也使得 Executor 的 v1.3.5 streaming logic 幾乎可以原封不動保留。
 
----
-
-# 62. Retry-aware Execution 可以放在哪裡？
+## Retry-aware Execution 可以放在哪裡？
 
 目前有三個可能位置：
 
@@ -2636,15 +2124,9 @@ DeviceTestRunner._execute_step_with_retry()
 避免過度抽象
 ```
 
-未來 Retry、Cancellation、Recorder Lifecycle 都加入後，再考慮抽成：
+未來 Retry、Cancellation、Recorder Lifecycle 都加入後，再考慮抽成：`StepExecutionEngine`
 
-```text
-StepExecutionEngine
-```
-
----
-
-# 63. 未來可能出現 StepExecutionEngine
+## 未來可能出現 StepExecutionEngine
 
 長期：
 
@@ -2664,15 +2146,9 @@ StepExecutionEngine
 
 > 先讓抽象從重複需求中長出來，而不是預測所有未來需求。
 
----
+## Retry 與 Teardown
 
-# 64. Retry 與 Teardown
-
-假設：
-
-```text
-scenario Step
-```
+假設：`scenario Step`
 
 嘗試三次後仍失敗：
 
@@ -2694,35 +2170,21 @@ global_teardown
 
 Retry 不可以阻止 cleanup。
 
-同樣：
-
-```text
-setup retry exhausted
-```
+同樣：`setup retry exhausted`
 
 仍應進入既定的 cleanup policy。
 
-因此：
-
-```text
-Retry Policy
-```
+因此：`Retry Policy`
 
 是 Step execution policy，
 
-而：
-
-```text
-Lifecycle Policy
-```
+而：`Lifecycle Policy`
 
 仍然是 Runner-level policy。
 
 兩者不能混為一談。
 
----
-
-# 65. Retry 與 Teardown 的 Boundary
+## Retry 與 Teardown 的 Boundary
 
 ```mermaid
 flowchart TD
@@ -2746,17 +2208,11 @@ flowchart TD
     Lifecycle -->|if final failure| Cleanup
 ```
 
-Retry Layer 只交給 Runner：
-
-```text
-Final StepResult
-```
+Retry Layer 只交給 Runner：`Final StepResult`
 
 Runner 不需要知道每一次 Retry 決策細節。
 
----
-
-# 66. Artifact Validation 仍然在 Lifecycle 後
+## Artifact Validation 仍然在 Lifecycle 後
 
 完整 v1.5 Pipeline：
 
@@ -2792,9 +2248,7 @@ Retry
 Final StepResult
 ```
 
----
-
-# 67. Full Architecture
+## Full Architecture
 
 ```mermaid
 flowchart TD
@@ -2874,15 +2328,9 @@ flowchart TD
     Result --> Reporter
 ```
 
----
+## report.json 的演進
 
-# 68. report.json 的演進
-
-v1.5.0 最有價值的新增內容是：
-
-```text
-attempt history
-```
+v1.5.0 最有價值的新增內容是：`attempt history`
 
 例如：
 
@@ -2913,51 +2361,23 @@ attempt history
 }
 ```
 
-其中剩下：
+其中剩下：`2 seconds`
 
-```text
-2 seconds
-```
+可能就是：`retry delay`
 
-可能就是：
+## Reporter 不應隱藏 Retry
 
-```text
-retry delay
-```
+例如：`Step PASSED`
 
----
+但報表最好呈現：`PASSED after 2 attempts`
 
-# 69. Reporter 不應隱藏 Retry
+而不是只：`PASSED`
 
-例如：
-
-```text
-Step PASSED
-```
-
-但報表最好呈現：
-
-```text
-PASSED after 2 attempts
-```
-
-而不是只：
-
-```text
-PASSED
-```
-
-這讓使用者知道：
-
-```text
-這個 Step 是 recovered failure
-```
+這讓使用者知道：`這個 Step 是 recovered failure`
 
 而不是第一次就穩定成功。
 
----
-
-# 70. Retry Log Example
+## Retry Log Example
 
 Console 可以顯示：
 
@@ -2980,21 +2400,11 @@ Attempt 2 passed.
 
 這是 Observability 的一部分。
 
----
+## Retry Error Message
 
-# 71. Retry Error Message
+當 Retry exhausted：`Step failed after 3 attempts`
 
-當 Retry exhausted：
-
-```text
-Step failed after 3 attempts
-```
-
-比：
-
-```text
-command failed
-```
+比：`command failed`
 
 更有資訊。
 
@@ -3007,15 +2417,9 @@ StepResult(
 )
 ```
 
-實際每次原因仍保存在：
+實際每次原因仍保存在：`AttemptResult[]`
 
-```text
-AttemptResult[]
-```
-
----
-
-# 72. Unit Test Strategy
+## Unit Test Strategy
 
 v1.5.0 最重要的測試：
 
@@ -3051,9 +2455,7 @@ flowchart TD
     LifecycleTests --> Integration
 ```
 
----
-
-# 73. RetryPolicy Tests
+## RetryPolicy Tests
 
 應至少測：
 
@@ -3073,9 +2475,7 @@ old YAML without retry
 → RetryPolicy(max_attempts=1)
 ```
 
----
-
-# 74. Success on First Attempt
+## Success on First Attempt
 
 FakeExecutor：
 
@@ -3084,7 +2484,7 @@ Attempt 1
 success=True
 ```
 
-Expected：
+預期結果：
 
 ```text
 executor called once
@@ -3092,17 +2492,11 @@ attempt_count = 1
 StepResult.success = True
 ```
 
-即使：
-
-```text
-max_attempts = 3
-```
+即使：`max_attempts = 3`
 
 也不能再執行 Attempt 2。
 
----
-
-# 75. Retry then Success
+## Retry then Success
 
 FakeExecutor：
 
@@ -3111,7 +2505,7 @@ Attempt 1 = FAIL
 Attempt 2 = PASS
 ```
 
-Expected：
+預期結果：
 
 ```text
 executor called twice
@@ -3121,9 +2515,7 @@ StepResult.success = True
 
 這是 v1.5.0 最重要的 Happy Retry Case。
 
----
-
-# 76. Retry Exhausted
+## Retry Exhausted
 
 FakeExecutor：
 
@@ -3133,13 +2525,9 @@ Attempt 2 = FAIL
 Attempt 3 = FAIL
 ```
 
-Policy：
+Policy：`max_attempts = 3`
 
-```text
-max_attempts = 3
-```
-
-Expected：
+預期結果：
 
 ```text
 executor called exactly 3 times
@@ -3147,17 +2535,11 @@ StepResult.success = False
 attempt_count = 3
 ```
 
-絕對不能執行：
-
-```text
-Attempt 4
-```
+絕對不能執行：`Attempt 4`
 
 這是 bounded retry 最重要的 invariant。
 
----
-
-# 77. No Retry Policy
+## No Retry Policy
 
 Policy：
 
@@ -3167,30 +2549,20 @@ RetryPolicy(
 )
 ```
 
-Attempt 1：
+Attempt 1：`FAIL`
 
-```text
-FAIL
-```
-
-Expected：
+預期結果：
 
 ```text
 executor called once
 Step FAILED
 ```
 
-也就是：
-
-```text
-max_attempts=1
-```
+具體規則：`max_attempts=1`
 
 必須完全等價於 v1.4.1 行為。
 
----
-
-# 78. Retry Delay Test
+## Retry Delay Test
 
 不要真的：
 
@@ -3200,11 +2572,7 @@ time.sleep(5)
 
 做 Unit Test。
 
-應該注入：
-
-```text
-Sleeper / sleep function
-```
+應該注入：`Sleeper / sleep function`
 
 或者 Mock：
 
@@ -3220,9 +2588,7 @@ sleep.assert_called_with(5)
 
 這樣 Unit Test 不需要真的等 Retry Delay。
 
----
-
-# 79. Attempt Artifact Tests
+## Attempt Artifact Tests
 
 Retry 兩次後應產生：
 
@@ -3236,11 +2602,9 @@ attempt_2/stderr.log
 
 而不是第二次覆蓋第一次。
 
-這是 ArtifactManager v1.5 非常重要的測試。
+此測試檢查 ArtifactManager v1.5 的檔案保存行為。
 
----
-
-# 80. Lifecycle + Retry Recovery Test
+## Lifecycle + Retry Recovery Test
 
 例如 setup Step：
 
@@ -3249,7 +2613,7 @@ Attempt 1 FAIL
 Attempt 2 PASS
 ```
 
-Expected：
+預期結果：
 
 ```text
 setup final status = PASS
@@ -3258,25 +2622,15 @@ scenario
 仍然執行
 ```
 
-也就是：
-
-```text
-Attempt Failure
-```
+具體規則：`Attempt Failure`
 
 不能直接 trigger Lifecycle Fail-fast。
 
-只有：
-
-```text
-Final Step Failure
-```
+只有：`Final Step Failure`
 
 才 trigger。
 
----
-
-# 81. Lifecycle + Retry Exhausted Test
+## Lifecycle + Retry Exhausted Test
 
 例如 setup：
 
@@ -3285,13 +2639,9 @@ Attempt 1 FAIL
 Attempt 2 FAIL
 ```
 
-Policy：
+Policy：`max_attempts=2`
 
-```text
-max_attempts=2
-```
-
-Expected：
+預期結果：
 
 ```text
 setup Step = FAILED
@@ -3302,9 +2652,7 @@ global_teardown = executed
 
 這驗證 Retry 與 Lifecycle policy 的 Boundary。
 
----
-
-# 82. Integration Test
+## Integration Test
 
 可以建立一個 temporary script：
 
@@ -3341,11 +2689,9 @@ Attempt 2
 → PASS
 ```
 
-非常適合 Retry Integration Test。
+可用於重試整合測試。
 
----
-
-# 83. Integration Expected Result
+## Integration Expected Result
 
 Policy：
 
@@ -3355,7 +2701,7 @@ retry:
   delay_seconds: 0
 ```
 
-Expected：
+預期結果：
 
 ```text
 Attempt 1 = FAILED
@@ -3373,9 +2719,7 @@ Final Run = PASSED
 
 如果 Artifact Validation 也通過。
 
----
-
-# 84. Testing Retry with Timeout
+## Testing Retry with Timeout
 
 另一個重要案例：
 
@@ -3401,43 +2745,23 @@ v1.5 Retry
 v1.6 Timeout/Cancellation
 ```
 
----
+## Retry 不應和 ArtifactValidator 耦合
 
-# 85. Retry 不應和 ArtifactValidator 耦合
+Unit Test 中可以驗證：`RetryExecutor`
 
-Unit Test 中可以驗證：
+完全不需要：`ArtifactValidator`
 
-```text
-RetryExecutor
-```
-
-完全不需要：
-
-```text
-ArtifactValidator
-```
-
-而：
-
-```text
-ArtifactValidator
-```
+而：`ArtifactValidator`
 
 也完全不知道 Retry 發生過。
 
-最後只有：
-
-```text
-RunResult
-```
+最後只有：`RunResult`
 
 同時擁有兩邊資訊。
 
 這表示 v1.4.1 建立的 Boundary 是正確的。
 
----
-
-# 86. Component Architecture
+## Component Architecture
 
 ```mermaid
 flowchart LR
@@ -3501,9 +2825,7 @@ flowchart LR
     RunResult --> Reporter
 ```
 
----
-
-# 87. Dependency Direction
+## Dependency Direction
 
 建議：
 
@@ -3518,41 +2840,19 @@ reporter.py
 runner.py
 ```
 
-RetryPolicy：
+RetryPolicy：`models.py`
 
-```text
-models.py
-```
+Retry loop：`runner.py`
 
-Retry loop：
+單次 process execution：`executor.py`
 
-```text
-runner.py
-```
+不要讓：`executor.py`
 
-單次 process execution：
-
-```text
-executor.py
-```
-
-不要讓：
-
-```text
-executor.py
-```
-
-開始 import：
-
-```text
-DeviceTestRunner
-```
+開始 import：`DeviceTestRunner`
 
 或 Lifecycle policy。
 
----
-
-# 88. 建議目錄
+## 建議目錄
 
 v1.5.0 不一定需要新增新的 module。
 
@@ -3593,17 +2893,11 @@ device-test-runner/
     └── architecture_v1.5.0.md
 ```
 
-如果 Retry 未來繼續擴大，再考慮：
-
-```text
-retry.py
-```
+如果 Retry 未來繼續擴大，再考慮：`retry.py`
 
 目前先不必過度拆 module。
 
----
-
-# 89. v1.4.1 與 v1.5.0 比較
+## v1.4.1 與 v1.5.0 比較
 
 | 架構項目                       | v1.4.1                  | v1.5.0             |
 | -------------------------- | ----------------------- | ------------------ |
@@ -3625,9 +2919,7 @@ retry.py
 | Lifecycle Failure          | First execution failure | Final step failure |
 | Execution Engine           | Process-aware           | Policy-aware       |
 
----
-
-# 90. Version Evolution
+## Version Evolution
 
 ```mermaid
 flowchart LR
@@ -3655,67 +2947,27 @@ flowchart LR
     V15 --> G[Recover from Failure]
 ```
 
----
+## Architecture Evolution 的真正意義
 
-# 91. Architecture Evolution 的真正意義
+一路從 v1.0 到 v1.5，可以看到 Runner 不斷增加的是：`Decision Making`
 
-一路從 v1.0 到 v1.5，可以看到 Runner 不斷增加的是：
+v1.0：`Run this command.`
 
-```text
-Decision Making
-```
+v1.1：`Run these commands in order.`
 
-v1.0：
+v1.3：`Run them according to lifecycle.`
 
-```text
-Run this command.
-```
+v1.3.5：`Manage the process while it is running.`
 
-v1.1：
+v1.4：`Determine whether the produced result is valid.`
 
-```text
-Run these commands in order.
-```
+v1.5：`Determine what to do when execution fails.`
 
-v1.3：
+所以 Runner 的價值越來越不是：`subprocess wrapper`
 
-```text
-Run them according to lifecycle.
-```
+而是：`Execution Policy + Orchestration`
 
-v1.3.5：
-
-```text
-Manage the process while it is running.
-```
-
-v1.4：
-
-```text
-Determine whether the produced result is valid.
-```
-
-v1.5：
-
-```text
-Determine what to do when execution fails.
-```
-
-所以 Runner 的價值越來越不是：
-
-```text
-subprocess wrapper
-```
-
-而是：
-
-```text
-Execution Policy + Orchestration
-```
-
----
-
-# 92. v1.5.0 最重要的 Boundary
+## v1.5.0 最重要的 Boundary
 
 這一版最重要的架構分界：
 
@@ -3725,7 +2977,7 @@ RetryPolicy
 CommandStepExecutor
 ```
 
-也就是：
+具體規則：
 
 ```text
 Policy
@@ -3733,25 +2985,15 @@ Policy
 Mechanism
 ```
 
-CommandStepExecutor 是 mechanism：
+CommandStepExecutor 是 mechanism：`如何執行一次？`
 
-```text
-如何執行一次？
-```
+RetryPolicy 是 policy：`失敗後要不要再執行？`
 
-RetryPolicy 是 policy：
-
-```text
-失敗後要不要再執行？
-```
-
-這是 Test Platform / Operating System / Distributed System 中非常重要的設計概念：
+測試平台、作業系統與分散式系統也使用此設計：
 
 > **Separate policy from mechanism.**
 
----
-
-# 93. Policy vs Mechanism
+## Policy vs Mechanism
 
 ```mermaid
 flowchart TD
@@ -3787,15 +3029,9 @@ Error-based Retry
 Artifact-aware Retry
 ```
 
-而不需要修改：
+而不需要修改：`Popen streaming engine`
 
-```text
-Popen streaming engine
-```
-
----
-
-# 94. v1.5.0 架構摘要
+## v1.5.0 架構摘要
 
 ```mermaid
 flowchart TD
@@ -3855,9 +3091,7 @@ flowchart TD
     Status --> Report
 ```
 
----
-
-# 95. v1.5.0 核心摘要
+## v1.5.0 核心摘要
 
 Device Test Runner v1.5.0 可以濃縮為：
 
@@ -3910,21 +3144,13 @@ RunResult.status
 report.json
 ```
 
-v1.5.0 最重要的架構進化不是「多跑幾次 command」，而是正式把：
+v1.5.0 最重要的架構進化不是「多跑幾次 command」，而是正式把：`Mechanism`
 
-```text
-Mechanism
-```
-
-與：
-
-```text
-Policy
-```
+與：`Policy`
 
 拆開。
 
-也就是：
+具體規則：
 
 ```text
 CommandStepExecutor

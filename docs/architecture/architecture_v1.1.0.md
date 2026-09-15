@@ -1,53 +1,14 @@
 # Device Test Runner Architecture v1.1
 
-## 1. 版本目標
+本文件說明 v1.1.0 的架構、資料流與設計限制。範例與介面以該版本為準；目前使用方式請見 [README](../../README.md)。
 
-Device Test Runner v1.1 延續 v1.0 的架構，將原本只能執行一個 Command 的 Workflow，擴充成由多個 `WorkflowStep` 組成的 Workflow。
+## 版本用途
 
-v1.0：
+v1.1 將單一命令的 workflow 擴充為多個 `WorkflowStep`。Runner 依序執行各步驟，為每一步建立 `StepResult`，再彙整成 `RunResult`。
 
-```text
-Test Case
-   ↓
-Workflow
-   ↓
-Single Command
-```
+設定仍由 `ConfigLoader` 載入，外部命令仍由 `CommandExecutor` 執行。主要變更在 workflow 的結構與結果的彙整方式。
 
-v1.1：
-
-```text
-Test Case
-   ↓
-Workflow
-   ├── WorkflowStep 1
-   ├── WorkflowStep 2
-   └── WorkflowStep N
-```
-
-v1.1 的完整資料流：
-
-```text
-YAML Configuration
-        ↓
-ConfigLoader
-        ↓
-RunnerConfig
-        ↓
-DeviceTestRunner
-        ↓
-WorkflowStep
-        ↓
-CommandExecutor
-        ↓
-StepResult
-        ↓
-RunResult
-```
-
----
-
-## 2. v1.1 的主要改變
+## v1.1 的主要改變
 
 v1.1 包含兩個核心變更。
 
@@ -79,11 +40,7 @@ workflow:
 
 ### 執行結果分成兩層
 
-v1.0：
-
-```text
-RunResult
-```
+v1.0：`RunResult`
 
 v1.1：
 
@@ -94,9 +51,7 @@ RunResult
 
 每個 Workflow Step 都有自己的執行結果，最後再由 `RunResult` 彙整整個 Test Case。
 
----
-
-## 3. v1.1 YAML Configuration
+## v1.1 YAML Configuration
 
 ```yaml
 test_case:
@@ -146,9 +101,7 @@ workflow.steps
 List[WorkflowStep]
 ```
 
----
-
-## 4. v1.1 Domain Models
+## v1.1 Domain Models
 
 ```python
 from dataclasses import dataclass
@@ -222,9 +175,7 @@ class RunResult:
         )
 ```
 
----
-
-## 5. Domain Model 結構
+## Domain Model 結構
 
 ```mermaid
 classDiagram
@@ -291,9 +242,7 @@ classDiagram
     RunResult *-- StepResult : contains
 ```
 
----
-
-## 6. Aggregate 結構
+## Aggregate 結構
 
 從 Domain Model 的角度來看，v1.1 有兩個主要 Aggregate。
 
@@ -331,9 +280,7 @@ flowchart LR
     Runner --> Result
 ```
 
----
-
-## 7. v1.1 系統架構
+## v1.1 系統架構
 
 ```mermaid
 flowchart TD
@@ -375,9 +322,7 @@ flowchart TD
     RunResult --> User
 ```
 
----
-
-## 8. Layered Architecture
+## Layered Architecture
 
 ```mermaid
 flowchart LR
@@ -428,9 +373,7 @@ flowchart LR
     Runner --> RunResult
 ```
 
----
-
-## 9. 各元件責任
+## 各元件責任
 
 | 元件                 | 責任                        |
 | ------------------ | ------------------------- |
@@ -446,9 +389,7 @@ flowchart LR
 | `StepResult`       | 保存單一步驟執行結果                |
 | `RunResult`        | 彙整完整 Test Case 結果         |
 
----
-
-## 10. ConfigLoader 流程
+## ConfigLoader 流程
 
 ```mermaid
 flowchart TD
@@ -507,9 +448,7 @@ Workflow(
 )
 ```
 
----
-
-## 11. ConfigLoader 的責任邊界
+## ConfigLoader 的責任邊界
 
 ConfigLoader 負責：
 
@@ -529,9 +468,7 @@ ConfigLoader 不負責：
 * 建立 RunResult
 * 寫入 artifact
 
----
-
-## 12. WorkflowStep 的角色
+## WorkflowStep 的角色
 
 `WorkflowStep` 是 v1.1 的最小執行單位。
 
@@ -564,9 +501,7 @@ WorkflowStep(
 )
 ```
 
----
-
-## 13. `type` 欄位的架構意義
+## `type` 欄位的架構意義
 
 v1.1 目前只有：
 
@@ -596,9 +531,7 @@ if step.type != "command":
     raise ValueError(f"Unsupported step type: {step.type}")
 ```
 
----
-
-## 14. CommandExecutor 的責任
+## CommandExecutor 的責任
 
 v1.1 的 Executor 一次只執行一個 `WorkflowStep`。
 
@@ -641,9 +574,7 @@ Executor 不負責：
 * 讀取 YAML
 * 管理完整 Test Case
 
----
-
-## 15. Executor 執行流程
+## Executor 執行流程
 
 ```mermaid
 flowchart TD
@@ -673,9 +604,7 @@ flowchart TD
     Terminate --> TimeoutResult
 ```
 
----
-
-## 16. StepResult
+## StepResult
 
 每一個 WorkflowStep 都會產生一個 StepResult。
 
@@ -737,9 +666,7 @@ StepResult(
 )
 ```
 
----
-
-## 17. DeviceTestRunner 的責任
+## DeviceTestRunner 的責任
 
 `DeviceTestRunner` 是 v1.1 的 Orchestration Layer。
 
@@ -753,9 +680,7 @@ StepResult(
 6. 根據執行結果決定是否繼續
 7. 建立 `RunResult`
 
----
-
-## 18. Runner 執行流程
+## Runner 執行流程
 
 ```mermaid
 flowchart TD
@@ -783,9 +708,7 @@ flowchart TD
     Stop --> Complete
 ```
 
----
-
-## 19. Runner Pseudocode
+## Runner Pseudocode
 
 ```python
 class DeviceTestRunner:
@@ -825,9 +748,7 @@ class DeviceTestRunner:
 建立 RunResult
 ```
 
----
-
-## 20. Sequence Diagram
+## Sequence Diagram
 
 ```mermaid
 sequenceDiagram
@@ -866,9 +787,7 @@ sequenceDiagram
     Runner-->>User: RunResult
 ```
 
----
-
-## 21. Fail-fast 策略
+## Fail-fast 策略
 
 v1.1 預設採用 fail-fast。
 
@@ -906,9 +825,7 @@ run_scenario
 
 如果 `setup_device` 失敗，繼續執行 `run_scenario` 通常沒有意義。
 
----
-
-## 22. RunResult Aggregation
+## RunResult Aggregation
 
 完整 Test Case 的執行結果由多個 `StepResult` 組成。
 
@@ -954,9 +871,7 @@ RunResult(
 )
 ```
 
----
-
-## 23. `success` 與 `passed` 的關係
+## `success` 與 `passed` 的關係
 
 目前 `RunResult` 同時有：
 
@@ -975,7 +890,7 @@ def passed(self) -> bool:
     )
 ```
 
-概念上：
+設計概念：
 
 * `success` 是建立 RunResult 時保存的狀態
 * `passed` 是根據 StepResult 動態計算的狀態
@@ -1053,9 +968,7 @@ class RunResult:
 
 但如果 v1.1 的既有程式碼已經使用 `success` 欄位，可以先維持原設計。
 
----
-
-## 24. ArtifactConfig 的角色
+## ArtifactConfig 的角色
 
 ```python
 @dataclass
@@ -1097,9 +1010,7 @@ flowchart LR
 
 v1.1 可以先處理目錄建立，真正的 Artifact Collector 可留到後續版本。
 
----
-
-## 25. DeviceInfo 的角色
+## DeviceInfo 的角色
 
 ```python
 @dataclass
@@ -1138,9 +1049,7 @@ command: "adb -s {device.serial} shell getprop"
 
 但這不屬於 v1.1 的核心功能。
 
----
-
-## 26. 建議目錄結構
+## 建議目錄結構
 
 ```text
 device-test-runner/
@@ -1173,9 +1082,7 @@ device-test-runner/
     └── architecture_v1.1.md
 ```
 
----
-
-## 27. 測試架構
+## 測試架構
 
 ```mermaid
 flowchart TD
@@ -1191,9 +1098,7 @@ flowchart TD
     RunnerTest --> IntegrationTest
 ```
 
----
-
-## 28. Domain Model Tests
+## Domain Model Tests
 
 驗證：
 
@@ -1219,9 +1124,7 @@ Step 2 success = False
 RunResult.passed = False
 ```
 
----
-
-## 29. ConfigLoader Tests
+## ConfigLoader Tests
 
 驗證完整 YAML 是否正確轉換：
 
@@ -1245,9 +1148,7 @@ RunnerConfig
 * 每個 Step 的 timeout
 * `config.artifact.output_dir`
 
----
-
-## 30. Executor Tests
+## Executor Tests
 
 每個 Executor Test 只關注一個 WorkflowStep。
 
@@ -1269,9 +1170,7 @@ StepResult
 * duration 計算
 * unsupported type
 
----
-
-## 31. Runner Tests
+## Runner Tests
 
 Runner Test 應使用 Fake Executor，避免真的啟動 subprocess。
 
@@ -1285,9 +1184,7 @@ Runner Test 應使用 Fake Executor，避免真的啟動 subprocess。
 * RunResult 是否包含 Test Case Name
 * RunResult.success 是否正確
 
----
-
-## 32. Integration Test
+## Integration Test
 
 Integration Test 驗證完整資料流：
 
@@ -1334,9 +1231,7 @@ StepResult list
 RunResult
 ```
 
----
-
-## 33. v1.0 與 v1.1 比較
+## v1.0 與 v1.1 比較
 
 | 架構項目            | v1.0               | v1.1                 |
 | --------------- | ------------------ | -------------------- |
@@ -1354,23 +1249,13 @@ RunResult
 | fail-fast       | 不需要                | 支援                   |
 | ArtifactConfig  | 有                  | 有                    |
 
----
-
-## 34. v1.1 架構價值
+## v1.1 架構價值
 
 v1.1 的主要價值不是單純把 YAML 改成 List。
 
-真正的架構變化是：
+真正的架構變化是：`一個大 Script`
 
-```text
-一個大 Script
-```
-
-被拆成：
-
-```text
-多個有名稱、有 timeout、有結果的 WorkflowStep
-```
+被拆成：`多個有名稱、有 timeout、有結果的 WorkflowStep`
 
 因此系統開始具備 Workflow Orchestration 的基本能力：
 
@@ -1381,9 +1266,7 @@ v1.1 的主要價值不是單純把 YAML 改成 List。
 * Runner 可以控制失敗後的行為
 * RunResult 可以顯示具體失敗位置
 
----
-
-## 35. v1.1 架構摘要
+## v1.1 架構摘要
 
 ```mermaid
 flowchart TD

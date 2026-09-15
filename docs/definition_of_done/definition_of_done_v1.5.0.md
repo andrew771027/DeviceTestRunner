@@ -1,6 +1,6 @@
 # Device Test Runner v1.5.0 Definition of Done
 
-Baseline: Git tag `v1.5.0`
+Version baseline: Git tag `v1.5.0`
 
 - [x] RetryConfig and RetryPolicy are implemented.
 - [x] Configuration defaults and invalid values are tested.

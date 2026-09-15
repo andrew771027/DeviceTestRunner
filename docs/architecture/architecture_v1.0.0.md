@@ -1,34 +1,14 @@
 # Device Test Runner Architecture v1.0
 
-## 1. 版本目標
+本文件說明 v1.0.0 的架構、資料流與設計限制。範例與介面以該版本為準；目前使用方式請見 [README](../../README.md)。
 
-Device Test Runner v1.0 的目標，是建立第一條可以完整執行的 Device Test Runner 資料流：
+## 版本用途
 
-```text
-YAML Configuration
-        ↓
-ConfigLoader
-        ↓
-RunnerConfig
-        ↓
-DeviceTestRunner
-        ↓
-CommandExecutor
-        ↓
-External Command
-        ↓
-RunResult
-```
+v1.0 建立從 YAML 設定到執行結果的基本流程。一個 test case 對應一個 workflow，workflow 執行一個命令。Runner 載入設定、啟動外部程序，收集 exit code、stdout、stderr 與執行時間，最後建立 `RunResult`。
 
-v1.0 先處理一個最小執行單位：
+此版本尚未將 workflow 拆成多個 step。
 
-> 一個 Test Case 對應一個 Workflow，一個 Workflow 執行一個 Command。
-
-這個版本尚未將 Workflow 拆成多個 Step。
-
----
-
-## 2. v1.0 的範圍
+## v1.0 的範圍
 
 v1.0 包含：
 
@@ -57,9 +37,7 @@ v1.0 尚未包含：
 * parallel execution
 * remote execution
 
----
-
-## 3. v1.0 YAML 結構
+## v1.0 YAML 結構
 
 ```yaml
 test_case:
@@ -94,9 +72,7 @@ workflow:
   steps:
 ```
 
----
-
-## 4. v1.0 Domain Models
+## v1.0 Domain Models
 
 ```python
 from dataclasses import dataclass
@@ -157,9 +133,7 @@ v1.0 沒有 `WorkflowStep`，因此執行結果也不需要 `StepResult`。
 
 所有執行資訊直接放在 `RunResult` 中。
 
----
-
-## 5. Domain Model 結構
+## Domain Model 結構
 
 ```mermaid
 classDiagram
@@ -220,9 +194,7 @@ RunnerConfig
 └── artifact
 ```
 
----
-
-## 6. 系統架構
+## 系統架構
 
 ```mermaid
 flowchart TD
@@ -245,9 +217,7 @@ flowchart TD
     Runner --> User
 ```
 
----
-
-## 7. 模組責任
+## 模組責任
 
 | 模組                 | 責任                        |
 | ------------------ | ------------------------- |
@@ -257,9 +227,7 @@ flowchart TD
 | `CommandExecutor`  | 執行 Workflow 中的 command    |
 | `RunResult`        | 保存完整 Test Case 執行結果       |
 
----
-
-## 8. 建議目錄結構
+## 建議目錄結構
 
 ```text
 device-test-runner/
@@ -289,9 +257,7 @@ device-test-runner/
     └── architecture_v1.0.md
 ```
 
----
-
-## 9. Configuration Layer
+## Configuration Layer
 
 Configuration Layer 負責將 YAML 資料轉換成 Python Domain Model。
 
@@ -339,9 +305,7 @@ RunnerConfig(
 )
 ```
 
----
-
-## 10. ConfigLoader 的責任
+## ConfigLoader 的責任
 
 `ConfigLoader` 負責：
 
@@ -361,9 +325,7 @@ ConfigLoader 不負責：
 * 判斷 Test Case 是否成功
 * 顯示報表
 
----
-
-## 11. Execution Layer
+## Execution Layer
 
 v1.0 的 Executor 一次執行整個 Workflow。
 
@@ -397,9 +359,7 @@ Executor 負責：
 * 計算 duration
 * 處理 timeout 或執行例外
 
----
-
-## 12. Executor 流程
+## Executor 流程
 
 ```mermaid
 flowchart TD
@@ -416,9 +376,7 @@ flowchart TD
     Terminate --> TimeoutResult[Create Failed RunResult]
 ```
 
----
-
-## 13. Orchestration Layer
+## Orchestration Layer
 
 `DeviceTestRunner` 是 v1.0 的流程協調者。
 
@@ -458,9 +416,7 @@ Runner 負責：
 
 Runner 不應直接操作 `subprocess.run()`。
 
----
-
-## 14. 執行流程
+## 執行流程
 
 ```mermaid
 sequenceDiagram
@@ -490,15 +446,9 @@ sequenceDiagram
     Runner-->>User: RunResult
 ```
 
----
+## Result Model
 
-## 15. Result Model
-
-v1.0 的結果只有一層：
-
-```text
-RunResult
-```
+v1.0 的結果只有一層：`RunResult`
 
 例如：
 
@@ -534,9 +484,7 @@ def passed(self) -> bool:
 一個 Test Case 的結果
 ```
 
----
-
-## 16. ArtifactConfig 的定位
+## ArtifactConfig 的定位
 
 v1.0 已經定義：
 
@@ -579,9 +527,7 @@ Path(config.artifact.output_dir).mkdir(
 * artifact manifest
 * artifact upload
 
----
-
-## 17. 測試架構
+## 測試架構
 
 ```mermaid
 flowchart TD
@@ -645,9 +591,7 @@ Temporary Shell Script
 RunResult
 ```
 
----
-
-## 18. v1.0 的架構限制
+## v1.0 的架構限制
 
 v1.0 的 Workflow 只有一個 command：
 
@@ -688,9 +632,7 @@ Runner 只能知道整個 script 最終成功或失敗，無法知道：
 
 因此，v1.1 將 Workflow 改為由多個 `WorkflowStep` 組成。
 
----
-
-## 19. v1.0 架構摘要
+## v1.0 架構摘要
 
 ```mermaid
 flowchart TD

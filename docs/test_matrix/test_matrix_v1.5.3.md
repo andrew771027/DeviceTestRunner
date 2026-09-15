@@ -1,6 +1,6 @@
 # Device Test Runner v1.5.3 Test Matrix
 
-Release theme: Selective Retry and Artifact Criticality
+Version scope: Selective Retry and Artifact Criticality
 
 | Requirement | Scenario | Level | Expected result | Evidence |
 | --- | --- | --- | --- | --- |
@@ -19,7 +19,7 @@ Release theme: Selective Retry and Artifact Criticality
 | Version reporting | Run completes | Integration | `runner_version` is `1.5.3` | `tests/test_integration/test_integration.py`, `tests/test_integration/test_integration_artifact_validation.py` |
 | Regression | Existing lifecycle, validation and classification paths run | Unit + Integration | Existing contracts remain green | `tests/test_unit/`, `tests/test_integration/` |
 
-## Verification Baseline
+## Verification baseline
 
 * Command: `poetry run pytest -q`
 * Result: **134 passed in 25.45s** (verified 2026-09-04)

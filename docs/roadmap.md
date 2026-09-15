@@ -1,10 +1,14 @@
 # Device Test Runner Roadmap
 
-## 1. Project Vision
+目前已實作 v1.6.0 的基本取消功能。接下來依序處理程序終止、run 逾時與取消後的清理，再加入 YAML 變數與 recorder 管理。
 
-Device Test Runner 是一個針對 Device Validation Domain 設計的測試流程執行器。
+本文件保留各版本的功能規劃。`Completed` 表示該節記錄的功能已完成；`Planned` 與 `Future` 表示尚未實作。實際發佈條件與驗證結果請見各版本的完成條件文件。
 
-它的目標不是取代現有的 Google Scripts Repo、硬體量測工具或各 Lab 既有的測試腳本，而是提供一個統一的 orchestration layer，負責：
+## 專案用途
+
+Device Test Runner 使用設定檔安排裝置測試流程。
+
+各 Lab 可沿用既有腳本與量測工具。Runner 統一安排執行順序並保存結果，負責：
 
 * 載入測試設定
 * 執行測試生命週期
@@ -15,15 +19,13 @@ Device Test Runner 是一個針對 Device Validation Domain 設計的測試流�
 * 支援 recorder 與 scenario 的協作
 * 未來延伸至 remote execution 與 controller／worker 架構
 
-Device Test Runner 將盡量保持 domain script 與 runner framework 分離。
+裝置操作由 domain script 負責，流程控制由 Runner 負責。
 
 各 Lab 可以保留既有的 Bash、Python、ADB、Fastboot、Appium 或其他測試工具，並由 Device Test Runner 統一管理執行流程與結果。
 
----
+## 設計原則
 
-## 2. Design Principles
-
-### 2.1 Orchestration over Domain Logic
+### Orchestration over Domain Logic
 
 Device Test Runner 負責流程控制，但不應承擔所有硬體測試細節。
 
@@ -35,11 +37,11 @@ Device Test Runner 負責流程控制，但不應承擔所有硬體測試細節�
 * Parser 負責解析 domain-specific measurement data
 * Device Test Runner 負責安排以上元件的執行順序、狀態與 artifacts
 
-### 2.2 Configuration-Driven
+### Configuration-Driven
 
 測試流程應透過 YAML 或其他 configuration definition 描述，而不是把每個 test case 寫死在 runner 裡。
 
-### 2.3 Artifact-First
+### Artifact-First
 
 每次執行都應留下可追蹤的 artifacts，包括：
 
@@ -52,7 +54,7 @@ Device Test Runner 負責流程控制，但不應承擔所有硬體測試細節�
 * validation results
 * execution summary
 
-### 2.4 Failure-Aware Lifecycle
+### Failure-Aware Lifecycle
 
 即使某個步驟失敗，runner 仍需正確處理：
 
@@ -62,7 +64,7 @@ Device Test Runner 負責流程控制，但不應承擔所有硬體測試細節�
 * artifact finalization
 * failure reporting
 
-### 2.5 Incremental Evolution
+### Incremental Evolution
 
 專案先完成單機版 lifecycle orchestration，再逐步加入：
 
@@ -75,17 +77,15 @@ Device Test Runner 負責流程控制，但不應承擔所有硬體測試細節�
 * controller／worker
 * keyword-driven test definition
 
----
+## 版本規劃
 
-# 3. Version Roadmap
+### v1.0 — Basic YAML Runner
 
-## v1.0 — Basic YAML Runner
-
-### Goal
+#### 目標
 
 建立最小可執行的 Device Test Runner。
 
-### Core Features
+#### 功能範圍
 
 * YAML configuration
 * RunnerConfig model
@@ -98,7 +98,7 @@ Device Test Runner 負責流程控制，但不應承擔所有硬體測試細節�
 * DeviceTestRunner orchestration
 * 基本 PASSED／FAILED 判定
 
-### Learning Focus
+#### 相關技術
 
 * Configuration loading
 * Data model design
@@ -106,19 +106,17 @@ Device Test Runner 負責流程控制，但不應承擔所有硬體測試細節�
 * orchestration basics
 * input／output flow
 
-### Status
+#### 狀態
 
 Completed
 
----
+### v1.1 — Naming and Model Refactoring
 
-## v1.1 — Naming and Model Refactoring
-
-### Goal
+#### 目標
 
 統一 YAML、Python models、runner 與 tests 之間的命名。
 
-### Core Features
+#### 功能範圍
 
 * 調整 model 命名
 * 移除容易與 pytest collection 衝突的名稱
@@ -127,26 +125,24 @@ Completed
 * 更新 unit tests
 * 更新 integration tests
 
-### Learning Focus
+#### 相關技術
 
 * Naming consistency
 * Refactoring
 * backward compatibility
 * test maintenance
 
-### Status
+#### 狀態
 
 Completed
 
----
+### v1.2 — Artifact Management
 
-## v1.2 — Artifact Management
-
-### Goal
+#### 目標
 
 將測試輸出集中交由 ArtifactManager 管理。
 
-### Core Features
+#### 功能範圍
 
 * ArtifactManager
 * 建立每次 execution 的 run directory
@@ -157,7 +153,7 @@ Completed
 * 彙整 test case、device 與 execution status
 * Artifact directory naming convention
 
-### Expected Output
+#### 輸出範例
 
 ```text
 artifacts/
@@ -168,7 +164,7 @@ artifacts/
     └── stderr/
 ```
 
-### Learning Focus
+#### 相關技術
 
 * Artifact ownership
 * Output organization
@@ -176,19 +172,17 @@ artifacts/
 * serialization
 * separation of concerns
 
-### Status
+#### 狀態
 
 Completed
 
----
+### v1.3 — Test Lifecycle
 
-## v1.3 — Test Lifecycle
-
-### Goal
+#### 目標
 
 從單一 workflow steps 提升為完整的 test lifecycle orchestration。
 
-### Lifecycle Stages
+#### Lifecycle Stages
 
 ```text
 global_setup
@@ -202,7 +196,7 @@ teardown
 global_teardown
 ```
 
-### Core Features
+#### 功能範圍
 
 * LifecycleConfig
 * LifecycleSteps
@@ -215,7 +209,7 @@ global_teardown
 * teardown execution foundation
 * lifecycle report structure
 
-### Learning Focus
+#### 相關技術
 
 * Test lifecycle
 * stage orchestration
@@ -223,19 +217,17 @@ global_teardown
 * state transitions
 * status aggregation
 
-### Status
+#### 狀態
 
 Completed
 
----
+### v1.4 — Artifact Validation
 
-## v1.4 — Artifact Validation
-
-### Goal
+#### 目標
 
 在測試完成後，自動驗證必要 artifacts 是否正確產生。
 
-### Core Features
+#### 功能範圍
 
 * ArtifactValidator
 * ArtifactValidationResult
@@ -250,7 +242,7 @@ Completed
 * Validation failure 影響最終 run status
 * Validation results 寫入 result.json
 
-### Example Validation Rules
+#### Example Validation Rules
 
 ```yaml
 artifact:
@@ -267,7 +259,7 @@ artifact:
         min_size_bytes: 1024
 ```
 
-### Expected Report
+#### Expected Report
 
 ```json
 {
@@ -292,7 +284,7 @@ artifact:
 }
 ```
 
-### Learning Focus
+#### 相關技術
 
 * Validation abstraction
 * policy separation
@@ -300,19 +292,17 @@ artifact:
 * status aggregation
 * post-execution verification
 
-### Status
+#### 狀態
 
 Completed
 
----
+### v1.5 — Retry Policy
 
-## v1.5 — Retry Policy
-
-### Goal
+#### 目標
 
 針對可恢復的失敗提供可設定的 retry mechanism。
 
-### Core Features
+#### 功能範圍
 
 * RetryPolicy
 * maximum attempts
@@ -324,7 +314,7 @@ Completed
 * retry configuration validation
 * 未提供 retry config 時預設只執行一次
 
-### Example Configuration
+#### Example Configuration
 
 ```yaml
 retry:
@@ -334,7 +324,7 @@ retry:
 
 目前所有失敗的 command attempt 都使用相同 retry policy。依 exit code 或 error category 決定是否重試，將在後續版本擴充。
 
-### Future Error Classification
+#### Future Error Classification
 
 初期可區分：
 
@@ -346,7 +336,7 @@ retry:
 * validation failure
 * non-retryable configuration error
 
-### Learning Focus
+#### 相關技術
 
 * Policy objects
 * attempt tracking
@@ -354,19 +344,17 @@ retry:
 * error classification
 * idempotency
 
-### Status
+#### 狀態
 
 Completed
 
----
+### v1.5.1 — Artifact-Aware Retry
 
-## v1.5.1 — Artifact-Aware Retry
-
-### Goal
+#### 目標
 
 讓 artifact validation 成為 step attempt 成功條件的一部分，使 command 成功但輸出 artifact 尚未就緒或內容無效時，仍可依 retry policy 重試該步驟。
 
-### Core Features
+#### 功能範圍
 
 * `after_step` 將 artifact validation rule 綁定到指定 step
 * `retry_on_failure` 明確控制 artifact failure 是否觸發 retry
@@ -376,7 +364,7 @@ Completed
 * 非 retry-enabled rules 保留在 lifecycle 結束後的 final validation
 * artifact retry exhausted 時停止後續 scenario steps，並維持 teardown guarantees
 
-### Example Configuration
+#### Example Configuration
 
 ```yaml
 retry:
@@ -398,19 +386,17 @@ artifact:
         min_rows: 2
 ```
 
-### Status
+#### 狀態
 
 Completed
 
----
+### v1.5.2 — Failure Classification
 
-## v1.5.2 — Failure Classification
-
-### Goal
+#### 目標
 
 將 process 與 artifact failure 轉換為一致、可報告且可供 retry policy 使用的 failure type，提升 device test failure triage 的速度與可追蹤性。
 
-### Core Features
+#### 功能範圍
 
 * `FailureClassifier`
 * `NONE`、`TIMEOUT`、`DEVICE_OFFLINE`、`PROCESS_ERROR`、`ARTIFACT_MISSING`、`ARTIFACT_INVALID`
@@ -420,19 +406,17 @@ Completed
 * per-attempt failure type 寫入 `StepAttemptResult` 與 `result.json`
 * real subprocess integration coverage
 
-### Status
+#### 狀態
 
 Completed
 
----
+### v1.5.3 — Selective Retry and Artifact Criticality
 
-## v1.5.3 — Selective Retry and Artifact Criticality
-
-### Goal
+#### 目標
 
 讓使用者依 failure type 精確控制 retry，並區分會阻擋測試結果的 required artifact 與僅供診斷的 optional artifact。
 
-### Core Features
+#### 功能範圍
 
 * `retry.retry_on` 接受 `timeout`、`device_offline`、`process_error`、`artifact_missing`、`artifact_invalid`
 * 未設定 `retry_on` 時不重試；重複值去重，未知值與 `none` 拒絕載入
@@ -441,19 +425,17 @@ Completed
 * retry cleanup 僅移除 run directory 內的 required targets
 * summary 新增 `failed_required_artifact_rules`
 
-### Status
+#### 狀態
 
 Completed
 
----
+### v1.6.0 — Cancellation Foundation
 
-## v1.6.0 — Cancellation Foundation
-
-### Goal
+#### 目標
 
 在既有 timeout 與 selective retry 上，提供由 Python 呼叫端控制的取消流程及可追蹤結果。
 
-### Implemented Features
+#### Implemented Features
 
 * `CancellationToken`（threading.Event）、可重複 cancel 與 exception helper。
 * Runner 在一般 stage／attempt 邊界檢查取消；executor polling 區分 cancellation 與 timeout。
@@ -463,7 +445,7 @@ Completed
 * `cancel_requested`、attempt `timed_out`／`cancelled`、step `cancelled`、`cancelled_steps` 與 `CANCELLED` status。
 * 本機完整 suite：153 passed in 39.39s（2026-09-12，Python 3.14）；150 個函式均有 reviewed Given／When／Then。
 
-### Remaining Work
+#### 待完成項目
 
 * v1.6.1：process-group／child cleanup、輸出收尾、retry process cleanup 與 SIGINT。
 * v1.6.2：run-level deadline 與 timeout cancellation request。
@@ -471,21 +453,19 @@ Completed
 * `configs/sample.yaml` 全數通過的示範流程。
 * Tag、GitHub Release、issue closure 與手動文件 CI 成功執行的驗證。
 
-### Status
+#### 狀態
 
 Foundation implemented and locally tested; release pending. 不將完整 Timeout and Cancellation guarantees 標記為完成。
 
 詳細證據：[Architecture](architecture/architecture_v1.6.0.md)、[Test Matrix](test_matrix/test_matrix_v1.6.0.md)、[Definition of Done](definition_of_done/definition_of_done_v1.6.0.md)。
 
----
+### v1.6.1 — Safe Process Termination
 
-## v1.6.1 — Safe Process Termination
-
-### Goal
+#### 目標
 
 補齊 Process Lifecycle／Cleanup，確保取消、timeout 與 retry 不留下仍在執行的程序或無法結束的輸出 reader。
 
-### Core Features
+#### 功能範圍
 
 * terminate → grace period → kill，提供 graceful cancellation。
 * Process group termination 與 child process cleanup。
@@ -494,64 +474,60 @@ Foundation implemented and locally tested; release pending. 不將完整 Timeout
 * Ctrl+C／SIGINT 轉為 cancellation request，沿用 runner 取消流程。
 * 可選：第二次 Ctrl+C force exit；需明確說明強制離開可能中斷 cleanup 與 report 寫入。
 
-### Relationship to v1.6.0
+#### Relationship to v1.6.0
 
 v1.6.0 已有直接 `Popen` 程序的 terminate → 固定兩秒等待 → kill，以及正常路徑的 stdout／stderr thread join。本版本擴充到 process group、後代程序與各種結束路徑的收尾保證，不重做 cancellation token。
 
 目前使用 `shell=True`，沒有建立獨立 process group；reader join 沒有等待上限。Runner 雖然等待 executor 返回才 retry，但不代表前一次的後代程序已清乾淨；既有 retry cleanup 主要處理 required artifact targets。`main.py` 尚未接上 SIGINT。
 
-### Acceptance Focus
+#### 驗收重點
 
 * 取消、step timeout 與 retry 後沒有殘留的受管理子程序。
 * 拒絕 graceful termination 的程序會在 grace period 後被強制終止。
 * stdout／stderr 收尾可完成，下一次 attempt 不與前一次程序重疊。
 * 明確定義支援平台的 process-group 與 signal 行為；SIGTERM 接線另行決定範圍。
 
-### Status
+#### 狀態
 
 Planned
 
----
+### v1.6.2 — Run-level Timeout
 
-## v1.6.2 — Run-level Timeout
-
-### Goal
+#### 目標
 
 在既有 per-step timeout 之外，限制一般 run 工作的總執行時間，並透過統一 cancellation 流程停止工作。
 
-### Core Features
+#### 功能範圍
 
 * 新增 `run_timeout_seconds` 設定與驗證，未設定時維持既有行為。
 * Run timeout 轉為 cancellation request，停止一般 stages、執行中的 command 與 retry delay。
 * 明確區分 step timeout 與 run timeout，報告保留取消原因。
 * Step timeout 可依 `retry_on` 重試；run timeout 不應因下一次 attempt 而重設 deadline 或繼續一般工作。
 
-### Relationship to v1.6.0
+#### Relationship to v1.6.0
 
 v1.6.0 只有 `timeout_second` 的 step deadline，沒有 run deadline。現有 token 只有取消狀態，`cancel_requested` 也不記錄原因，因此需要擴充原因資訊，避免將 run timeout 和使用者取消混為一談。
 
 相容性方向：沿用 cancellation 執行路徑；保留既有 attempt `timed_out` 對 step timeout 的意義。Run-level 原因欄位與最終 status 的 schema 在實作時明確定義，不能僅將 run timeout 冒充為某一步的 TIMEOUT。
 
-### Acceptance Focus
+#### 驗收重點
 
 * 多個未超時的 steps 累計仍可觸發 run timeout。
 * Retry delay 與 attempts 共用同一個 run deadline。
 * Run deadline 停止一般工作後仍進入 cleanup；cleanup 使用 v1.6.3 的獨立 scope／timeout。
 * 明確定義計時起點、涵蓋階段與 report finalization 邊界；run timeout 不等同整個程序必須立即退出。
 
-### Status
+#### 狀態
 
 Planned
 
----
+### v1.6.3 — Cancellation-aware Cleanup
 
-## v1.6.3 — Cancellation-aware Cleanup
-
-### Goal
+#### 目標
 
 將 cancellation 後的 cleanup 從現有 best effort 路由提升為明確的 scope、時間限制與 partial artifact／report policy。
 
-### Core Features
+#### 功能範圍
 
 * Cancellation 後執行符合 lifecycle 條件的 teardown 與 global_teardown。
 * Teardown 獨立 cancellation scope，不直接沿用已取消的一般工作 token。
@@ -559,7 +535,7 @@ Planned
 * Partial artifact／report policy：保留已完成 attempt 與輸出，說明未完成或未產生 artifact 的判定與報告方式。
 * 保留主要取消原因及 cleanup failure／timeout，避免清理結果覆蓋原始原因。
 
-### Relationship to v1.6.0
+#### Relationship to v1.6.0
 
 v1.6.0 已在進入 setup 後的取消路徑執行 teardown，並對每個 cleanup attempt 建立新 token；cleanup command 也已有一般 step timeout。這些是本版本的基礎，不是全新功能。
 
@@ -567,20 +543,18 @@ v1.6.0 已在進入 setup 後的取消路徑執行 teardown，並對每個 clean
 
 目前 run 結束後仍驗證所有 artifact rules，missing required artifacts 可與 CANCELLED 並存。新的 partial policy 應保留診斷證據，明確決定哪些規則執行或標記未完成，不默默將缺失 artifact 改為通過。
 
-### Acceptance Focus
+#### 驗收重點
 
 * 覆蓋 run 開始前、global_setup 中、global_setup 完成邊界、setup／scenario 中及 retry delay 的取消路由。
 * 不將「取消後 teardown」解讀為所有情況無條件執行：尚未取得資源的階段應依 lifecycle contract 決定清理責任。
 * 一般 run 已取消或逾時時，cleanup 仍可執行，但受自己的 timeout 限制。
 * Cleanup 失敗、超時或 partial artifact 不會遺失原始取消原因；正常受控收尾可寫出 report。
 
-### Status
+#### 狀態
 
 Planned
 
----
-
-### v1.6.x Scope Alignment
+#### v1.6.x Scope Alignment
 
 | 項目 | v1.6.0 現況 | 後續版本責任 |
 | --- | --- | --- |
@@ -593,19 +567,17 @@ Planned
 | teardown timeout | 已套用一般 step timeout | v1.6.3 定義 cleanup 整體時間預算 |
 | partial report | 已保留 attempt 輸出並做 final validation | v1.6.3 明確制定 partial policy 與 finalization |
 
-三個版本可依序建立在 v1.6.0 上，沒有必然衝突；重疊項目應視為既有基礎的強化。需特別對齊 run deadline 與 cleanup deadline，以及 step timeout 與 run cancellation 的報告語意。
+三個版本依序擴充 v1.6.0。實作時需對齊 run 與 cleanup 的截止時間，並在報告中區分 step timeout 與 run cancellation。
 
----
+### v1.7.x — YAML Variables, Environment and Runtime Context
 
-## v1.7.x — YAML Variables, Environment and Runtime Context
-
-### Goal
+#### 目標
 
 讓 YAML 可重用靜態參數、設定 command environment，並引用 runner 產生的執行資訊，減少 scripts 與 configuration 中重複的路徑及參數。
 
 安排在 v1.6.3 之後、v1.8 Recorder Lifecycle 之前：先穩定 attempt 與 cleanup 的生命週期，再定義 context 的有效範圍；後續 recorder、hooks 與 job model 可共用這套設定能力。
 
-### Core Features
+#### 功能範圍
 
 | 能力 | 責任 | 解析時機 |
 | --- | --- | --- |
@@ -619,30 +591,30 @@ Planned
 * Runtime context 為唯讀；初期範圍包含 run ID、run artifact directory、stage、step name、attempt number。
 * 不使用任意 Python expression、eval 或 command substitution 作為模板功能。
 
-### v1.7.0 — Static Variables
+#### v1.7.0 — Static Variables
 
-#### Goal
+##### 目標
 
 載入 YAML 時替換固定參數，建立後續 Environment 與 Runtime Context 共用的解析規則。
 
-#### Scope and Acceptance
+##### 範圍與驗收條件
 
 * 支援 `variables` 與 `vars` namespace，定義可引用的設定欄位。
 * 支援重複引用、literal escaping 與明確的缺值錯誤；偵測巢狀引用中的循環。
 * 區分完整 scalar 引用與字串內插，替換後仍執行欄位型別驗證。
 * 不含變數語法的既有 YAML 維持相容；不執行任意 expression 或 shell command。
 
-#### Status
+##### 狀態
 
 Planned
 
-### v1.7.1 — Environment
+#### v1.7.1 — Environment
 
-#### Goal
+##### 目標
 
 在靜態變數基礎上提供 host、run、step environment 設定與一致的覆寫順序。
 
-#### Scope and Acceptance
+##### 範圍與驗收條件
 
 * 每次 run 建立 host environment snapshot，以 `env` namespace 引用。
 * 合併順序為 host snapshot → run environment → step environment；不修改 host `os.environ`。
@@ -650,17 +622,17 @@ Planned
 * 保留 `DEVICE_TEST_RUNNER_ROOT`、`RUN_ARTIFACT_DIR`，禁止使用者覆寫 runner 保留欄位。
 * 不將完整環境或敏感值寫入 report／模板診斷，明確定義 shell quoting 責任。
 
-#### Status
+##### 狀態
 
 Planned
 
-### v1.7.2 — Runtime Context
+#### v1.7.2 — Runtime Context
 
-#### Goal
+##### 目標
 
 在 run 與 attempt 建立後，提供唯讀的執行資訊，供設定與 subprocess environment 使用。
 
-#### Scope and Acceptance
+##### 範圍與驗收條件
 
 * `context` namespace 提供 run ID、artifact directory、stage、step 與 attempt。
 * 沿用 runner 的既有識別值；retry 更新 attempt，cleanup 更新 stage／step，run 資訊保持一致。
@@ -668,11 +640,11 @@ Planned
 * 定義欄位解析時機；禁止尚未建立或已失效的 context 引用，避免 run directory 自我依賴。
 * Final validation 的 run scope 與 attempt scope 分開，不隱含採用最後一次 attempt。
 
-#### Status
+##### 狀態
 
 Planned
 
-### Proposed YAML
+#### Proposed YAML
 
 以下為 v1.7.0～v1.7.2 完成後的整合規劃語法，尚未實作；實作前需確認欄位名稱與替換範圍。
 
@@ -700,13 +672,13 @@ lifecycle:
 
 此片段展示新增設定，其他必要 sections 仍需提供；`measure.sh` 為示意 script。`${{ ... }}` 是提議的 runner template 語法；既有 `$NAME`／`${NAME}` 仍由 shell 展開。
 
-### Relationship to v1.6.0
+#### Relationship to v1.6.0
 
 目前 ConfigLoader 直接建立 models，沒有通用 YAML variable substitution、run／step environment mapping 或 runtime context resolver。Executor 已繼承 `os.environ`，並注入 `DEVICE_TEST_RUNNER_ROOT` 與 `RUN_ARTIFACT_DIR`；這是既有 environment 基礎，應保留相容性。
 
 新增 context 需沿用已建立的 run directory、stage 與 attempt 資訊，而不是再建立一套不一致的識別值。Retry 每次重新產生 attempt context；cleanup 使用自己的 stage／step context，並保留同一次 run 的資訊。
 
-### Acceptance Focus
+#### 驗收重點
 
 * 同一靜態變數可用於多個支援欄位；未知引用與循環引用提供欄位位置明確的錯誤。
 * 規定替換後的型別驗證：完整 scalar 引用與字串內插分開處理，不能讓字串替換繞過 timeout 等欄位的驗證。
@@ -718,23 +690,21 @@ lifecycle:
 * Report 不直接序列化整份 host environment，敏感值不因模板診斷而被列印。
 * 不含新語法的既有 YAML 與 `$RUN_ARTIFACT_DIR` scripts 維持既有行為。
 
-### Scope Boundaries
+#### 範圍限制
 
 初期不包含跨 step output 引用、secret manager、條件式、迴圈或完整 template language。這些功能需要額外定義資料依賴與失敗語意，可在 job／keyword-driven 階段另行規劃。
 
-### Status
+#### 狀態
 
 Planned
 
----
+### v1.8 — Recorder Lifecycle
 
-## v1.8 — Recorder Lifecycle
-
-### Goal
+#### 目標
 
 支援 background recorder 與 foreground scenario 同時運作。
 
-### Expected Flow
+#### 執行流程
 
 ```text
 start recorder
@@ -748,7 +718,7 @@ stop recorder
 collect recorder artifacts
 ```
 
-### Core Features
+#### 功能範圍
 
 * RecorderConfig
 * RecorderController
@@ -763,7 +733,7 @@ collect recorder artifacts
 * recorder artifacts collection
 * recorder failure propagation
 
-### Possible Readiness Strategies
+#### Possible Readiness Strategies
 
 * fixed delay
 * log keyword detection
@@ -771,7 +741,7 @@ collect recorder artifacts
 * health command
 * process running check
 
-### Learning Focus
+#### 相關技術
 
 * Background process
 * process synchronization
@@ -780,21 +750,19 @@ collect recorder artifacts
 * concurrent execution
 * resource ownership
 
-### Status
+#### 狀態
 
 Planned
 
----
-
-## v1.9 — Hook and Teardown Guarantees
+### v1.9 — Hook and Teardown Guarantees
 
 v1.6.3 負責 cancellation-aware cleanup 的基礎 scope、timeout 與 partial policy；本版本在其上擴充可重用 hooks、recorder 整合與多重錯誤呈現，避免重複實作相同的取消清理機制。
 
-### Goal
+#### 目標
 
 確保即使 setup 或 scenario 失敗，必要的 cleanup 仍會執行。
 
-### Core Features
+#### 功能範圍
 
 * always-run teardown
 * always-run global teardown
@@ -806,7 +774,7 @@ v1.6.3 負責 cancellation-aware cleanup 的基礎 scope、timeout 與 partial p
 * primary failure 與 cleanup failure 分離
 * teardown results 寫入 report.json
 
-### Failure Example
+#### Failure Example
 
 ```text
 setup: PASSED
@@ -830,7 +798,7 @@ cleanup_errors:
   teardown command failed
 ```
 
-### Learning Focus
+#### 相關技術
 
 * try／finally
 * failure preservation
@@ -838,19 +806,17 @@ cleanup_errors:
 * hooks
 * multi-error reporting
 
-### Status
+#### 狀態
 
 Planned
 
----
+### v1.10 — Execution Summary
 
-## v1.10 — Execution Summary
-
-### Goal
+#### 目標
 
 提供可讀、可查詢的完整 execution summary。
 
-### Core Features
+#### 功能範圍
 
 * RunSummary
 * stage duration summary
@@ -868,7 +834,7 @@ Planned
 * JSON summary
 * exit code strategy
 
-### Example Summary
+#### Example Summary
 
 ```text
 Test Case: power_idle_test
@@ -895,7 +861,7 @@ First Failure:
 - Exit Code: 1
 ```
 
-### Learning Focus
+#### 相關技術
 
 * Aggregation
 * reporting model
@@ -903,59 +869,47 @@ First Failure:
 * diagnostics
 * exit code design
 
-### Status
+#### 狀態
 
 Planned
 
----
+### v1.11 — Job Model
 
-## v1.11 — Job Model
-
-### Status
+#### 狀態
 
 Planned
 
----
+### v1.12 — Batch Runner
 
-## v1.12 — Batch Runner
-
-### Status
+#### 狀態
 
 Planned
 
----
+### v1.13 — Multi-Process Execution
 
-## v1.13 — Multi-Process Execution
-
-### Status
+#### 狀態
 
 Planned
 
----
+### v1.14 — Concurrency Limit
 
-## v1.14 — Concurrency Limit
-
-### Status
+#### 狀態
 
 Planned
 
----
+### v1.15 — Resource / Device Lock
 
-## v1.15 — Resource / Device Lock
-
-### Status
+#### 狀態
 
 Planned
 
----
+### v2.0 — Controller and Worker
 
-## v2.0 — Controller and Worker
-
-### Goal
+#### 目標
 
 將單機 Device Test Runner 擴展為可進行 remote execution 的分散式測試系統。
 
-### High-Level Architecture
+#### High-Level Architecture
 
 ```text
 User / CLI / Web UI
@@ -969,7 +923,7 @@ Worker
 Device + Recorder + Test Scripts
 ```
 
-### Controller Responsibilities
+#### Controller Responsibilities
 
 * 接收 execution request
 * 驗證 request
@@ -981,7 +935,7 @@ Device + Recorder + Test Scripts
 * 處理 worker disconnect
 * 提供 execution history
 
-### Worker Responsibilities
+#### Worker Responsibilities
 
 * 回報 worker capability
 * 回報 device inventory
@@ -992,7 +946,7 @@ Device + Recorder + Test Scripts
 * 回報 final result
 * 處理 cancellation
 
-### Core Features
+#### 功能範圍
 
 * Controller
 * Worker
@@ -1009,40 +963,40 @@ Device + Recorder + Test Scripts
 * basic scheduling policy
 * retry on worker failure
 
-### Possible Implementation Stages
+#### Possible Implementation Stages
 
-#### v2.0.0
+##### v2.0.0
 
 * Single controller
 * Single worker
 * HTTP-based dispatch
 * synchronous execution
 
-#### v2.1.0
+##### v2.1.0
 
 * Multiple workers
 * worker capability registration
 * basic worker selection
 
-#### v2.2.0
+##### v2.2.0
 
 * job queue
 * asynchronous execution
 * run status polling
 
-#### v2.3.0
+##### v2.3.0
 
 * heartbeat
 * worker offline detection
 * worker recovery
 
-#### v2.4.0
+##### v2.4.0
 
 * artifact upload
 * centralized report storage
 * execution history
 
-### Learning Focus
+#### 相關技術
 
 * Distributed systems
 * controller／worker architecture
@@ -1052,23 +1006,21 @@ Device + Recorder + Test Scripts
 * failure recovery
 * resource scheduling
 
-### Status
+#### 狀態
 
 Future
 
----
-
-# 4. Keyword-Driven Direction
+## Keyword-Driven Direction
 
 Keyword-Driven 是 Device Test Runner 的另一條重要發展方向。
 
 它不一定要等到 v2.0 才開始，但應建立在穩定的 lifecycle、executor 與 artifact foundation 上。
 
-## Goal
+### 目標
 
 讓不熟悉 Python 或 Bash 的 Lab 成員，可以使用高階 domain keywords 組合測試流程。
 
-### Example
+#### Example
 
 ```yaml
 scenario:
@@ -1092,7 +1044,7 @@ scenario:
     - keyword: stop_power_recorder
 ```
 
-## Planned Components
+### Planned Components
 
 * KeywordRegistry
 * KeywordExecutor
@@ -1106,7 +1058,7 @@ scenario:
 * keyword aliases
 * reusable keyword composition
 
-## Example Domain Libraries
+### Example Domain Libraries
 
 ```text
 keywords/
@@ -1124,7 +1076,7 @@ keywords/
     └── artifact_keywords.py
 ```
 
-## Design Principle
+### Design Principle
 
 YAML 仍然是底層 scenario definition。
 
@@ -1142,13 +1094,11 @@ Keyword Executor
 Command / Python Function / Remote Action
 ```
 
----
-
-# 5. Future Extensions
+## Future Extensions
 
 以下方向暫時不屬於近期核心版本，但可作為後續擴展。
 
-## 5.1 CLI
+### CLI
 
 * run scenario
 * validate config
@@ -1167,7 +1117,7 @@ device-test-runner keywords list
 device-test-runner report show artifacts/run-001/report.json
 ```
 
-## 5.2 Web UI
+### Web UI
 
 * 建立 execution request
 * 選擇 device
@@ -1180,7 +1130,7 @@ device-test-runner report show artifacts/run-001/report.json
 
 Web UI 不應直接執行 domain logic，而應呼叫 Controller API。
 
-## 5.3 Device Inventory
+### Device Inventory
 
 * device serial
 * product
@@ -1191,7 +1141,7 @@ Web UI 不應直接執行 domain logic，而應呼叫 Controller API。
 * current reservation
 * capability labels
 
-## 5.4 Scheduling
+### Scheduling
 
 * FIFO
 * device capability matching
@@ -1201,7 +1151,7 @@ Web UI 不應直接執行 domain logic，而應呼叫 Controller API。
 * retry scheduling
 * maximum concurrent runs
 
-## 5.5 Observability
+### Observability
 
 * structured logging
 * execution metrics
@@ -1213,7 +1163,7 @@ Web UI 不應直接執行 domain logic，而應呼叫 Controller API。
 * timeout rate
 * artifact validation failure rate
 
-## 5.6 Persistence
+### Persistence
 
 * execution history database
 * worker registry
@@ -1222,15 +1172,9 @@ Web UI 不應直接執行 domain logic，而應呼叫 Controller API。
 * test result history
 * trend analysis
 
----
+## Version Management Strategy
 
-# 6. Version Management Strategy
-
-Device Test Runner 使用 Semantic Versioning：
-
-```text
-MAJOR.MINOR.PATCH
-```
+Device Test Runner 使用 Semantic Versioning：`MAJOR.MINOR.PATCH`
 
 Example:
 
@@ -1245,7 +1189,7 @@ v1.6.0
 v2.0.0
 ```
 
-## MAJOR
+### MAJOR
 
 重大架構改變或不相容變更。
 
@@ -1256,7 +1200,7 @@ v1.x single-machine runner
 v2.0 controller／worker architecture
 ```
 
-## MINOR
+### MINOR
 
 新增向下相容的功能。
 
@@ -1270,7 +1214,7 @@ v1.5.2 failure classification
 v1.5.3 selective retry and artifact criticality
 ```
 
-## PATCH
+### PATCH
 
 修正 bug 或小型改善。
 
@@ -1283,9 +1227,7 @@ v1.5.2 add failure classification and diagnostics
 v1.5.3 add selective retry and optional artifacts
 ```
 
----
-
-# 7. GitHub Project Mapping
+## GitHub Project Mapping
 
 每個 Roadmap version 對應一個 GitHub Milestone。
 
@@ -1307,11 +1249,9 @@ Git Tag
 GitHub Release
 ```
 
-## Example Milestone
+### Example Milestone
 
-```text
-v1.4 Artifact Validation
-```
+`v1.4 Artifact Validation`
 
 Related Issues:
 
@@ -1327,7 +1267,7 @@ Related Issues:
 - Update architecture documentation
 ```
 
-## Suggested Project Status
+### Suggested Project Status
 
 ```text
 Backlog
@@ -1337,9 +1277,7 @@ Review
 Done
 ```
 
----
-
-# 8. Definition of Done
+## Definition of Done
 
 每一個版本完成前，至少需要滿足：
 
@@ -1356,9 +1294,7 @@ Done
 * Git tag 已建立
 * GitHub Release notes 已建立
 
----
-
-# 9. Current Priorities
+## 開發優先順序
 
 目前已實作並本機驗證 v1.6.0 cancellation foundation；完整取消保證與發佈仍待完成。接下來的開發優先順序：
 
@@ -1386,9 +1322,7 @@ Done
 
 目前最重要的是先建立可靠的單機 execution lifecycle。
 
----
-
-# 10. Long-Term Outcome
+## 長期方向
 
 Device Test Runner 的長期目標，是從單機的測試流程執行器，逐步演化為 Device Validation Platform 的核心執行層。
 

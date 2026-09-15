@@ -1,60 +1,14 @@
 # Device Test Runner Architecture v1.3.5
 
-## 1. 版本定位
+本文件說明 v1.3.5 的架構、資料流與設計限制。範例與介面以該版本為準；目前使用方式請見 [README](../../README.md)。
 
-Device Test Runner v1.3.5 延續 v1.3 的 Test Lifecycle 架構。
+## 版本範圍
 
-v1.3 已經完成：
+v1.3.5 改善命令執行與 log 保存。Executor 使用 `subprocess.Popen`，在命令執行期間讀取 stdout、stderr，同時顯示於終端並寫入 artifact log。
 
-* `global_setup`
-* `setup`
-* `scenario`
-* `teardown`
-* `global_teardown`
-* Stage-aware `StepResult`
-* `RunMetadata`
-* `ExecutionSummary`
-* `RunResult`
-* Artifact Directory
-* Lifecycle failure policy
+五個 lifecycle 階段、stage-aware `StepResult`、`RunMetadata`、`ExecutionSummary` 與 `RunResult` 延續 v1.3 的設計。命令完成或逾時後，Executor 建立步驟結果。
 
-v1.3.5 不再改動 Lifecycle Domain Model，而是升級 **Command Execution 與 Log Pipeline**。
-
-v1.3 的 Executor 比較接近：
-
-```text
-啟動 Command
-    ↓
-等待 Command 結束
-    ↓
-一次取得 stdout / stderr
-    ↓
-建立 StepResult
-```
-
-v1.3.5 改為：
-
-```text
-啟動 Child Process
-    ↓
-stdout 即時串流
-stderr 即時串流
-    ↓
-同步顯示於 Terminal
-同步寫入 Artifact Log
-    ↓
-等待 Process 結束或 Timeout
-    ↓
-建立 StepResult
-```
-
-v1.3.5 的主要目標是：
-
-> 在外部腳本執行期間，即時看到 stdout 與 stderr，同時將完整輸出保存到 Artifact，而不是等待 Command 結束後才一次取得結果。
-
----
-
-# 2. v1.3.5 的主要改變
+## v1.3.5 的主要改變
 
 v1.3.5 的核心改變包括：
 
@@ -85,9 +39,7 @@ Streaming Process Execution
 Concurrent Log Collection
 ```
 
----
-
-# 3. Domain Model 是否改變
+## Domain Model 是否改變
 
 v1.3.5 沿用 v1.3 的 Domain Model：
 
@@ -140,11 +92,9 @@ Process Lifecycle Layer
 
 而不是 Domain Model Layer。
 
----
+## v1.3 與 v1.3.5 的執行差異
 
-# 4. v1.3 與 v1.3.5 的執行差異
-
-## v1.3：Buffered Execution
+### v1.3：Buffered Execution
 
 概念上可能使用：
 
@@ -180,9 +130,7 @@ flowchart LR
 * stdout / stderr 只有結束後才能取得
 * 大量輸出全部暫存在記憶體中
 
----
-
-## v1.3.5：Streaming Execution
+### v1.3.5：Streaming Execution
 
 v1.3.5 使用：
 
@@ -217,9 +165,7 @@ flowchart TD
     Join --> Result
 ```
 
----
-
-# 5. v1.3.5 系統架構
+## v1.3.5 系統架構
 
 ```mermaid
 flowchart TD
@@ -284,9 +230,7 @@ flowchart TD
     Runner --> RunResult
 ```
 
----
-
-# 6. Process、Thread 與 Runner 的角色
+## Process、Thread 與 Runner 的角色
 
 v1.3.5 中，需要區分三種概念：
 
@@ -296,9 +240,7 @@ Child Process
 Threads
 ```
 
----
-
-## Device Test Runner Process
+### Device Test Runner Process
 
 Device Test Runner 本身是一個 Python Process。
 
@@ -312,7 +254,7 @@ Device Test Runner 本身是一個 Python Process。
 * 建立 `RunResult`
 * 輸出 report
 
-概念上：
+設計概念：
 
 ```text
 Parent Process
@@ -320,9 +262,7 @@ Parent Process
 Device Test Runner
 ```
 
----
-
-## Child Process
+### Child Process
 
 每次執行：
 
@@ -346,9 +286,7 @@ Device Test Runner
     └── Python / adb / recorder / application
 ```
 
----
-
-## Threads
+### Threads
 
 v1.3.5 的 Parent Process 中，主要有三條執行線：
 
@@ -379,11 +317,9 @@ flowchart TD
     Child --> Err
 ```
 
----
+## 三條 Thread 的責任
 
-# 7. 三條 Thread 的責任
-
-## Main Thread
+### Main Thread
 
 主執行緒負責 Process lifecycle：
 
@@ -403,9 +339,7 @@ flowchart TD
 
 否則可能阻塞另一條 stream。
 
----
-
-## stdout Reader Thread
+### stdout Reader Thread
 
 stdout Thread 負責：
 
@@ -428,9 +362,7 @@ stdout Reader Thread
         └── stdout Buffer
 ```
 
----
-
-## stderr Reader Thread
+### stderr Reader Thread
 
 stderr Thread 負責：
 
@@ -453,9 +385,7 @@ stderr Reader Thread
         └── stderr Buffer
 ```
 
----
-
-# 8. 為什麼 stdout 與 stderr 需要兩條 Thread
+## 為什麼 stdout 與 stderr 需要兩條 Thread
 
 stdout 與 stderr 是兩條獨立的資料流。
 
@@ -506,9 +436,7 @@ flowchart LR
     ErrPipe --> ErrThread
 ```
 
----
-
-# 9. subprocess.PIPE 的角色
+## subprocess.PIPE 的角色
 
 設定：
 
@@ -519,7 +447,7 @@ stderr=subprocess.PIPE
 
 代表 Child Process 的 stdout 與 stderr，不再直接輸出到原本 Terminal，而是被連接到 Parent Process 可以讀取的 Pipe。
 
-概念上：
+設計概念：
 
 ```text
 Child Process stdout
@@ -539,9 +467,7 @@ PIPE
 Parent Process
 ```
 
----
-
-## 與 Linux `|` 的關係
+### 與 Linux `|` 的關係
 
 Linux command：
 
@@ -587,9 +513,7 @@ subprocess.PIPE
 接收端通常是 Python 程式
 ```
 
----
-
-# 10. Pipe Buffer 的角色
+## Pipe Buffer 的角色
 
 Pipe 不只是抽象連接，它通常還有由作業系統管理的有限 Buffer。
 
@@ -628,13 +552,11 @@ Buffer 滿後，Child Process 的寫入操作可能被阻塞，直到 Parent Pro
 
 這就是為什麼 v1.3.5 必須持續消耗 stdout 與 stderr。
 
----
-
-# 11. Pipe Buffer 與 Python List Buffer 不同
+## Pipe Buffer 與 Python List Buffer 不同
 
 v1.3.5 可能同時存在兩種 Buffer。
 
-## OS Pipe Buffer
+### OS Pipe Buffer
 
 由作業系統管理：
 
@@ -646,9 +568,7 @@ Child Process
 
 它負責跨 Process 傳遞資料。
 
----
-
-## Python Output Buffer
+### Python Output Buffer
 
 由 Executor 自己管理，例如：
 
@@ -682,9 +602,7 @@ flowchart LR
 
 這兩個 Buffer 不應混為一談。
 
----
-
-# 12. StepLogWriter
+## StepLogWriter
 
 v1.3.5 建議由 `StepLogWriter` 封裝單一步驟的 log 寫入。
 
@@ -715,9 +633,7 @@ log_writer.write_stdout(line)
 log_writer.write_stderr(line)
 ```
 
----
-
-# 13. ArtifactManager 與 StepLogWriter 的關係
+## ArtifactManager 與 StepLogWriter 的關係
 
 `ArtifactManager` 負責整個 Run 的 Artifact 結構。
 
@@ -771,9 +687,7 @@ result = executor.execute(
 )
 ```
 
----
-
-# 14. Executor 介面
+## Executor 介面
 
 v1.3.5 的 Executor 介面可以是：
 
@@ -796,11 +710,7 @@ stage
 StepLogWriter
 ```
 
-輸出：
-
-```text
-StepResult
-```
+輸出：`StepResult`
 
 完整資料流：
 
@@ -818,9 +728,7 @@ flowchart LR
     Executor --> Result
 ```
 
----
-
-# 15. Executor 結構
+## Executor 結構
 
 概念程式碼：
 
@@ -919,9 +827,7 @@ class CommandStepExecutor:
 
 這是概念架構，實際程式可以再依既有 Repo 調整。
 
----
-
-# 16. Stream Reader
+## Stream Reader
 
 兩個 Reader Thread 可以共用同一個 Reader 方法：
 
@@ -968,9 +874,7 @@ flowchart LR
     Reader --> Terminal
 ```
 
----
-
-# 17. Terminal Streaming
+## Terminal Streaming
 
 v1.3.5 不只將 log 寫入檔案，也需要保留原本 Script 在 Terminal 顯示的能力。
 
@@ -1008,9 +912,7 @@ print(line, end="", file=sys.stderr)
 └── StepResult Buffer
 ```
 
----
-
-# 18. Tee Pipeline
+## Tee Pipeline
 
 `tee` 在 Linux 中代表將同一份資料同時送往多個目的地。
 
@@ -1042,9 +944,7 @@ flowchart LR
 * 執行歷史保存
 * 結果物件建立
 
----
-
-# 19. `text=True`
+## `text=True`
 
 Popen 設定：
 
@@ -1079,9 +979,7 @@ b"scenario started\n"
 * append 到 `list[str]`
 * 組裝進 `StepResult`
 
----
-
-# 20. `bufsize=1`
+## `bufsize=1`
 
 設定：
 
@@ -1106,9 +1004,7 @@ bufsize=1
 
 如果 Child Process 自己對 stdout 進行 Buffering，Parent Process 仍可能晚一段時間才收到資料。
 
----
-
-# 21. Child Process 的 Output Buffering
+## Child Process 的 Output Buffering
 
 即使 Parent Process 使用 Popen streaming，Child Process 也可能不立即輸出。
 
@@ -1147,9 +1043,7 @@ Child Process 是否 flush
 Parent Process 是否持續 read
 ```
 
----
-
-# 22. Main Thread 的 Timeout 管理
+## Main Thread 的 Timeout 管理
 
 主執行緒使用：
 
@@ -1197,19 +1091,13 @@ flowchart TD
     Join --> Result
 ```
 
----
+## terminate 與 kill
 
-# 23. terminate 與 kill
-
-## `process.terminate()`
+### `process.terminate()`
 
 要求 Process 結束。
 
-在 Unix-like 系統通常對應：
-
-```text
-SIGTERM
-```
+在 Unix-like 系統通常對應：`SIGTERM`
 
 這讓 Process 有機會：
 
@@ -1218,17 +1106,11 @@ SIGTERM
 * 停止 recorder
 * 清理部分資源
 
----
-
-## `process.kill()`
+### `process.kill()`
 
 強制終止 Process。
 
-在 Unix-like 系統通常對應：
-
-```text
-SIGKILL
-```
+在 Unix-like 系統通常對應：`SIGKILL`
 
 Process 無法攔截或自行清理。
 
@@ -1242,9 +1124,7 @@ terminate
 仍未結束才 kill
 ```
 
----
-
-# 24. Timeout 後仍要讀完 Pipe
+## Timeout 後仍要讀完 Pipe
 
 當 Process 被 terminate 或 kill 後，stdout / stderr Pipe 中可能仍然有尚未被 Reader Thread 消耗的資料。
 
@@ -1278,9 +1158,7 @@ join Reader Thread
 建立 StepResult
 ```
 
----
-
-# 25. 為什麼要呼叫 `join()`
+## 為什麼要呼叫 `join()`
 
 `thread.start()` 會讓 Thread 開始執行，但 Main Thread 不會自動等待它完成。
 
@@ -1308,9 +1186,7 @@ stderr_thread.join()
 
 是 Executor 完成條件的一部分。
 
----
-
-# 26. Thread Synchronization
+## Thread Synchronization
 
 v1.3.5 的同步關係：
 
@@ -1344,9 +1220,7 @@ sequenceDiagram
     Main->>Main: build StepResult
 ```
 
----
-
-# 27. Thread Safety
+## Thread Safety
 
 stdout Thread 只修改：
 
@@ -1378,9 +1252,7 @@ stderr Thread → stderr_lines
 
 目前分離兩個 Buffer，是 v1.3.5 較簡單且安全的設計。
 
----
-
-# 28. stdout 與 stderr 的時間順序
+## stdout 與 stderr 的時間順序
 
 stdout 與 stderr 是兩條獨立 Stream。
 
@@ -1426,17 +1298,13 @@ unified event queue
 
 這不屬於 v1.3.5 的範圍。
 
----
-
-# 29. Executor Failure Types
+## Executor Failure Types
 
 v1.3.5 需要處理幾種不同失敗。
 
-## Process Exit Failure
+### Process Exit Failure
 
-```text
-exit_code != 0
-```
+`exit_code != 0`
 
 例如：
 
@@ -1448,13 +1316,9 @@ StepResult(
 )
 ```
 
----
+### Timeout Failure
 
-## Timeout Failure
-
-```text
-process.wait() raises TimeoutExpired
-```
+`process.wait() raises TimeoutExpired`
 
 例如：
 
@@ -1468,9 +1332,7 @@ StepResult(
 
 實際 exit code 可能依終止方式與作業系統而不同。
 
----
-
-## Process Start Failure
+### Process Start Failure
 
 例如：
 
@@ -1493,9 +1355,7 @@ StepResult(
 )
 ```
 
----
-
-## Stream Reader Failure
+### Stream Reader Failure
 
 例如：
 
@@ -1507,9 +1367,7 @@ StepResult(
 
 較簡單的 v1.3.5 可以在 Reader Thread 捕捉例外，將錯誤保存到共享的 error collection。
 
----
-
-# 30. Thread Exception 的注意事項
+## Thread Exception 的注意事項
 
 Reader Thread 中拋出的 Exception，不會自動傳回 Main Thread。
 
@@ -1554,9 +1412,7 @@ custom thread wrapper
 
 v1.3.5 先採用簡單 error collection 即可。
 
----
-
-# 31. Executor Architecture Diagram
+## Executor Architecture Diagram
 
 ```mermaid
 flowchart TD
@@ -1612,11 +1468,9 @@ flowchart TD
     Build --> Return
 ```
 
----
+## Runner 與 Executor 的責任邊界
 
-# 32. Runner 與 Executor 的責任邊界
-
-## DeviceTestRunner
+### DeviceTestRunner
 
 負責：
 
@@ -1631,9 +1485,7 @@ flowchart TD
 * RunResult
 * Reporter
 
----
-
-## CommandStepExecutor
+### CommandStepExecutor
 
 負責：
 
@@ -1646,9 +1498,7 @@ flowchart TD
 * duration
 * 建立 StepResult
 
----
-
-## StepLogWriter
+### StepLogWriter
 
 負責：
 
@@ -1658,9 +1508,7 @@ flowchart TD
 * file encoding
 * 關閉 file handle
 
----
-
-## Responsibility Diagram
+### Responsibility Diagram
 
 ```mermaid
 flowchart LR
@@ -1679,9 +1527,7 @@ flowchart LR
     Writer -->|Persist logs| Files
 ```
 
----
-
-# 33. Lifecycle 與 Streaming 的整合
+## Lifecycle 與 Streaming 的整合
 
 v1.3 的 Lifecycle Runner 依序執行：
 
@@ -1748,9 +1594,7 @@ flowchart TD
     GT --> StepExecution
 ```
 
----
-
-# 34. Step Execution State Machine
+## Step Execution State Machine
 
 單一 Step 可以視為一個狀態機：
 
@@ -1780,9 +1624,7 @@ stateDiagram-v2
 
 v1.3.5 雖然不一定要正式建立 Enum，但理解這個狀態機有助於正確處理 Process lifecycle。
 
----
-
-# 35. Artifact Directory
+## Artifact Directory
 
 v1.3.5 可以沿用 v1.3 的 Stage-aware 目錄：
 
@@ -1812,9 +1654,7 @@ artifact/
 
 > v1.3.5 的 log 不再於 Step 結束後一次寫入，而是在 Step 執行期間持續寫入。
 
----
-
-# 36. Log File Flush
+## Log File Flush
 
 為了讓執行期間可以直接查看 log file，`StepLogWriter` 寫入後可以進行 flush：
 
@@ -1847,9 +1687,7 @@ write()
 flush()
 ```
 
----
-
-# 37. Log Streaming 的記憶體成本
+## Log Streaming 的記憶體成本
 
 v1.3.5 同時：
 
@@ -1857,7 +1695,7 @@ v1.3.5 同時：
 * 將 log 保存在 `stdout_lines` / `stderr_lines`
 * 最後放入 `StepResult`
 
-如果 Script 產生非常大量輸出，仍可能消耗大量記憶體。
+如果 Script 產生大量輸出，仍可能消耗大量記憶體。
 
 例如：
 
@@ -1888,9 +1726,7 @@ v1.3.5 可以先接受這個限制。
 
 但這些不屬於 v1.3.5 的範圍。
 
----
-
-# 38. StepResult 與 Log File 的關係
+## StepResult 與 Log File 的關係
 
 目前 `StepResult` 仍保存：
 
@@ -1928,9 +1764,7 @@ stderr_file: str
 
 但 v1.3.5 不必立即修改既有 Model。
 
----
-
-# 39. Timeout 與 Process Tree
+## Timeout 與 Process Tree
 
 使用：
 
@@ -1969,9 +1803,7 @@ Entire Process Tree Lifecycle
 
 這樣較符合版本邊界。
 
----
-
-# 40. Shell 使用注意事項
+## Shell 使用注意事項
 
 如果使用：
 
@@ -2012,9 +1844,7 @@ Process 關係比較直接。
 
 v1.3.5 可以維持目前 command string 設計，但未來 Process lifecycle 強化時，需要重新評估 `shell=True`。
 
----
-
-# 41. StepResult 建立時機
+## StepResult 建立時機
 
 StepResult 只能在以下條件都完成後建立：
 
@@ -2044,9 +1874,7 @@ flowchart LR
     Aggregate --> Result
 ```
 
----
-
-# 42. Sequence Diagram
+## Sequence Diagram
 
 ```mermaid
 sequenceDiagram
@@ -2103,9 +1931,7 @@ sequenceDiagram
     Executor-->>Runner: StepResult
 ```
 
----
-
-# 43. Failure Sequence
+## Failure Sequence
 
 ```mermaid
 sequenceDiagram
@@ -2145,9 +1971,7 @@ sequenceDiagram
 
 即使 timeout，前面已經產生的 log 仍然應保留。
 
----
-
-# 44. Runner Lifecycle 不因 Streaming 改變
+## Runner Lifecycle 不因 Streaming 改變
 
 v1.3.5 雖然 Executor 內部變複雜，但 Runner 的高階 Lifecycle 仍然相同。
 
@@ -2187,9 +2011,7 @@ Runner knows WHAT happened.
 Executor knows HOW the command was executed.
 ```
 
----
-
-# 45. Dependency Structure
+## Dependency Structure
 
 ```mermaid
 flowchart TD
@@ -2227,9 +2049,7 @@ Runner
 
 Domain Model 不應依賴 subprocess、threading 或檔案系統。
 
----
-
-# 46. 建議目錄結構
+## 建議目錄結構
 
 ```text
 device-test-runner/
@@ -2277,9 +2097,7 @@ device-test-runner/
     └── architecture_v1.3.5.md
 ```
 
----
-
-# 47. 測試架構
+## 測試架構
 
 v1.3.5 的測試重點集中在 Executor 與 Streaming Log。
 
@@ -2301,9 +2119,7 @@ flowchart TD
     RunnerTests --> IntegrationTests
 ```
 
----
-
-# 48. StepLogWriter Tests
+## StepLogWriter Tests
 
 應測試：
 
@@ -2336,9 +2152,7 @@ def test_write_stdout(tmp_path):
     )
 ```
 
----
-
-# 49. Stream Reader Tests
+## Stream Reader Tests
 
 Stream Reader 可以使用：
 
@@ -2362,9 +2176,7 @@ stream = io.StringIO(
 * EOF 後正常結束
 * 空 Stream 正常結束
 
----
-
-# 50. Mock Popen Tests
+## Mock Popen Tests
 
 Executor Unit Test 不應每次真的建立 Child Process。
 
@@ -2399,9 +2211,7 @@ stderr = "failed\n"
 wait() returns 1
 ```
 
----
-
-# 51. Timeout Tests
+## Timeout Tests
 
 Timeout Test 應模擬：
 
@@ -2427,9 +2237,7 @@ subprocess.TimeoutExpired
 * `StepResult.error` 有 timeout 訊息
 * 已產生的 stdout/stderr 被保留
 
----
-
-# 52. Reader Thread Tests
+## Reader Thread Tests
 
 需要驗證兩條 Reader Thread 可以同時處理：
 
@@ -2465,9 +2273,7 @@ StepResult.stdout 有五行
 StepResult.stderr 有五行
 ```
 
----
-
-# 53. Integration Test
+## Integration Test
 
 v1.3.5 Integration Test 應驗證完整流程：
 
@@ -2506,9 +2312,7 @@ flowchart TD
 * Process 可以正常結束
 * Thread 全部結束
 
----
-
-# 54. Thread Leak 檢查
+## Thread Leak 檢查
 
 測試完成後，不應留下 Reader Thread。
 
@@ -2536,9 +2340,7 @@ scenario-run_youtube-stderr
 
 Thread 命名不是必要功能，但對測試與 log 追蹤很有幫助。
 
----
-
-# 55. Popen Mock 的難點
+## Popen Mock 的難點
 
 Mock `subprocess.run()` 通常只需要回傳一個完成結果。
 
@@ -2554,17 +2356,11 @@ completed or timed out
 
 Mock 需要模擬行為，而不只是資料。
 
-因此 v1.3.5 的 Executor Test 本質上開始接近：
-
-```text
-Process lifecycle simulation
-```
+因此 v1.3.5 的 Executor Test 本質上開始接近：`Process lifecycle simulation`
 
 這也是 v1.3.5 比 v1.3 更重要的學習價值。
 
----
-
-# 56. v1.3 與 v1.3.5 比較
+## v1.3 與 v1.3.5 比較
 
 | 架構項目               | v1.3                  | v1.3.5                         |
 | ------------------ | --------------------- | ------------------------------ |
@@ -2586,9 +2382,7 @@ Process lifecycle simulation
 | Deadlock 風險處理      | 不明顯                   | 同時消耗兩條 PIPE                    |
 | 測試難度               | CompletedProcess Mock | Popen lifecycle Mock           |
 
----
-
-# 57. v1.3.5 的架構價值
+## v1.3.5 的架構價值
 
 v1.3.5 的價值不是單純把：
 
@@ -2615,21 +2409,11 @@ subprocess.Popen()
 建立執行結果
 ```
 
-這使 Device Test Runner 從：
+這使 Device Test Runner 從：`Command Wrapper`
 
-```text
-Command Wrapper
-```
+進一步成為：`Process-aware Execution Engine`
 
-進一步成為：
-
-```text
-Process-aware Execution Engine
-```
-
----
-
-# 58. v1.3.5 架構摘要
+## v1.3.5 架構摘要
 
 ```mermaid
 flowchart TD

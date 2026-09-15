@@ -1,6 +1,6 @@
 # Device Test Runner v1.3.0 Definition of Done
 
-Baseline: Git tag `v1.3.0`
+Version baseline: Git tag `v1.3.0`
 
 - [x] Five-stage lifecycle orchestration is implemented.
 - [x] Success, setup failure, and scenario failure paths are covered.

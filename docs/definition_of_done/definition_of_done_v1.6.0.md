@@ -1,8 +1,8 @@
 # Device Test Runner v1.6.0 Definition of Done
 
-Release theme: Cancellation Foundation
+Version scope: Cancellation Foundation
 
-## Product and Architecture
+## Product and architecture
 
 - [x] CancellationToken exposes active/cancelled state, idempotent cancellation and exception helper.
 - [x] Runner accepts an optional token and stops normal work on observed cancellation.
@@ -23,13 +23,13 @@ Release theme: Cancellation Foundation
 
 Verification on 2026-09-12 (local Python 3.14): `.venv/bin/python -m pytest -q` → **153 passed in 39.39s**. This is local evidence, not a successful GitHub Actions Python 3.12 run. `git diff --check` passed; local Markdown links and JSON examples validated.
 
-### Sample Configuration
+### Sample configuration
 
 2026-09-12 本機載入 `configs/sample.yaml`，只將 `artifact.output_dir` 改為暫存目錄後，使用真實 runner/executor 執行。觀察到：`status=FAILED`、configured 9、executed 8、passed 7、failed 1、cancelled 0、skipped 1；8 個 artifact rules 中 3 passed、5 required failures。`run_unstable_command` 第一個 attempt 為 process error，sample 的 retry_on 未包含此類型，所以沒有重試，下一步 `run_retry_command` 被跳過。報告成功寫出，但不是全數通過的 sample。
 
-未在這個文件任務修改 sample 或 scripts。`scripts/unstable.sh` 檢查的是 literal `COUNTER_FILE`，`scripts/artifact_retry.sh` 的 mkdir 未正確展開 `$RUN_ARTIFACT_DIR`；這些 source findings 也需在獨立修正中處理。
+此驗證紀錄中的 sample 與 scripts 尚有以下問題。`scripts/unstable.sh` 檢查的是 literal `COUNTER_FILE`，`scripts/artifact_retry.sh` 的 mkdir 未正確展開 `$RUN_ARTIFACT_DIR`；這些 source findings 也需在獨立修正中處理。
 
-## Documentation and Release
+## Documentation and release
 
 - [x] README and four v1.6.0 documents reflect source behavior and compatibility changes.
 - [x] Roadmap records implemented cancellation foundation and remaining guarantees.

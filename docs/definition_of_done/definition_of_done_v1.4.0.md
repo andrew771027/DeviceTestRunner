@@ -1,6 +1,6 @@
 # Device Test Runner v1.4.0 Definition of Done
 
-Baseline: Git tag `v1.4.0`
+Version baseline: Git tag `v1.4.0`
 
 - [x] Artifact validation models, loader, and validator are implemented.
 - [x] File, size, extension, and directory rules have positive and negative tests.

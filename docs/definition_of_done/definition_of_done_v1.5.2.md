@@ -1,8 +1,8 @@
 # Device Test Runner v1.5.2 Definition of Done
 
-Release theme: Failure Classification
+Version scope: Failure Classification
 
-## Product and Architecture
+## Product and architecture
 
 - [x] `FailureType` 定義 success、process 與 artifact failure categories。
 - [x] `FailureClassifier` 將 timeout、device-offline patterns、一般 process error 與 artifact failure 分類。
@@ -19,7 +19,7 @@ Release theme: Failure Classification
 - [x] 所有 test cases 具有 Given／When／Then acceptance description。
 - [x] 完整 pytest suite 通過：112 passed。
 
-## Documentation and Release
+## Documentation and release
 
 - [x] README 更新 v1.5.2 current capability、report schema 與文件連結。
 - [x] Architecture、Test Matrix 與 Acceptance Criteria 已建立。

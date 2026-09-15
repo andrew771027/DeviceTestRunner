@@ -1,6 +1,8 @@
 # Device Test Runner Architecture v1.2
 
-## 1. 版本目標
+本文件說明 v1.2.0 的架構、資料流與設計限制。範例與介面以該版本為準；目前使用方式請見 [README](../../README.md)。
+
+## 版本用途
 
 Device Test Runner v1.2 延續 v1.1 的多步驟 Workflow 架構，開始處理測試執行後產生的資料與檔案。
 
@@ -51,11 +53,9 @@ JsonReporter
 report.json
 ```
 
----
+## v1.2 的主要改變
 
-# 2. v1.2 的主要改變
-
-## 2.1 v1.1 的執行結果只存在記憶體中
+### v1.1 的執行結果只存在記憶體中
 
 在 v1.1 中，Runner 執行完成後會回傳：
 
@@ -84,15 +84,9 @@ RunResult(
 
 v1.2 開始將這些資訊保存成 Artifact。
 
----
+### 每一次 Run 都建立獨立目錄
 
-## 2.2 每一次 Run 都建立獨立目錄
-
-v1.2 不直接把所有檔案寫在：
-
-```text
-artifact/sample_device_config/
-```
+v1.2 不直接把所有檔案寫在：`artifact/sample_device_config/`
 
 而是在 output directory 下，為每一次執行建立獨立的 Run Directory。
 
@@ -110,9 +104,7 @@ artifact/sample_device_config/
 
 這樣每次執行都能保留自己的結果，不會覆蓋上一輪測試。
 
----
-
-# 3. v1.2 YAML Configuration
+## v1.2 YAML Configuration
 
 v1.2 沿用 v1.1 的 YAML 格式：
 
@@ -152,9 +144,7 @@ artifact:
   output_dir:
 ```
 
----
-
-# 4. Domain Models
+## Domain Models
 
 v1.2 沿用目前的 Models：
 
@@ -232,9 +222,7 @@ class RunResult:
 
 v1.2 的重點不是增加新的 Domain Model，而是讓既有 Model 可以被保存成 Artifact。
 
----
-
-# 5. v1.2 系統架構
+## v1.2 系統架構
 
 ```mermaid
 flowchart TD
@@ -289,9 +277,7 @@ flowchart TD
     Runner --> User
 ```
 
----
-
-# 6. Layered Architecture
+## Layered Architecture
 
 ```mermaid
 flowchart LR
@@ -357,9 +343,7 @@ flowchart LR
     Reporter --> JSON
 ```
 
----
-
-# 7. 核心元件責任
+## 核心元件責任
 
 | 元件                    | 責任                                         |
 | --------------------- | ------------------------------------------ |
@@ -372,9 +356,7 @@ flowchart LR
 | `StepResult`          | 描述單一 Step 的執行結果                            |
 | `RunResult`           | 彙整整個 Test Case 的結果                         |
 
----
-
-# 8. v1.2 類別關係圖
+## v1.2 類別關係圖
 
 ```mermaid
 classDiagram
@@ -469,11 +451,9 @@ classDiagram
     DeviceTestRunner --> RunResult : creates
 ```
 
----
+## DeviceTestRunner 的角色變化
 
-# 9. DeviceTestRunner 的角色變化
-
-## v1.1
+### v1.1
 
 在 v1.1 中，Runner 的主要工作是：
 
@@ -487,7 +467,7 @@ collect StepResult
 create RunResult
 ```
 
-## v1.2
+### v1.2
 
 在 v1.2 中，Runner 的工作增加為：
 
@@ -511,9 +491,7 @@ write report.json
 
 因此，v1.2 的 Runner 已經不只是 Workflow Orchestrator，也開始協調 Artifact 與 Report。
 
----
-
-# 10. DeviceTestRunner 執行流程
+## DeviceTestRunner 執行流程
 
 概念程式碼：
 
@@ -584,9 +562,7 @@ class DeviceTestRunner:
         return run_result
 ```
 
----
-
-# 11. Runner Activity Diagram
+## Runner Activity Diagram
 
 ```mermaid
 flowchart TD
@@ -624,9 +600,7 @@ flowchart TD
     WriteReport --> Return
 ```
 
----
-
-# 12. Sequence Diagram
+## Sequence Diagram
 
 ```mermaid
 sequenceDiagram
@@ -669,9 +643,7 @@ sequenceDiagram
     Runner-->>User: RunResult
 ```
 
----
-
-# 13. ArtifactManager
+## ArtifactManager
 
 `ArtifactManager` 封裝所有檔案系統操作。
 
@@ -725,9 +697,7 @@ ArtifactManager 不負責：
 * 決定是否 fail-fast
 * 決定 report.json 的資料格式
 
----
-
-# 14. 為什麼需要 ArtifactManager
+## 為什麼需要 ArtifactManager
 
 如果 Runner 直接操作檔案：
 
@@ -767,21 +737,11 @@ artifact_manager.save_stdout(...)
 
 不需要知道實際的 `open()`、encoding 或 directory 建立細節。
 
----
+## Run Directory 設計
 
-# 15. Run Directory 設計
+建議 Run Directory 包含：`{test_case_id}_{timestamp}`
 
-建議 Run Directory 包含：
-
-```text
-{test_case_id}_{timestamp}
-```
-
-例如：
-
-```text
-power_001_20260718_213015
-```
+例如：`power_001_20260718_213015`
 
 完整路徑：
 
@@ -790,11 +750,7 @@ artifact/sample_device_config/
 └── power_001_20260718_213015/
 ```
 
-時間戳記可以使用：
-
-```text
-YYYYMMDD_HHMMSS
-```
+時間戳記可以使用：`YYYYMMDD_HHMMSS`
 
 優點：
 
@@ -804,9 +760,7 @@ YYYYMMDD_HHMMSS
 * 適合人工瀏覽
 * 未來容易上傳至 Artifact Server
 
----
-
-# 16. Artifact Directory 結構
+## Artifact Directory 結構
 
 v1.2 建議輸出：
 
@@ -834,9 +788,7 @@ setup_device_stdout.log
 setup_device_stderr.log
 ```
 
----
-
-# 17. Artifact 命名規則
+## Artifact 命名規則
 
 Step name 最終會成為檔名，因此需要考慮特殊字元。
 
@@ -870,9 +822,7 @@ def sanitize_name(name: str) -> str:
 
 v1.2 不需要建立複雜的命名系統，但 ArtifactManager 應該集中負責這個問題。
 
----
-
-# 18. stdout 與 stderr 為什麼分開
+## stdout 與 stderr 為什麼分開
 
 每個 StepResult 已經包含：
 
@@ -908,15 +858,9 @@ stderr 通常包含：
 
 分開保存可以讓除錯更容易，也符合 subprocess 原始輸出模型。
 
----
+## JsonReporter
 
-# 19. JsonReporter
-
-`JsonReporter` 負責將結構化資料輸出為：
-
-```text
-report.json
-```
+`JsonReporter` 負責將結構化資料輸出為：`report.json`
 
 概念介面：
 
@@ -947,13 +891,11 @@ Reporter 不負責：
 * 保存 stderr
 * 控制 Workflow 順序
 
----
-
-# 20. ArtifactManager 與 JsonReporter 的差異
+## ArtifactManager 與 JsonReporter 的差異
 
 兩者都會寫檔案，但責任不一樣。
 
-## ArtifactManager
+### ArtifactManager
 
 負責：
 
@@ -963,7 +905,7 @@ Reporter 不負責：
 stdout/stderr 如何保存
 ```
 
-## JsonReporter
+### JsonReporter
 
 負責：
 
@@ -988,9 +930,7 @@ flowchart LR
     Reporter --> FileSystem
 ```
 
----
-
-# 21. report.json 建議結構
+## report.json 建議結構
 
 v1.2 的 report.json 可以分成四個主要區塊：
 
@@ -1055,9 +995,7 @@ v1.2 的 report.json 可以分成四個主要區塊：
 }
 ```
 
----
-
-# 22. Metadata 的定位
+## Metadata 的定位
 
 Metadata 不是單純的 summary。
 
@@ -1098,9 +1036,7 @@ Metadata 不適合重複放：
 
 這些資訊應該放在各自的 Domain 區塊。
 
----
-
-# 23. report.json 的資料分類
+## report.json 的資料分類
 
 ```mermaid
 flowchart TD
@@ -1133,9 +1069,7 @@ flowchart TD
     Result --> Steps[steps]
 ```
 
----
-
-# 24. report.json 不建議直接保存完整 stdout
+## report.json 不建議直接保存完整 stdout
 
 `StepResult` 中有完整的：
 
@@ -1170,16 +1104,14 @@ setup_device_stderr.log
 }
 ```
 
-也就是：
+具體規則：
 
 ```text
 report.json = index / structured summary
 log files = raw execution output
 ```
 
----
-
-# 25. RunResult 與 report.json 的差異
+## RunResult 與 report.json 的差異
 
 `RunResult` 是 Runtime Domain Object：
 
@@ -1218,9 +1150,7 @@ flowchart LR
 
 Reporter 的角色，就是將 Runtime Model 轉換成適合長期保存的格式。
 
----
-
-# 26. RunResult.success 與 passed
+## RunResult.success 與 passed
 
 目前 RunResult 定義：
 
@@ -1312,9 +1242,7 @@ status = "PASSED" if run_result.success else "FAILED"
 
 不要一部分使用 `success`，另一部分使用 `passed`。
 
----
-
-# 27. 空 Workflow 的成功判斷
+## 空 Workflow 的成功判斷
 
 Python 中：
 
@@ -1336,11 +1264,7 @@ all(result.success for result in self.step_results)
 
 在沒有任何 StepResult 時，會判定成功。
 
-但對 Device Test Runner 而言：
-
-```text
-沒有執行任何 Step
-```
+但對 Device Test Runner 而言：`沒有執行任何 Step`
 
 通常不應該代表 Test Passed。
 
@@ -1360,9 +1284,7 @@ def passed(self) -> bool:
 
 這不是 Artifact 功能本身，但 v1.2 開始產生正式 report.json 後，結果判斷需要更嚴謹。
 
----
-
-# 28. Fail-fast 與 Artifact
+## Fail-fast 與 Artifact
 
 v1.2 仍然沿用 v1.1 的 fail-fast。
 
@@ -1386,13 +1308,11 @@ flowchart LR
 * 產生 report.json
 * 回傳 RunResult
 
-也就是：
+具體規則：
 
 > Step 失敗會停止 Workflow，但不能中止報告與 Artifact 產生。
 
----
-
-# 29. Reporter 應該在最後執行
+## Reporter 應該在最後執行
 
 正確流程：
 
@@ -1422,13 +1342,11 @@ flowchart LR
 
 未來如果需要處理 process crash，再考慮 incremental report 或 event log。
 
----
-
-# 30. Error Handling
+## Error Handling
 
 v1.2 開始涉及檔案系統，因此錯誤來源增加。
 
-## Executor Error
+### Executor Error
 
 例如：
 
@@ -1446,7 +1364,7 @@ StepResult(
 )
 ```
 
-## Artifact Error
+### Artifact Error
 
 例如：
 
@@ -1477,9 +1395,7 @@ except Exception:
 
 這樣會讓使用者誤以為 Artifact 已經成功產生。
 
----
-
-# 31. ArtifactManager 的生命週期
+## ArtifactManager 的生命週期
 
 目前設計是在 `run()` 中建立：
 
@@ -1520,9 +1436,7 @@ flowchart LR
 
 v1.2 不需要提前過度抽象。
 
----
-
-# 32. JsonReporter 使用 Dependency Injection
+## JsonReporter 使用 Dependency Injection
 
 目前 Reporter 由 Runner constructor 注入：
 
@@ -1555,9 +1469,7 @@ HtmlReporter
 
 v1.2 雖然只實作 JsonReporter，但注入介面已經建立了擴充空間。
 
----
-
-# 33. Reporter 擴充方向
+## Reporter 擴充方向
 
 ```mermaid
 classDiagram
@@ -1595,9 +1507,7 @@ JsonReporter
 
 當第二種 Reporter 真正出現時，再抽象成 Protocol 或 ABC 會比較合理。
 
----
-
-# 34. 建議目錄結構
+## 建議目錄結構
 
 ```text
 device-test-runner/
@@ -1641,9 +1551,7 @@ device-test-runner/
     └── architecture_v1.2.md
 ```
 
----
-
-# 35. 測試架構
+## 測試架構
 
 ```mermaid
 flowchart TD
@@ -1663,9 +1571,7 @@ flowchart TD
     RunnerTest --> IntegrationTest
 ```
 
----
-
-# 36. ArtifactManager Unit Tests
+## ArtifactManager Unit Tests
 
 ArtifactManager 應測試：
 
@@ -1700,9 +1606,7 @@ def test_save_stdout(tmp_path):
     ) == "setup completed"
 ```
 
----
-
-# 37. JsonReporter Unit Tests
+## JsonReporter Unit Tests
 
 JsonReporter 應測試：
 
@@ -1737,9 +1641,7 @@ def test_write_report(tmp_path):
     assert data["result"]["success"] is True
 ```
 
----
-
-# 38. Runner Unit Tests
+## Runner Unit Tests
 
 Runner Test 應使用：
 
@@ -1759,9 +1661,7 @@ Runner Test 應使用：
 * Reporter 收到正確的 config
 * Reporter 收到正確的 RunResult
 
----
-
-# 39. Integration Test
+## Integration Test
 
 v1.2 的 Integration Test 驗證完整流程：
 
@@ -1804,9 +1704,7 @@ stderr files exist
 report content matches RunResult
 ```
 
----
-
-# 40. v1.1 與 v1.2 比較
+## v1.1 與 v1.2 比較
 
 | 架構項目            | v1.1          | v1.2   |
 | --------------- | ------------- | ------ |
@@ -1826,27 +1724,13 @@ report content matches RunResult
 | metadata        | 無             | 有      |
 | 執行歷史            | process 結束後消失 | 可保留    |
 
----
+## v1.2 的架構價值
 
-# 41. v1.2 的架構價值
+v1.1 已經可以正確執行 Workflow，但比較像：`執行工具`
 
-v1.1 已經可以正確執行 Workflow，但比較像：
+v1.2 開始變成：`可追蹤的 Test Runner`
 
-```text
-執行工具
-```
-
-v1.2 開始變成：
-
-```text
-可追蹤的 Test Runner
-```
-
-因為一個成熟的 Test Runner 不只需要知道：
-
-```text
-現在執行成功或失敗
-```
+因為一個成熟的 Test Runner 不只需要知道：`現在執行成功或失敗`
 
 還需要回答：
 
@@ -1864,9 +1748,7 @@ stderr 是什麼？
 
 ArtifactManager 與 JsonReporter 讓這些資訊可以被保存與重現。
 
----
-
-# 42. v1.2 的責任分離
+## v1.2 的責任分離
 
 ```mermaid
 flowchart LR
@@ -1884,7 +1766,7 @@ flowchart LR
     Runner -->|How to represent final result| Reporter
 ```
 
-可以用一句話描述每個元件：
+各元件的責任：
 
 ```text
 ConfigLoader：把設定讀進來。
@@ -1894,9 +1776,7 @@ ArtifactManager：保存原始檔案。
 JsonReporter：產生結構化報告。
 ```
 
----
-
-# 43. v1.2 尚未處理的問題
+## v1.2 尚未處理的問題
 
 v1.2 專注於基本 Artifact 與 Reporting，因此仍不處理：
 
@@ -1929,9 +1809,7 @@ v1.2 的核心應保持在：
 → 報告
 ```
 
----
-
-# 44. v1.2 架構摘要
+## v1.2 架構摘要
 
 ```mermaid
 flowchart TD

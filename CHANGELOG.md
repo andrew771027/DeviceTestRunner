@@ -2,9 +2,15 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Reorganized the README around setup, execution, configuration and reports.
+- Edited versioned documentation for clearer headings, shorter explanations and readable acceptance conditions.
+- Expanded the commit checklist with concrete documentation and release checks.
+
 ## [1.6.0]
 
-Release theme: Cancellation Foundation. Runtime implementation is present; release tag and publication are not verified.
+Version scope: Cancellation Foundation. Runtime implementation is present; release tag and publication are not verified.
 
 ### Added
 
@@ -29,7 +35,7 @@ Release theme: Cancellation Foundation. Runtime implementation is present; relea
 - Poetry explicitly includes the `runner` package, fixing wheel discovery for distribution name `devicetestrunner`
 - Manual documentation workflow removes conflicting sandbox flags and maps its API-key secret to `CODEX_API_KEY` for the CLI invocation
 
-### Verification and Limitations
+### Verification and limitations
 
 - Local Python 3.14: `.venv/bin/python -m pytest -q` — **153 passed in 39.39s**, observed 2026-09-12
 - Sample configuration with only its output directory redirected to a temporary location returned FAILED: one failed step, one skipped step and five failed required artifact rules

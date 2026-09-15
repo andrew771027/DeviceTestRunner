@@ -1,6 +1,6 @@
 # Device Test Runner v1.4.1 Test Matrix
 
-Baseline: Git tag `v1.4.1`
+Version baseline: Git tag `v1.4.1`
 
 | Area | Test level | Expected result | Historical evidence |
 | --- | --- | --- | --- |

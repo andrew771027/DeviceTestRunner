@@ -108,6 +108,14 @@ jobs:
             existing language, headings, filename conventions, and Markdown style.
             Use actual source and test behavior as the authority when older docs differ.
 
+            In the versioned architecture document, add or update Mermaid UML diagrams:
+            - Use classDiagram to show the main classes and their relationships.
+            - Use sequenceDiagram to show key execution flows, including relevant
+              failure, retry, cancellation, and cleanup branches supported by this version.
+            Verify class names, relationships, call order, and branches against the
+            version's implementation. Label proposed designs separately from implemented
+            behavior. Keep the diagrams consistent with the surrounding explanation.
+
             Audit every Python test function under tests/. Each test must have a concise
             docstring containing meaningful Given, When, and Then lines. Add or update
             descriptions only where needed; do not change production behavior merely

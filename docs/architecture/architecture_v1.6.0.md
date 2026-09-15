@@ -1,12 +1,14 @@
 # Device Test Runner Architecture v1.6.0 — Cancellation Foundation
 
-## 1. 版本定位與證據
+本文件說明 v1.6.0 的架構、資料流與設計限制。範例與介面以該版本為準；目前使用方式請見 [README](../../README.md)。
+
+## 版本範圍與依據
 
 v1.6.0 在 v1.5.3 的 selective retry 與 artifact criticality 上加入 cooperative cancellation。`DeviceTestRunner.VERSION` 為 `1.6.0`；呼叫端可傳入 `CancellationToken`，在一般 lifecycle step 或 retry delay 期間要求取消。
 
-本文件以 Git tag `v1.6.0` 的實作為依據，並以 tag `v1.5.3` 為比較基準。這是 cancellation foundation，不代表完整 process-tree、signal 或 exception cleanup guarantees 已完成。
+本文件以 Git tag `v1.6.0` 的實作為依據，並以 tag `v1.5.3` 為比較基準。此版本提供基本取消功能；程序樹終止、訊號處理與例外後的清理仍有待完成。
 
-## 2. Components and Data Flow
+## 元件與資料流
 
 ```mermaid
 flowchart TD
@@ -30,7 +32,7 @@ flowchart TD
 * `run(config, cancellation_token=None)` 未收到 token 時建立新 token。一般 stage 與 attempt 開始前檢查取消，避免繼續啟動工作。
 * Cleanup attempt 使用新的未取消 token，避免外部已取消的 token 立刻終止清理程序。
 
-## 3. `subprocess` 定義、差異與應用
+## `subprocess` 定義、差異與應用
 
 Python 的 `subprocess` 模組用來建立並管理外部 OS process，例如 shell command、script 或裝置工具。它把 Python 程式與外部命令的生命週期連接起來，包含啟動 process、傳遞環境變數、讀取 stdout／stderr、取得 exit code，以及等待或停止 process。
 
@@ -52,7 +54,7 @@ Python 的 `subprocess` 模組用來建立並管理外部 OS process，例如 sh
 
 因此，`Popen` 是本版本 cancellation／monitoring 的基礎；`run()` 適合不需要中途控制的短命令，而 `wait()` 與 `poll()` 是 `Popen` 生命週期控制中的不同等待策略，不是互相替代的執行 API。
 
-## 4. Executor and Retry
+## 命令執行與重試
 
 Executor 使用 `shell=True` 在 run directory 執行 command，設定 `DEVICE_TEST_RUNNER_ROOT` 與 `RUN_ARTIFACT_DIR`，由兩個 thread 讀取 stdout／stderr。
 
@@ -64,7 +66,7 @@ Executor 使用 `shell=True` 在 run directory 執行 command，設定 `DEVICE_T
 
 Retry delay 使用 monotonic clock，以最多 0.1 秒的 sleep 檢查取消。若等待中取消，step 標記 `cancelled=true`，但已完成 attempt 保留原始 failure type。Cleanup 使用原始 token 等待 retry delay，因此取消後可以略過剩餘 delay 並繼續 cleanup retry；不保證取消後 cleanup 仍等待完整設定時間。
 
-## 5. Lifecycle Routing
+## 生命週期路由
 
 | 取消時機 | 後續行為 |
 | --- | --- |
@@ -78,7 +80,7 @@ Retry delay 使用 monotonic clock，以最多 0.1 秒的 sleep 檢查取消。�
 
 Lifecycle 後仍對 **所有** artifact rules 做 final validation，包括有 `after_step` 的規則與被取消／跳過 step 的規則。因此取消 run 可以同時包含 missing required artifact 診斷。
 
-## 6. Report Contract and Compatibility
+## 報告欄位與相容性
 
 | 層級 | v1.6.0 欄位／行為 |
 | --- | --- |
@@ -95,7 +97,7 @@ Lifecycle 後仍對 **所有** artifact rules 做 final validation，包括有 `
 
 YAML 禁止 `retry_on: [cancelled]`，policy 即使收到直接 Python 建構且包含 `CANCELLED` 的清單也不重試。YAML 未指定 `retry_on` 時為空清單；直接 `RetryConfig()` 的預設包含五種一般 failure types，預設 `max_attempts=1`。呼叫端宜明確指定 retry policy。
 
-## 7. Remaining Work
+## 待完成項目
 
 * Process-group／descendant termination 與可量測的 shutdown 上限。
 * CLI SIGINT／SIGTERM 接線與明確 exit code 策略。
@@ -103,8 +105,7 @@ YAML 禁止 `retry_on: [cancelled]`，policy 即使收到直接 Python 建構且
 * Cancellation boundary race 與 cleanup retry-delay semantics 的更完整測試。
 * Sample happy path 修正與 GitHub Release 驗證；Git tag `v1.6.0` 已存在。
 
-
-## 8. Implementation UML — Git tag v1.6.0
+## Implementation UML — Git tag v1.6.0
 
 ### Cancellation and Result Relationships
 

@@ -1,6 +1,6 @@
 # Device Test Runner v1.4.1 Definition of Done
 
-Baseline: Git tag `v1.4.1`
+Version baseline: Git tag `v1.4.1`
 
 - [x] CSV and JSON content validation is implemented.
 - [x] Missing paths, malformed content, encoding errors, type mismatches, and value mismatches are covered.

@@ -1,6 +1,6 @@
 # Device Test Runner v1.5.2 Test Matrix
 
-Release theme: Failure Classification
+Version scope: Failure Classification
 
 | Requirement | Scenario | Level | Expected result | Evidence |
 | --- | --- | --- | --- | --- |
@@ -19,7 +19,7 @@ Release theme: Failure Classification
 | Final validation | Non-retry-enabled artifact rule fails | Unit + Integration | Final run status is `FAILED` without step retry | `tests/test_unit/test_runner.py`, `tests/test_integration/test_integration_artifact_validation.py` |
 | Lifecycle guarantees | Setup or scenario step fails | Unit + Integration | Later scenario work is skipped while required teardown stages run | `tests/test_unit/test_runner.py`, `tests/test_integration/test_integration.py` |
 
-## Verification Baseline
+## Verification baseline
 
 - Test functions collected: 112
 - Full command: `poetry run pytest -q`

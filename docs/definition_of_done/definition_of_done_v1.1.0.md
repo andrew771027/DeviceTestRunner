@@ -1,6 +1,6 @@
 # Device Test Runner v1.1.0 Definition of Done
 
-Baseline: Git tag `v1.1.0`
+Version baseline: Git tag `v1.1.0`
 
 - [x] Naming and model refactoring is complete across YAML, loader, executor, runner, and tests.
 - [x] Pytest collection-name conflicts are removed.

@@ -1,8 +1,8 @@
 # Device Test Runner v1.5.3 Definition of Done
 
-Release theme: Selective Retry and Artifact Criticality
+Version scope: Selective Retry and Artifact Criticality
 
-## Product and Architecture
+## Product and architecture
 
 - [x] `retry.retry_on` controls retry by `FailureType`.
 - [x] Missing `retry_on` defaults to no retry; invalid values are rejected and duplicates removed.
@@ -18,7 +18,7 @@ Release theme: Selective Retry and Artifact Criticality
 - [x] Existing lifecycle, validation and failure-classification coverage remains green.
 - [x] Full suite passes: 134 tests on 2026-09-04.
 
-## Documentation and Release
+## Documentation and release
 
 - [x] README documents v1.5.3 configuration and behavior.
 - [x] Architecture, Test Matrix and Acceptance Criteria v1.5.3 are created.

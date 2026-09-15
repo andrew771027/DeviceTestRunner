@@ -1,6 +1,6 @@
 # Device Test Runner v1.5.1 Definition of Done
 
-Baseline: current working tree after tag `v1.5.0` (release candidate)
+Historical baseline: the working tree after tag `v1.5.0` (release candidate)
 
 - [x] `after_step` and `retry_on_failure` are represented in config and models.
 - [x] Runner selects retry-enabled validation rules by step.
@@ -15,4 +15,4 @@ Baseline: current working tree after tag `v1.5.0` (release candidate)
 - [ ] Architecture filename/version convention is finalized (`architecture_v.1.5.1.md` versus existing `architecture_v1.x.x.md`).
 - [ ] Commit checklist is complete and tag `v1.5.1` is created.
 
-Status: Not done. Last targeted run was 24 passed and 2 failed; no `v1.5.1` tag exists.
+Status: Not done. The recorded targeted run had 24 passed and 2 failed; no `v1.5.1` tag exists.

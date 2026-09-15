@@ -1,66 +1,16 @@
 # Device Test Runner Architecture v1.5.1 — Artifact-aware Retry
 
-## 1. 版本定位
+本文件說明 v1.5.1 的架構、資料流與設計限制。範例與介面以該版本為準；目前使用方式請見 [README](../../README.md)。
 
-Device Test Runner v1.5.1 延續 v1.5.0 的 Retry Policy，但將 Retry Decision 從單純的：
+## 版本範圍
 
-```text
-Execution Result
-```
+v1.5.1 將 artifact validation 納入重試判斷。即使命令回傳 `exit_code = 0`，綁定該步驟且啟用重試驗證的規則失敗時，attempt 仍會失敗，Runner 再依重試策略決定是否執行下一次。
 
-擴充為：
+每次 attempt 依序執行命令、驗證相關 artifacts，並記錄兩者結果。未啟用 attempt 驗證的規則仍在流程結束時檢查。
 
-```text
-Execution Result
-+
-Artifact Validation Result
-```
+## 為什麼 v1.5.0 還不夠
 
-v1.5.0：
-
-```text
-Attempt
-    ↓
-Command Execution
-    ↓
-exit_code / timeout / error
-    ↓
-Retry Decision
-```
-
-v1.5.1：
-
-```text
-Attempt
-    ↓
-Command Execution
-    ↓
-Attempt Artifact Validation
-    ↓
-Execution Result
-+
-Artifact Validation Result
-    ↓
-Retry Decision
-```
-
-因此 v1.5.1 可以定位成：
-
-> **Artifact-aware Retry Policy**
-
-核心問題是：
-
-> Command 回傳 `exit_code == 0`，但是預期 Artifact 不存在、內容無效或 Validation Failure 時，Runner 是否應該重新執行？
-
----
-
-# 2. 為什麼 v1.5.0 還不夠
-
-v1.5.0 的 Retry Decision 主要依賴：
-
-```text
-AttemptResult.success
-```
+v1.5.0 的 Retry Decision 主要依賴：`AttemptResult.success`
 
 例如：
 
@@ -104,15 +54,11 @@ MISSING
 attempt_result.success
 ```
 
-會得到：
-
-```text
-PASS
-```
+會得到：`PASS`
 
 但實際 Test Output 並沒有產生。
 
-這就是：
+此情況表示：
 
 ```text
 Execution Success
@@ -120,9 +66,7 @@ Execution Success
 Artifact Success
 ```
 
----
-
-# 3. v1.5.1 的核心判定
+## v1.5.1 的核心判定
 
 v1.5.1 將 Attempt Success 定義成：
 
@@ -132,7 +76,7 @@ AND
 Attempt Artifact Validation Passed
 ```
 
-也就是：
+具體規則：
 
 ```text
 Attempt Success
@@ -175,9 +119,7 @@ flowchart TD
     ArtifactPass -- No --> RetryDecision
 ```
 
----
-
-# 4. v1.5.0 與 v1.5.1 的差異
+## v1.5.0 與 v1.5.1 的差異
 
 v1.5.0：
 
@@ -214,9 +156,7 @@ AND
 Artifact PASS
 ```
 
----
-
-# 5. Architecture Evolution
+## Architecture Evolution
 
 ```mermaid
 flowchart LR
@@ -235,9 +175,7 @@ flowchart LR
     V151 --> D[Retry execution or artifact failure]
 ```
 
----
-
-# 6. v1.5.1 最重要的架構變化
+## v1.5.1 最重要的架構變化
 
 v1.4.x 的 Artifact Validation 是：
 
@@ -269,9 +207,7 @@ Run-level Validation
 
 這兩者的用途不同。
 
----
-
-# 7. Attempt-level Validation
+## Attempt-level Validation
 
 Attempt-level Validation 的目的是：
 
@@ -294,17 +230,11 @@ Retry
 
 這不是最終報表 Validation。
 
-它是：
-
-```text
-Execution Policy Input
-```
+它是：`Execution Policy Input`
 
 也就是 Retry Decision 的一部分。
 
----
-
-# 8. Run-level Validation
+## Run-level Validation
 
 v1.4.x 已經存在的 Validation 仍然保留：
 
@@ -338,9 +268,7 @@ Should run pass?
 
 這兩個問題不能混為一談。
 
----
-
-# 9. Validation Timing Architecture
+## Validation Timing Architecture
 
 ```mermaid
 flowchart TD
@@ -380,9 +308,7 @@ flowchart TD
     FinalValidation --> RunResult
 ```
 
----
-
-# 10. Retry Decision 的 Inputs
+## Retry Decision 的 Inputs
 
 v1.5.0：
 
@@ -418,9 +344,7 @@ flowchart LR
 
 這是 v1.5.1 最核心的 Architecture Change。
 
----
-
-# 11. 不應讓 ArtifactValidator 自己決定 Retry
+## 不應讓 ArtifactValidator 自己決定 Retry
 
 不建議：
 
@@ -428,11 +352,7 @@ flowchart LR
 artifact_validator.validate_and_retry(...)
 ```
 
-因為：
-
-```text
-ArtifactValidator
-```
+因為：`ArtifactValidator`
 
 的責任應該仍然只是：
 
@@ -461,13 +381,11 @@ ValidationResult
 Retry Policy / Retry Decision
 ```
 
-也就是：
+具體規則：
 
 > Validator 提供事實，Policy 做決策。
 
----
-
-# 12. Policy vs Evidence
+## Policy vs Evidence
 
 這裡可以進一步區分：
 
@@ -496,13 +414,11 @@ Policy
 Retry Decision
 ```
 
-這是一個非常重要的架構概念：
+此處的設計原則：
 
 > **Result describes what happened. Policy decides what to do next.**
 
----
-
-# 13. RetryPolicy 的演進
+## RetryPolicy 的演進
 
 v1.5.0：
 
@@ -545,47 +461,27 @@ retry:
 
 才啟用 Artifact-aware Retry。
 
----
-
-# 14. 為什麼 Artifact Retry 建議 Opt-in
+## 為什麼 Artifact Retry 建議 Opt-in
 
 不是所有 Artifact Failure 都適合 Retry。
 
-例如：
-
-```text
-CSV missing
-```
+例如：`CSV missing`
 
 可能是 transient failure。
 
-但：
-
-```text
-CSV schema 永遠錯
-```
+但：`CSV schema 永遠錯`
 
 通常再跑三次也不會修好。
 
-又例如：
-
-```text
-Parser config 錯誤
-```
+又例如：`Parser config 錯誤`
 
 Retry 完全沒有意義。
 
-因此：
-
-```text
-retry_on_artifact_failure
-```
+因此：`retry_on_artifact_failure`
 
 最好不是全域預設開啟。
 
----
-
-# 15. LifecycleStepContent
+## LifecycleStepContent
 
 可以延續 v1.5.0：
 
@@ -605,11 +501,7 @@ class LifecycleStepContent:
 
 > 哪些 Artifact Rule 屬於這個 Step？
 
-v1.4.x 的 Artifact Validation Rule 原本主要是 Run-level：
-
-```text
-artifact.validations
-```
+v1.4.x 的 Artifact Validation Rule 原本主要是 Run-level：`artifact.validations`
 
 v1.5.1 需要建立：
 
@@ -621,15 +513,9 @@ Attempt Artifact Rules
 
 的關係。
 
----
+## Artifact Rule Scope
 
-# 16. Artifact Rule Scope
-
-v1.5.1 很重要的新概念是：
-
-```text
-Validation Scope
-```
+v1.5.1 很重要的新概念是：`Validation Scope`
 
 例如：
 
@@ -639,11 +525,7 @@ RUN scope
 ATTEMPT scope
 ```
 
-Run-level Rule：
-
-```text
-Lifecycle 完成後驗證
-```
+Run-level Rule：`Lifecycle 完成後驗證`
 
 Attempt-level Rule：
 
@@ -652,9 +534,7 @@ Attempt-level Rule：
 並參與 Retry Decision
 ```
 
----
-
-# 17. 建議加入 ValidationScope
+## 建議加入 ValidationScope
 
 可以使用 Enum：
 
@@ -686,17 +566,11 @@ class ArtifactValidationRule:
   required: true
 ```
 
-預設：
-
-```text
-scope = run
-```
+預設：`scope = run`
 
 因此維持 backward compatibility。
 
----
-
-# 18. Attempt-level YAML
+## Attempt-level YAML
 
 例如：
 
@@ -729,9 +603,7 @@ final_report.json
 → 不參與 Retry
 ```
 
----
-
-# 19. 另一種設計：Rule 掛在 Step
+## 另一種設計：Rule 掛在 Step
 
 也可以：
 
@@ -752,17 +624,9 @@ scenario:
 
 這個模型其實更自然。
 
-因為：
+因為：`Artifact`
 
-```text
-Artifact
-```
-
-直接屬於：
-
-```text
-產生它的 Step。
-```
+直接屬於：`產生它的 Step。`
 
 結構：
 
@@ -773,17 +637,11 @@ LifecycleStepContent
 └── artifact_rules
 ```
 
----
+## v1.5.1 推薦 Step-scoped Artifact Rules
 
-# 20. v1.5.1 推薦 Step-scoped Artifact Rules
+相較於：`ArtifactConfig.validations + scope`
 
-相較於：
-
-```text
-ArtifactConfig.validations + scope
-```
-
-我更推薦：
+我更建議：
 
 ```text
 Step-scoped Attempt Validation Rules
@@ -807,9 +665,7 @@ Final Run Validation
 
 原因是語意更清楚。
 
----
-
-# 21. 建議 Model
+## 建議 Model
 
 ```python
 @dataclass(frozen=True)
@@ -856,9 +712,7 @@ class LifecycleStepContent:
 
 這個 Domain Model 很完整。
 
----
-
-# 22. Step Model Architecture（設計提案）
+## Step Model Architecture（設計提案）
 
 以下延續第 21 節的建議設計，不代表 Git tag `v1.5.1` 的實作。實作中的 retry 位於 RunnerConfig，validation rules 位於 ArtifactConfig，以 after_step 關聯 step。
 
@@ -891,45 +745,19 @@ classDiagram
     LifecycleStepContent *-- ArtifactValidationRule
 ```
 
----
+## 為什麼 Artifact Rule 掛 Step 很合理
 
-# 23. 為什麼 Artifact Rule 掛 Step 很合理
+例如：`setup_device`
 
-例如：
+產生：`setup.log`
 
-```text
-setup_device
-```
+而：`run_scenario`
 
-產生：
+產生：`power.csv`
 
-```text
-setup.log
-```
+如果所有 Artifact Rule 都放：`ArtifactConfig`
 
-而：
-
-```text
-run_scenario
-```
-
-產生：
-
-```text
-power.csv
-```
-
-如果所有 Artifact Rule 都放：
-
-```text
-ArtifactConfig
-```
-
-Runner 必須額外知道：
-
-```text
-哪個 Artifact 是哪個 Step 產生的？
-```
+Runner 必須額外知道：`哪個 Artifact 是哪個 Step 產生的？`
 
 Step-scoped Rule 可以直接表達：
 
@@ -940,9 +768,7 @@ run_scenario
 
 這對 Artifact-aware Retry 特別重要。
 
----
-
-# 24. ArtifactConfig 仍保留 Final Validation
+## ArtifactConfig 仍保留 Final Validation
 
 `ArtifactConfig` 不應因此消失。
 
@@ -957,11 +783,7 @@ class ArtifactConfig:
     )
 ```
 
-這些是：
-
-```text
-Final Run-level Artifacts
-```
+這些是：`Final Run-level Artifacts`
 
 例如：
 
@@ -985,9 +807,7 @@ Run-level
 
 形成自然分層。
 
----
-
-# 25. Attempt Result Model
+## Attempt Result Model
 
 v1.5.0 的：
 
@@ -997,7 +817,7 @@ AttemptResult
 
 現在需要開始包含 Attempt Validation。
 
-推薦：
+建議：
 
 ```python
 @dataclass(frozen=True)
@@ -1035,9 +855,7 @@ class AttemptResult:
 
 這是 v1.5.1 最值得注意的 Result Model 演進。
 
----
-
-# 26. 為什麼區分 execution_success
+## 為什麼區分 execution_success
 
 以前：
 
@@ -1045,23 +863,11 @@ class AttemptResult:
 AttemptResult.success
 ```
 
-代表：
+代表：`Process Execution Success`
 
-```text
-Process Execution Success
-```
+v1.5.1 如果 Artifact Validation 也參與 Attempt Success：`success`
 
-v1.5.1 如果 Artifact Validation 也參與 Attempt Success：
-
-```text
-success
-```
-
-語意變成：
-
-```text
-Overall Attempt Success
-```
+語意變成：`Overall Attempt Success`
 
 因此最好明確拆成：
 
@@ -1081,9 +887,7 @@ AND
 validation_success
 ```
 
----
-
-# 27. Attempt Result Hierarchy
+## Attempt Result Hierarchy
 
 ```mermaid
 flowchart TD
@@ -1105,15 +909,9 @@ flowchart TD
     ValidationSuccess --> Success
 ```
 
----
+## 空 Validation Rules 的語意
 
-# 28. 空 Validation Rules 的語意
-
-如果 Step 沒有：
-
-```text
-validations
-```
+如果 Step 沒有：`validations`
 
 則：
 
@@ -1121,11 +919,7 @@ validations
 all([])
 ```
 
-為：
-
-```text
-True
-```
+為：`True`
 
 在這裡反而是合理的。
 
@@ -1146,9 +940,7 @@ execution_success
 
 保持 v1.5.0 行為。
 
----
-
-# 29. Attempt Execution Pipeline
+## Attempt Execution Pipeline
 
 v1.5.1 的單次 Attempt 可以拆成：
 
@@ -1194,15 +986,9 @@ flowchart TD
 
 即使 execution failed，是否還要 Validate，可以依需求。
 
----
+## Execution Failure 後要不要 Attempt Validation？
 
-# 30. Execution Failure 後要不要 Attempt Validation？
-
-推薦：
-
-```text
-可以 Validate 已存在 Artifact。
-```
+建議：`可以 Validate 已存在 Artifact。`
 
 原因與 Run-level Validation 相同。
 
@@ -1216,15 +1002,11 @@ debug.log exists
 
 這仍然是有價值的資訊。
 
-但 Retry Decision 已經知道：
-
-```text
-execution_failure = True
-```
+但 Retry Decision 已經知道：`execution_failure = True`
 
 因此 Artifact Validation 不會把 Attempt 變回成功。
 
-也就是：
+具體規則：
 
 ```text
 Execution FAIL
@@ -1233,9 +1015,7 @@ Artifact PASS
 Attempt FAIL
 ```
 
----
-
-# 31. Retry Decision Model
+## Retry Decision Model
 
 可以正式引入：
 
@@ -1272,9 +1052,7 @@ not success
 
 而是有多個原因。
 
----
-
-# 32. Retry Decision Reasons
+## Retry Decision Reasons
 
 可以先用簡單字串：
 
@@ -1299,9 +1077,7 @@ class RetryReason(str, Enum):
 
 但 v1.5.1 不一定要急著 Enum 化。
 
----
-
-# 33. Retry Decision Function
+## Retry Decision Function
 
 概念：
 
@@ -1350,9 +1126,7 @@ def should_retry(
 
 這是 v1.5.1 核心 Policy Logic。
 
----
-
-# 34. Retry Decision Flow
+## Retry Decision Flow
 
 ```mermaid
 flowchart TD
@@ -1395,9 +1169,7 @@ flowchart TD
     ArtifactFailure -- No --> Stop
 ```
 
----
-
-# 35. Artifact-aware Retry Example
+## Artifact-aware Retry Example
 
 Step：
 
@@ -1419,61 +1191,25 @@ Step：
       min_size_bytes: 1024
 ```
 
----
+## Attempt 1
 
-# 36. Attempt 1
+Execution：`exit_code = 0`
 
-Execution：
+所以：`execution_success = True`
 
-```text
-exit_code = 0
-```
+但：`power.csv missing`
 
-所以：
+所以：`validation_success = False`
 
-```text
-execution_success = True
-```
+因此：`AttemptResult.success = False`
 
-但：
+Policy：`retry_on_artifact_failure = True`
 
-```text
-power.csv missing
-```
+所以：`RETRY`
 
-所以：
+## Attempt 2
 
-```text
-validation_success = False
-```
-
-因此：
-
-```text
-AttemptResult.success = False
-```
-
-Policy：
-
-```text
-retry_on_artifact_failure = True
-```
-
-所以：
-
-```text
-RETRY
-```
-
----
-
-# 37. Attempt 2
-
-Execution：
-
-```text
-exit_code = 0
-```
+Execution：`exit_code = 0`
 
 Artifact：
 
@@ -1489,11 +1225,7 @@ execution_success = True
 validation_success = True
 ```
 
-因此：
-
-```text
-AttemptResult.success = True
-```
+因此：`AttemptResult.success = True`
 
 Retry Loop 結束。
 
@@ -1504,9 +1236,7 @@ StepResult.success = True
 attempt_count = 2
 ```
 
----
-
-# 38. Artifact-aware Retry Sequence
+## Artifact-aware Retry Sequence
 
 ```mermaid
 sequenceDiagram
@@ -1543,13 +1273,11 @@ sequenceDiagram
     Retry-->>Runner: StepResult PASSED
 ```
 
----
-
-# 39. Artifact Directory Structure
+## Artifact Directory Structure
 
 Artifact-aware Retry 需要更明確的 Attempt Isolation。
 
-推薦：
+建議：
 
 ```text
 artifact/
@@ -1577,9 +1305,7 @@ artifact/
 
 > 每次 Attempt 的 Domain Artifact 也應盡可能隔離。
 
----
-
-# 40. 為什麼 Attempt Artifact 必須隔離
+## 為什麼 Attempt Artifact 必須隔離
 
 假設沒有隔離。
 
@@ -1593,35 +1319,17 @@ FAIL
 
 Attempt 2 開始前沒有刪除舊檔。
 
-Attempt 2：
+Attempt 2：`command 根本沒產生 power.csv`
 
-```text
-command 根本沒產生 power.csv
-```
+但 Validator 看到：`Attempt 1 留下的 power.csv`
 
-但 Validator 看到：
+可能誤判：`Artifact exists`
 
-```text
-Attempt 1 留下的 power.csv
-```
-
-可能誤判：
-
-```text
-Artifact exists
-```
-
-這叫做：
-
-```text
-Stale Artifact
-```
+此設計稱為：`Stale Artifact`
 
 是 Artifact-aware Retry 最大的陷阱之一。
 
----
-
-# 41. Stale Artifact Problem
+## Stale Artifact Problem
 
 錯誤流程：
 
@@ -1650,23 +1358,13 @@ flowchart TD
     Validator --> FalsePass
 ```
 
-這會造成非常危險的 False Positive。
+這會造成誤判：使用前一次的檔案，卻將本次 attempt 判為成功。
 
----
+## Attempt Isolation 是 v1.5.1 的核心要求
 
-# 42. Attempt Isolation 是 v1.5.1 的核心要求
+因此 v1.5.1 建議正式建立：`Attempt Working Directory`
 
-因此 v1.5.1 建議正式建立：
-
-```text
-Attempt Working Directory
-```
-
-或：
-
-```text
-Attempt Artifact Directory
-```
+或：`Attempt Artifact Directory`
 
 每次 Attempt：
 
@@ -1676,21 +1374,11 @@ attempt_2/
 attempt_3/
 ```
 
-Validator 永遠只 Validate：
+Validator 永遠只 Validate：`Current Attempt Directory`
 
-```text
-Current Attempt Directory
-```
+而不是：`整個 Run Artifact Root`
 
-而不是：
-
-```text
-整個 Run Artifact Root
-```
-
----
-
-# 43. Attempt Context
+## Attempt Context
 
 可以考慮增加：
 
@@ -1726,9 +1414,7 @@ ArtifactValidator
 
 讓三者共享同一個 Attempt Scope。
 
----
-
-# 44. 是否一定需要 AttemptContext？
+## 是否一定需要 AttemptContext？
 
 v1.5.1 不一定需要立刻建立正式 class。
 
@@ -1740,11 +1426,7 @@ attempt_dir: Path
 
 即可。
 
-但概念上要明確知道：
-
-```text
-Attempt
-```
+但概念上要明確知道：`Attempt`
 
 現在已經是一個 Execution Scope。
 
@@ -1757,9 +1439,7 @@ Generated Artifacts
 Validation Results
 ```
 
----
-
-# 45. Attempt Scope Architecture
+## Attempt Scope Architecture
 
 ```mermaid
 flowchart TD
@@ -1782,9 +1462,7 @@ flowchart TD
     Validation --> Result
 ```
 
----
-
-# 46. Executor 是否應該知道 ArtifactValidator？
+## Executor 是否應該知道 ArtifactValidator？
 
 不應該。
 
@@ -1811,9 +1489,7 @@ CommandStepExecutor
 
 > 判斷這個 Attempt 是否值得 Retry。
 
----
-
-# 47. 正確 Component Boundary
+## 正確 Component Boundary
 
 ```mermaid
 flowchart TD
@@ -1837,9 +1513,7 @@ flowchart TD
 
 Retry Layer 是真正的 coordination point。
 
----
-
-# 48. CommandStepExecutor 的輸出
+## CommandStepExecutor 的輸出
 
 v1.5.0 建議：
 
@@ -1890,21 +1564,11 @@ class AttemptResult:
 
 這在 Domain 上最乾淨。
 
----
+## 是否需要再拆 ExecutionAttemptResult？
 
-# 49. 是否需要再拆 ExecutionAttemptResult？
+從架構純度：`推薦。`
 
-從架構純度：
-
-```text
-推薦。
-```
-
-但從 v1.5.1 scope control：
-
-```text
-不一定必須。
-```
+但從 v1.5.1 scope control：`不一定必須。`
 
 如果目前已有：
 
@@ -1926,9 +1590,7 @@ validation_results
 
 > Execution Result 與 Validation Result 的語意不要混掉。
 
----
-
-# 50. StepResult
+## StepResult
 
 最終：
 
@@ -1954,9 +1616,7 @@ StepResult
 
 只有所有 Retry 結束後，才產生 Final StepResult。
 
----
-
-# 51. Final Step Success
+## Final Step Success
 
 最終：
 
@@ -1977,47 +1637,21 @@ Execution PASS
 Artifact PASS
 ```
 
-結果：
+結果：`Step PASS`
 
-```text
-Step PASS
-```
-
-但是：
-
-```text
-attempt_count = 2
-```
+但是：`attempt_count = 2`
 
 因此仍可知道它不是 First-attempt Success。
 
----
+## Step Failure
 
-# 52. Step Failure
+如果所有 Attempts：`FAILED`
 
-如果所有 Attempts：
+不論是：`Execution Failure`
 
-```text
-FAILED
-```
+還是：`Artifact Failure`
 
-不論是：
-
-```text
-Execution Failure
-```
-
-還是：
-
-```text
-Artifact Failure
-```
-
-最後：
-
-```text
-StepResult.success = False
-```
+最後：`StepResult.success = False`
 
 再交回 Lifecycle Runner。
 
@@ -2033,15 +1667,9 @@ global_teardown
 
 Lifecycle Policy 不需要知道到底是哪一種 Attempt Failure。
 
----
+## Lifecycle 與 Retry Policy 的 Boundary
 
-# 53. Lifecycle 與 Retry Policy 的 Boundary
-
-Lifecycle Runner 只需要知道：
-
-```text
-Final StepResult.success
-```
+Lifecycle Runner 只需要知道：`Final StepResult.success`
 
 Retry Layer 才知道：
 
@@ -2080,13 +1708,11 @@ flowchart TD
     Lifecycle -->|Final failure| Cleanup
 ```
 
----
-
-# 54. Attempt Validation vs Final Validation
+## Attempt Validation vs Final Validation
 
 這兩者應該保留不同 Rule Set。
 
-## Attempt Rules
+### Attempt Rules
 
 放：
 
@@ -2094,15 +1720,9 @@ flowchart TD
 LifecycleStepContent.validations
 ```
 
-用途：
+用途：`是否 Retry？`
 
-```text
-是否 Retry？
-```
-
----
-
-## Final Rules
+### Final Rules
 
 放：
 
@@ -2110,17 +1730,11 @@ LifecycleStepContent.validations
 ArtifactConfig.validations
 ```
 
-用途：
-
-```text
-整個 Run 是否 PASS？
-```
+用途：`整個 Run 是否 PASS？`
 
 這樣可以避免同一套 Rule 同時扮演兩種責任。
 
----
-
-# 55. Rule Example
+## Rule Example
 
 Scenario Step：
 
@@ -2131,11 +1745,7 @@ validations:
     min_size_bytes: 1024
 ```
 
-這個是：
-
-```text
-Attempt-level requirement
-```
+這個是：`Attempt-level requirement`
 
 Final Artifact：
 
@@ -2151,21 +1761,11 @@ artifact:
       min_size_bytes: 2048
 ```
 
-這些是：
+這些是：`Run-level requirement`
 
-```text
-Run-level requirement
-```
+## Why Two Validation Layers Are Useful
 
----
-
-# 56. Why Two Validation Layers Are Useful
-
-例如每次 Attempt 只需要確認：
-
-```text
-raw_power.csv
-```
+例如每次 Attempt 只需要確認：`raw_power.csv`
 
 存在。
 
@@ -2177,23 +1777,13 @@ parsed_power.csv
 summary.json
 ```
 
-所以：
+所以：`Attempt correctness`
 
-```text
-Attempt correctness
-```
-
-和：
-
-```text
-Final run completeness
-```
+和：`Final run completeness`
 
 不是完全同一回事。
 
----
-
-# 57. Retry Delay
+## Retry Delay
 
 流程仍然維持：
 
@@ -2207,17 +1797,9 @@ delay
 Next Attempt
 ```
 
-Validation 花費時間屬於：
+Validation 花費時間屬於：`Attempt duration`
 
-```text
-Attempt duration
-```
-
-還是：
-
-```text
-Step duration
-```
+還是：`Step duration`
 
 建議：
 
@@ -2231,9 +1813,7 @@ Attempt validation
 
 因為使用者等待這個 Attempt 真正被判斷完成。
 
----
-
-# 58. Step Duration
+## Step Duration
 
 例如：
 
@@ -2249,13 +1829,9 @@ Process     30 sec
 Validation   1 sec
 ```
 
-Step duration：
+Step duration：`67 sec`
 
-```text
-67 sec
-```
-
-也就是：
+具體規則：
 
 ```text
 Attempt durations
@@ -2265,15 +1841,9 @@ Retry delays
 
 這樣才能真實反映 Retry 對 Lab time 的成本。
 
----
+## Error Classification 的進一步意義
 
-# 59. Error Classification 的進一步意義
-
-v1.5.1 開始自然形成：
-
-```text
-Failure Type
-```
+v1.5.1 開始自然形成：`Failure Type`
 
 例如：
 
@@ -2285,19 +1855,13 @@ ARTIFACT_TOO_LARGE
 VALIDATION_ERROR
 ```
 
-Retry Policy 未來就可以：
-
-```text
-retry only selected failure types
-```
+Retry Policy 未來就可以：`retry only selected failure types`
 
 但 v1.5.1 不需要一次全部做完。
 
 這可以成為後續 Retry Policy refinement。
 
----
-
-# 60. Artifact Failure Reason
+## Artifact Failure Reason
 
 ArtifactValidationResult 已經提供：
 
@@ -2314,11 +1878,7 @@ error
 result.success
 ```
 
-不用解析：
-
-```text
-error string
-```
+不用解析：`error string`
 
 這很重要。
 
@@ -2330,9 +1890,7 @@ if "does not exist" in result.error:
 
 Retry Policy 應使用 structured state，而不是 string parsing。
 
----
-
-# 61. 未來 ValidationFailureType
+## 未來 ValidationFailureType
 
 之後可以演進：
 
@@ -2355,17 +1913,11 @@ ArtifactValidationResult(
 
 v1.5.1 可先保留未來擴充點。
 
----
-
-# 62. Artifact Cleanup Between Attempts
+## Artifact Cleanup Between Attempts
 
 Attempt Isolation 最理想。
 
-如果暫時無法做到完整 Attempt Directory，也至少必須：
-
-```text
-Retry 前刪除該 Step 預期產生的 Artifact。
-```
+如果暫時無法做到完整 Attempt Directory，也至少必須：`Retry 前刪除該 Step 預期產生的 Artifact。`
 
 否則 stale artifact 會污染下一次 Validation。
 
@@ -2375,7 +1927,7 @@ Retry 前刪除該 Step 預期產生的 Artifact。
 
 原因是刪除本身可能失敗，也會失去上一輪 Debug Artifact。
 
-所以推薦：
+所以建議：
 
 ```text
 attempt_1/
@@ -2383,15 +1935,9 @@ attempt_2/
 attempt_3/
 ```
 
-而不是：
+而不是：`每次清空同一個 directory。`
 
-```text
-每次清空同一個 directory。
-```
-
----
-
-# 63. ArtifactManager 的演進
+## ArtifactManager 的演進
 
 v1.5.0：
 
@@ -2436,15 +1982,9 @@ device.log
 其他 Domain Artifact
 ```
 
----
+## Attempt Directory Ownership
 
-# 64. Attempt Directory Ownership
-
-推薦：
-
-```text
-ArtifactManager
-```
+建議：`ArtifactManager`
 
 負責：
 
@@ -2454,23 +1994,13 @@ Resolve artifact path
 Create log writer
 ```
 
-而：
+而：`ArtifactValidator`
 
-```text
-ArtifactValidator
-```
-
-只拿：
-
-```text
-attempt_dir + rule
-```
+只拿：`attempt_dir + rule`
 
 進行 read-only validation。
 
----
-
-# 65. Retry-aware Pipeline
+## Retry-aware Pipeline
 
 ```mermaid
 flowchart TD
@@ -2518,9 +2048,7 @@ flowchart TD
     Decision -- No --> Final
 ```
 
----
-
-# 66. Runner 高階流程不需要變得很亂
+## Runner 高階流程不需要變得很亂
 
 即使 v1.5.1 內部增加 Artifact-aware Retry，`run()` 高階流程仍然應該保持：
 
@@ -2561,9 +2089,7 @@ _execute_step_with_retry()
 
 而不是污染最上層 `run()`。
 
----
-
-# 67. Step Retry Pseudocode
+## Step Retry Pseudocode
 
 ```python
 def _execute_step_with_retry(
@@ -2641,9 +2167,7 @@ def _execute_step_with_retry(
     )
 ```
 
----
-
-# 68. `validate_all()`
+## `validate_all()`
 
 v1.4.x 的 Validator 可能是：
 
@@ -2673,9 +2197,7 @@ def validate_all(
 
 `validate()` 仍然是最小 unit。
 
----
-
-# 69. Artifact Validation 是否只有 Execution Success 才執行？
+## Artifact Validation 是否只有 Execution Success 才執行？
 
 建議不要硬限制。
 
@@ -2705,9 +2227,7 @@ AND
 Validation PASS
 ```
 
----
-
-# 70. Result Hierarchy
+## Result Hierarchy
 
 v1.5.1 的 Result Hierarchy：
 
@@ -2756,9 +2276,7 @@ flowchart TD
     ValSummary --> Status
 ```
 
----
-
-# 71. 注意：Attempt Validation Failure 不直接進 ValidationSummary
+## 注意：Attempt Validation Failure 不直接進 ValidationSummary
 
 這一點很重要。
 
@@ -2772,47 +2290,21 @@ Attempt 2
 Artifact PASS
 ```
 
-Step 最終：
+Step 最終：`PASS`
 
-```text
-PASS
-```
+那 Attempt 1 的 Validation Failure 是：`Retry History`
 
-那 Attempt 1 的 Validation Failure 是：
+不是：`Final Run-level Validation Failure`
 
-```text
-Retry History
-```
+所以不要把所有 Attempt ValidationResult 丟進：`ValidationSummary`
 
-不是：
+否則：`Run 可能最終成功`
 
-```text
-Final Run-level Validation Failure
-```
-
-所以不要把所有 Attempt ValidationResult 丟進：
-
-```text
-ValidationSummary
-```
-
-否則：
-
-```text
-Run 可能最終成功
-```
-
-卻因第一次 Attempt 失敗被算：
-
-```text
-failed_validations = 1
-```
+卻因第一次 Attempt 失敗被算：`failed_validations = 1`
 
 導致最終 Run FAILED。
 
----
-
-# 72. Attempt Validation 與 Run Validation 要分開統計
+## Attempt Validation 與 Run Validation 要分開統計
 
 因此：
 
@@ -2824,7 +2316,7 @@ Run-level Validation Results
 → ValidationSummary
 ```
 
-這是一個重要 Boundary。
+實作時需維持此責任邊界。
 
 未來如果要統計：
 
@@ -2835,9 +2327,7 @@ artifact_recovered_failures
 
 應建立 Retry/Attempt metrics，而不是塞進 Final ValidationSummary。
 
----
-
-# 73. ExecutionSummary 也只看 Final StepResult
+## ExecutionSummary 也只看 Final StepResult
 
 同樣：
 
@@ -2853,27 +2343,13 @@ passed_steps += 1
 failed_steps += 0
 ```
 
-不應計算：
+不應計算：`failed_steps += 1`
 
-```text
-failed_steps += 1
-```
+因為 Summary 聚合的是：`Step outcome`
 
-因為 Summary 聚合的是：
+不是：`Attempt history`
 
-```text
-Step outcome
-```
-
-不是：
-
-```text
-Attempt history
-```
-
----
-
-# 74. Observability Value
+## Observability Value
 
 v1.5.1 可以開始回答：
 
@@ -2889,7 +2365,7 @@ Retry 是因為 Process Failure 還是 Artifact Failure？
 第幾次 Attempt 才恢復？
 ```
 
-這些資訊非常適合未來做：
+這些資訊可用於：
 
 ```text
 Flakiness Analysis
@@ -2897,9 +2373,7 @@ Reliability Metrics
 Lab Efficiency Analysis
 ```
 
----
-
-# 75. Example Report
+## Example Report
 
 ```json
 {
@@ -2957,9 +2431,7 @@ Retry 是 Artifact Failure 觸發的。
 
 這就是 v1.5.1 的資訊價值。
 
----
-
-# 76. Console Output
+## Console Output
 
 可以顯示：
 
@@ -2978,7 +2450,6 @@ RETRY
 
 Retrying in 5 seconds...
 
-
 [scenario][run_power_test][attempt 2/3]
 
 Execution:
@@ -2994,15 +2465,9 @@ PASSED
 
 使用者可以直接知道 Retry 原因。
 
----
+## Retry Decision Logging
 
-# 77. Retry Decision Logging
-
-不要只印：
-
-```text
-Retrying...
-```
+不要只印：`Retrying...`
 
 建議：
 
@@ -3020,31 +2485,17 @@ exit_code=1
 
 這是 Policy Observability。
 
----
+## Artifact-aware Retry 的風險：Non-idempotent Step
 
-# 78. Artifact-aware Retry 的風險：Non-idempotent Step
-
-即使 Artifact Failure 看起來值得 Retry，也仍然受：
-
-```text
-Idempotency
-```
+即使 Artifact Failure 看起來值得 Retry，也仍然受：`Idempotency`
 
 影響。
 
-例如：
-
-```text
-start_recorder
-```
+例如：`start_recorder`
 
 Command execution 成功，但 Recorder 尚未產生 Artifact。
 
-直接 Retry：
-
-```text
-start_recorder again
-```
+直接 Retry：`start_recorder again`
 
 可能啟動第二個 Recorder。
 
@@ -3054,9 +2505,7 @@ start_recorder again
 
 這也是之後 Recorder Lifecycle、Hook / Teardown 的重要原因。
 
----
-
-# 79. Retry 前是否需要 Cleanup？
+## Retry 前是否需要 Cleanup？
 
 v1.5.1 基礎版可以：
 
@@ -3070,11 +2519,7 @@ attempt directory finalized
 retry
 ```
 
-但更複雜的 Step 可能需要：
-
-```text
-Attempt-specific Cleanup
-```
+但更複雜的 Step 可能需要：`Attempt-specific Cleanup`
 
 例如：
 
@@ -3094,9 +2539,7 @@ Recorder Lifecycle
 
 不建議全部塞進 v1.5.1。
 
----
-
-# 80. v1.5.1 不應做的事情
+## v1.5.1 不應做的事情
 
 為了控制 scope，先不要加入：
 
@@ -3125,9 +2568,7 @@ Retry Decision
 
 就足夠。
 
----
-
-# 81. Test Strategy
+## Test Strategy
 
 v1.5.1 最重要的新 Test：
 
@@ -3149,11 +2590,9 @@ Retry Enabled for Artifact Failure
 Attempt Validation vs Run Validation Separation
 ```
 
----
+## Execution PASS + Artifact PASS
 
-# 82. Execution PASS + Artifact PASS
-
-Expected：
+預期結果：
 
 ```text
 1 Attempt
@@ -3161,9 +2600,7 @@ Step PASS
 No Retry
 ```
 
----
-
-# 83. Execution PASS + Artifact FAIL + Retry Enabled
+## Execution PASS + Artifact FAIL + Retry Enabled
 
 Attempt 1：
 
@@ -3179,46 +2616,26 @@ retry_on_artifact_failure=True
 max_attempts=3
 ```
 
-Expected：
+預期結果：`Retry Attempt 2`
 
-```text
-Retry Attempt 2
-```
+## Execution PASS + Artifact FAIL + Retry Disabled
 
----
+Policy：`retry_on_artifact_failure=False`
 
-# 84. Execution PASS + Artifact FAIL + Retry Disabled
-
-Policy：
-
-```text
-retry_on_artifact_failure=False
-```
-
-Expected：
+預期結果：
 
 ```text
 No Retry
 Step FAIL
 ```
 
-即使：
-
-```text
-max_attempts=3
-```
+即使：`max_attempts=3`
 
 也不能 Retry。
 
-因為：
+因為：`Failure Type 不符合 Policy。`
 
-```text
-Failure Type 不符合 Policy。
-```
-
----
-
-# 85. Artifact Failure then Recovery
+## Artifact Failure then Recovery
 
 Fake execution：
 
@@ -3240,7 +2657,7 @@ Attempt 2
 artifact PASS
 ```
 
-Expected：
+預期結果：
 
 ```text
 executor called 2 times
@@ -3252,9 +2669,7 @@ attempt_count = 2
 
 這是 v1.5.1 最核心 Unit Test。
 
----
-
-# 86. Artifact Retry Exhausted
+## Artifact Retry Exhausted
 
 Policy：
 
@@ -3270,7 +2685,7 @@ Execution PASS
 Artifact FAIL
 ```
 
-Expected：
+預期結果：
 
 ```text
 Attempt 1 FAIL
@@ -3282,9 +2697,7 @@ Attempt 4 NOT EXECUTED
 Step FAILED
 ```
 
----
-
-# 87. Stale Artifact Test
+## Stale Artifact Test
 
 Attempt 1：
 
@@ -3300,45 +2713,21 @@ attempt_2/power.csv
 missing
 ```
 
-Validator 必須：
+Validator 必須：`FAIL Attempt 2`
 
-```text
-FAIL Attempt 2
-```
-
-絕不能看到：
-
-```text
-attempt_1/power.csv
-```
+絕不能看到：`attempt_1/power.csv`
 
 這是 v1.5.1 最重要的 ArtifactManager Test 之一。
 
----
+## Attempt Directory Test
 
-# 88. Attempt Directory Test
+應驗證：`attempt_1 != attempt_2`
 
-應驗證：
+而且：`attempt_1/power.csv`
 
-```text
-attempt_1 != attempt_2
-```
+不會影響：`attempt_2/power.csv`
 
-而且：
-
-```text
-attempt_1/power.csv
-```
-
-不會影響：
-
-```text
-attempt_2/power.csv
-```
-
----
-
-# 89. Attempt Validation 不污染 Final ValidationSummary
+## Attempt Validation 不污染 Final ValidationSummary
 
 Scenario：
 
@@ -3347,31 +2736,17 @@ Attempt 1 Artifact FAIL
 Attempt 2 Artifact PASS
 ```
 
-Final Run Artifacts：
+Final Run Artifacts：`PASS`
 
-```text
-PASS
-```
-
-Expected：
-
-```text
-Run PASSED
-```
+預期結果：`Run PASSED`
 
 如果這個 Test 失敗，表示 Attempt Validation 被錯誤加入 Final ValidationSummary。
 
----
+## Lifecycle Interaction
 
-# 90. Lifecycle Interaction
+Artifact Retry Exhausted：`scenario Step FAILED`
 
-Artifact Retry Exhausted：
-
-```text
-scenario Step FAILED
-```
-
-Expected：
+預期結果：
 
 ```text
 remaining scenario steps skipped
@@ -3383,9 +2758,7 @@ global_teardown executed
 
 Artifact-aware Retry 不應破壞 v1.3 Lifecycle policy。
 
----
-
-# 91. Artifact-aware Retry Integration Test
+## Artifact-aware Retry Integration Test
 
 Temporary Script 可以設計：
 
@@ -3426,11 +2799,9 @@ Process PASS
 Artifact exists
 ```
 
-非常適合驗證 Artifact-aware Retry。
+可用來驗證 artifact-aware retry。
 
----
-
-# 92. Integration Expected
+## Integration Expected
 
 ```text
 Attempt 1
@@ -3466,9 +2837,7 @@ attempt_count = 2
 Run continues
 ```
 
----
-
-# 93. Component Architecture
+## Component Architecture
 
 ```mermaid
 flowchart LR
@@ -3536,9 +2905,7 @@ flowchart LR
     ValidationSummary --> RunResult
 ```
 
----
-
-# 94. Dependency Boundary
+## Dependency Boundary
 
 建議仍維持：
 
@@ -3553,11 +2920,7 @@ reporter.py
 runner.py
 ```
 
-其中：
-
-```text
-executor.py
-```
+其中：`executor.py`
 
 不知道：
 
@@ -3567,11 +2930,7 @@ RetryPolicy
 Lifecycle policy
 ```
 
-而：
-
-```text
-validator.py
-```
+而：`validator.py`
 
 不知道：
 
@@ -3580,23 +2939,13 @@ RetryPolicy
 CommandStepExecutor
 ```
 
-真正讓兩者交會的是：
+真正讓兩者交會的是：`runner.py`
 
-```text
-runner.py
-```
-
-或未來：
-
-```text
-StepExecutionEngine
-```
+或未來：`StepExecutionEngine`
 
 這個 Orchestration Layer。
 
----
-
-# 95. 是否該開始抽 StepExecutionEngine？
+## 是否該開始抽 StepExecutionEngine？
 
 v1.5.0 還可以把 Retry 放：
 
@@ -3616,11 +2965,7 @@ AttemptResult
 StepResult
 ```
 
-因此它已經開始有：
-
-```text
-StepExecutionEngine
-```
+因此它已經開始有：`StepExecutionEngine`
 
 的味道。
 
@@ -3637,9 +2982,7 @@ class StepExecutionEngine:
         ...
 ```
 
----
-
-# 96. 但 v1.5.1 不一定要立刻抽 Class
+## 但 v1.5.1 不一定要立刻抽 Class
 
 如果目前 code 還不大：
 
@@ -3660,19 +3003,13 @@ Recorder
 Hook
 ```
 
-開始全部塞進同一個 private method 時，再抽成：
-
-```text
-StepExecutionEngine
-```
+開始全部塞進同一個 private method 時，再抽成：`StepExecutionEngine`
 
 會更自然。
 
 不要為了 Architecture Diagram 而過度抽象。
 
----
-
-# 97. v1.5.0 與 v1.5.1 比較
+## v1.5.0 與 v1.5.1 比較
 
 | 架構項目                      | v1.5.0              | v1.5.1                        |
 | ------------------------- | ------------------- | ----------------------------- |
@@ -3691,9 +3028,7 @@ StepExecutionEngine
 | Final ValidationSummary   | 有                   | 仍只統計 Run-level validation     |
 | Runner 定位                 | Policy-aware        | Result-aware Policy Engine    |
 
----
-
-# 98. Version Evolution
+## Version Evolution
 
 ```mermaid
 flowchart LR
@@ -3715,15 +3050,9 @@ flowchart LR
     V151 --> E[Retry invalid output]
 ```
 
----
+## v1.5.1 最重要的 Boundary
 
-# 99. v1.5.1 最重要的 Boundary
-
-這一版最重要的概念不是：
-
-```text
-ArtifactValidator 觸發 Retry
-```
+這一版最重要的概念不是：`ArtifactValidator 觸發 Retry`
 
 而是：
 
@@ -3741,7 +3070,7 @@ Retry-aware Execution
 做 Decision
 ```
 
-也就是：
+具體規則：
 
 ```text
 Evidence
@@ -3760,9 +3089,7 @@ if artifact missing:
 
 乾淨很多。
 
----
-
-# 100. Architecture Summary
+## 架構摘要
 
 ```mermaid
 flowchart TD
@@ -3837,9 +3164,7 @@ flowchart TD
     ValidationSummary --> Status
 ```
 
----
-
-# 101. v1.5.1 核心摘要
+## v1.5.1 核心摘要
 
 Device Test Runner v1.5.1 可以濃縮成：
 
@@ -3906,17 +3231,9 @@ v1.5.1
 Outcome-aware Retry
 ```
 
-Runner 不再只問：
+Runner 不再只問：`「Command 有沒有失敗？」`
 
-```text
-「Command 有沒有失敗？」
-```
-
-而是開始問：
-
-```text
-「這次 Attempt 是否真的產生了我們預期的測試成果？」
-```
+而是開始問：`「這次 Attempt 是否真的產生了我們預期的測試成果？」`
 
 只有在：
 
@@ -3944,8 +3261,7 @@ Fresh Attempt Directory
 
 這就是 Device Test Runner v1.5.1 **Artifact-aware Retry** 的核心架構。
 
-
-## Git tag v1.5.1 — Implemented Model UML
+### Git tag v1.5.1 — Implemented Model UML
 
 以下僅列出 `runner/models.py` 與 `runner/retry.py` 的核心關係。`LifecycleStepContent` 沒有 retry／validations 欄位；`after_step` 是名稱關聯，不是 step 持有 rule 物件。
 

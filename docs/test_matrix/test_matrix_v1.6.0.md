@@ -1,6 +1,6 @@
 # Device Test Runner v1.6.0 Test Matrix
 
-Release theme: Cancellation Foundation
+Version scope: Cancellation Foundation
 
 | Requirement | Scenario | Level | Expected result | Evidence |
 | --- | --- | --- | --- | --- |
@@ -22,7 +22,7 @@ Release theme: Cancellation Foundation
 
 Unit filenames above resolve under `tests/test_unit/`; integration filenames resolve under `tests/test_integration/`.
 
-## Verification Baseline
+## Verification baseline
 
 Verification date: 2026-09-12. Comparison baseline: Git tag `v1.5.3`. Verification covers the current v1.6.0 source and test changes; target tag `v1.6.0` has not yet been created.
 
@@ -30,7 +30,7 @@ Verification on 2026-09-12 (local Python 3.14): `.venv/bin/python -m pytest -q` 
 
 All 150 Python test functions under `tests/` were audited for meaningful Given／When／Then docstrings. Of these, 121 descriptions were added or corrected; 29 existing descriptions were retained. An AST comparison against HEAD with function docstrings removed confirmed unchanged executable test code. Parametrization of the lifecycle cancellation test adds three cases beyond the function count.
 
-## Coverage Limits
+## Coverage limits
 
 * Real cancellation integration calls the executor; lifecycle cancellation routing uses mocks. This does not prove a complete real-process runner cancellation sequence.
 * The integration test checks preserved output and classification, not a maximum shutdown duration or absence of surviving descendants.

@@ -1,6 +1,8 @@
 # Device Test Runner Architecture v1.5.2 — Failure Classification
 
-## 1. 版本定位
+本文件說明 v1.5.2 的架構、資料流與設計限制。範例與介面以該版本為準；目前使用方式請見 [README](../../README.md)。
+
+## 版本範圍
 
 v1.5.2 在 v1.5.1 的 artifact-aware retry 之上，加入統一的 failure classification。Runner 不再只依賴布林值或 exit code 決定 retry，而是先將 process 與 artifact 結果轉換成可追蹤的 failure type。
 
@@ -25,7 +27,7 @@ Execution / Validation Result
 | `ARTIFACT_MISSING` | 必要輸出未產生 | artifact validation result |
 | `ARTIFACT_INVALID` | 輸出存在但不符合品質契約 | artifact validation result |
 
-## 2. 元件責任
+## 元件責任
 
 ```mermaid
 flowchart LR
@@ -47,7 +49,7 @@ flowchart LR
 - `RetryPolicy` 依 failure type 與最大 attempts 判斷是否重試。
 - `StepAttemptResult` 保存最終 failure type，供報表與除錯使用。
 
-## 3. Attempt 判定流程
+## Attempt 判定流程
 
 ```mermaid
 flowchart TD
@@ -67,23 +69,15 @@ flowchart TD
     Decision -- No --> Fail[Step failed]
 ```
 
-Failure priority：
-
-```text
-Process failure > Artifact failure > NONE
-```
+Failure priority：`Process failure > Artifact failure > NONE`
 
 若 command 本身失敗，artifact validation 不會掩蓋 process failure。只有 command 成功後，step-scoped artifact rules 才參與該 attempt 的最終判定。
 
-Artifact failure 內部優先順序：
-
-```text
-ARTIFACT_MISSING > ARTIFACT_INVALID > NONE
-```
+Artifact failure 內部優先順序：`ARTIFACT_MISSING > ARTIFACT_INVALID > NONE`
 
 缺少必要產物比內容不合法更接近根因，因此同時發生時回報 `ARTIFACT_MISSING`。
 
-## 4. Device Offline Classification
+## Device Offline Classification
 
 `FailureClassifier` 會對 stderr 與 executor error 做不分大小寫的 pattern matching。目前辨識：
 
@@ -94,7 +88,7 @@ ARTIFACT_MISSING > ARTIFACT_INVALID > NONE
 
 未符合 device-offline pattern 的 process failure 會歸類為 `PROCESS_ERROR`。此分類是 retry policy，不是 domain-specific root-cause analysis；原始 stderr 與 log path 仍保留在 attempt result 中。
 
-## 5. Retry Contract
+## 重試規則
 
 v1.5.2 的 retry input 從 success boolean 改為 failure type：
 
@@ -115,7 +109,7 @@ retry_policy.should_retry(
 
 `NONE` 永不重試；到達 `max_attempts` 後，所有 failure type 都停止重試。
 
-## 6. Reporting and Observability
+## 報告與診斷
 
 每個 `StepAttemptResult` 包含：
 
@@ -130,7 +124,7 @@ retry_policy.should_retry(
 
 這讓使用者可從 `result.json` 判斷失敗屬於執行環境、裝置連線、command 邏輯，或 artifact acceptance contract，並保留原始 log 進一步追查。
 
-## 7. Lifecycle Cleanup Contract
+## 生命週期清理規則
 
 v1.5.2 同時強化 lifecycle 的 cleanup 保證。這是執行邏輯變更，不只是 failure classification 的內部重構：
 
@@ -141,7 +135,7 @@ v1.5.2 同時強化 lifecycle 的 cleanup 保證。這是執行邏輯變更，�
 
 因此 `teardown` 以 `global_setup` 成功為前提，而 `global_teardown` 無條件進入執行。被跳過的 configured steps 會計入 `skipped_steps`，並使最終 run status 為 `FAILED`。
 
-## 8. Compatibility
+## 相容性
 
 - YAML lifecycle 與 artifact rule schema 不因本版本改變。
 - 原有 `max_attempts`、`delay_seconds`、`after_step` 與 `retry_on_failure` 行為保留。
@@ -149,7 +143,7 @@ v1.5.2 同時強化 lifecycle 的 cleanup 保證。這是執行邏輯變更，�
 - `result.json` 的 attempt 與 artifact validation objects 新增 failure classification，consumer 應容許新增欄位。
 - Runner metadata version 更新為 `1.5.2`。
 
-## 9. Out of Scope
+## 範圍限制
 
 v1.5.2 不包含：
 
@@ -161,8 +155,7 @@ v1.5.2 不包含：
 
 上述能力保留給後續版本。
 
-
-## 10. Implementation UML — Git tag v1.5.2
+## Implementation UML — Git tag v1.5.2
 
 ### Classification Relationships
 

@@ -1,6 +1,6 @@
 # Device Test Runner v1.3.5 Definition of Done
 
-Baseline: Git tag `v1.3.5`
+Version baseline: Git tag `v1.3.5`
 
 - [x] stdout and stderr streaming is implemented without losing persisted output.
 - [x] Log writer flush and console visibility are covered by tests.

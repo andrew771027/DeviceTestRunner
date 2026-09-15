@@ -1,6 +1,8 @@
 # Device Test Runner Architecture v1.3
 
-## 1. 版本定位
+本文件說明 v1.3.0 的架構、資料流與設計限制。範例與介面以該版本為準；目前使用方式請見 [README](../../README.md)。
+
+## 版本範圍
 
 Device Test Runner v1.3 的核心目標，是將 v1.2 的線性 Workflow 擴充成具有明確階段語意的 **Test Lifecycle**。
 
@@ -46,11 +48,9 @@ v1.3 同時加入：
 * Configured / executed / skipped 統計
 * Artifact directory reference
 
----
+## v1.3 的架構演進
 
-# 2. v1.3 的架構演進
-
-## v1.1：多步驟 Workflow
+### v1.1：多步驟 Workflow
 
 ```text
 RunnerConfig
@@ -60,9 +60,7 @@ RunnerConfig
 
 Runner 只知道一組有順序的步驟。
 
----
-
-## v1.2：Artifact 與 Report
+### v1.2：Artifact 與 Report
 
 ```text
 WorkflowStep
@@ -76,9 +74,7 @@ report.json
 
 Runner 開始保存 stdout、stderr 與執行報告。
 
----
-
-## v1.3：Lifecycle Orchestration
+### v1.3：Lifecycle Orchestration
 
 ```text
 RunnerConfig
@@ -107,9 +103,7 @@ StepResult(
 )
 ```
 
----
-
-# 3. v1.3 Domain Model
+## v1.3 Domain Model
 
 ```python
 from dataclasses import dataclass, field
@@ -221,13 +215,11 @@ class RunResult:
         )
 ```
 
----
-
-# 4. Aggregate 結構
+## Aggregate 結構
 
 v1.3 有兩個主要 Aggregate。
 
-## RunnerConfig Aggregate
+### RunnerConfig Aggregate
 
 ```text
 RunnerConfig
@@ -251,9 +243,7 @@ RunnerConfig
 
 > 這次 Test Run 要在哪一台 Device 上，以哪些 Lifecycle 階段與步驟執行，以及 Artifact 應輸出到哪裡。
 
----
-
-## RunResult Aggregate
+### RunResult Aggregate
 
 ```text
 RunResult
@@ -267,9 +257,7 @@ RunResult
 
 > 這次 Test Run 在什麼環境執行、執行了哪些步驟、整體狀態如何，以及 Artifact 保存在哪裡。
 
----
-
-# 5. Class Diagram
+## Class Diagram
 
 ```mermaid
 classDiagram
@@ -371,9 +359,7 @@ classDiagram
     RunResult *-- StepResult
 ```
 
----
-
-# 6. Lifecycle Stage 設計
+## Lifecycle Stage 設計
 
 v1.3 定義五個固定 Stage：
 
@@ -401,11 +387,9 @@ flowchart LR
     Teardown --> GlobalTeardown
 ```
 
----
+## 各 Stage 的 Domain 語意
 
-# 7. 各 Stage 的 Domain 語意
-
-## global_setup
+### global_setup
 
 適合放整次 Run 只需要做一次的準備。
 
@@ -430,9 +414,7 @@ global_setup:
       timeout_second: 10
 ```
 
----
-
-## setup
+### setup
 
 適合放這個 Test Case 或 Scenario 執行前的準備。
 
@@ -447,9 +429,7 @@ global_setup:
 啟動必要服務
 ```
 
----
-
-## scenario
+### scenario
 
 Scenario 是主要被測試的行為。
 
@@ -465,9 +445,7 @@ Scenario 是主要被測試的行為。
 
 這是 Test Case 的核心內容。
 
----
-
-## teardown
+### teardown
 
 Teardown 用來清理 Scenario 造成的狀態。
 
@@ -483,9 +461,7 @@ Teardown 用來清理 Scenario 造成的狀態。
 
 Teardown 通常應該在 Scenario 失敗後仍然執行。
 
----
-
-## global_teardown
+### global_teardown
 
 Global teardown 是整個 Test Run 最後的全域清理。
 
@@ -501,9 +477,7 @@ Global teardown 是整個 Test Run 最後的全域清理。
 
 即使前面的 Stage 失敗，通常也應盡可能執行。
 
----
-
-# 8. 為什麼不用單一 Workflow
+## 為什麼不用單一 Workflow
 
 v1.2 的線性 Workflow 可以表達：
 
@@ -540,9 +514,7 @@ global_teardown 必須盡量執行
 
 這是 Test Lifecycle 與普通 Workflow 最大的不同。
 
----
-
-# 9. Lifecycle Orchestration Policy
+## Lifecycle Orchestration Policy
 
 v1.3 的 Runner 不應只做單純的巢狀迴圈：
 
@@ -571,9 +543,7 @@ for stage in stages:
 | `teardown` 失敗        | 繼續 global_teardown                              |
 | `global_teardown` 失敗 | 結束 Run，標記 FAILED                                |
 
----
-
-# 10. Lifecycle Activity Diagram
+## Lifecycle Activity Diagram
 
 ```mermaid
 flowchart TD
@@ -623,9 +593,7 @@ flowchart TD
     BuildResult --> End
 ```
 
----
-
-# 11. Stage 與 Step 的分離
+## Stage 與 Step 的分離
 
 v1.3 使用兩層結構：
 
@@ -642,7 +610,7 @@ global_setup: List[LifecycleStepContent]
 
 這個包裝層有幾個價值。
 
-## 統一 YAML 結構
+### 統一 YAML 結構
 
 每一個 Stage 都可以維持：
 
@@ -659,9 +627,7 @@ setup:
   - ...
 ```
 
----
-
-## 未來可以擴充 Stage Policy
+### 未來可以擴充 Stage Policy
 
 未來 `LifecycleSteps` 可以增加：
 
@@ -676,9 +642,7 @@ class LifecycleSteps:
 
 目前 v1.3 還沒有這些欄位，但包裝層已經預留擴充位置。
 
----
-
-## 避免 Mutable Default
+### 避免 Mutable Default
 
 這段程式使用：
 
@@ -706,9 +670,7 @@ class LifecycleSteps:
 
 每個 `LifecycleSteps` instance 都會取得自己的 list。
 
----
-
-# 12. `frozen=True` 的架構意義
+## `frozen=True` 的架構意義
 
 v1.3 的所有 Model 都使用：
 
@@ -724,19 +686,13 @@ v1.3 的所有 Model 都使用：
 config.device.serial = "new-device"
 ```
 
-會拋出：
-
-```text
-FrozenInstanceError
-```
+會拋出：`FrozenInstanceError`
 
 這表示 v1.3 將 Model 定位為：
 
 > 執行期間不可任意修改的資料快照。
 
----
-
-## Configuration Immutability
+### Configuration Immutability
 
 `RunnerConfig` 是從 YAML 建立的執行設定。
 
@@ -758,9 +714,7 @@ Runner execution
 * Artifact path 被修改
 * Lifecycle steps 被替換
 
----
-
-## Result Immutability
+### Result Immutability
 
 `StepResult`、`RunMetadata`、`ExecutionSummary` 與 `RunResult` 也都是執行結果快照。
 
@@ -774,9 +728,7 @@ Result snapshot
 Report / Artifact
 ```
 
----
-
-## Frozen Dataclass 的限制
+### Frozen Dataclass 的限制
 
 `frozen=True` 是淺層不可變。
 
@@ -788,7 +740,7 @@ lifecycle_steps.steps.append(new_step)
 
 其中 `steps` 還是普通的 `list`，因此 list 本身仍然可以被修改。
 
-也就是：
+具體規則：
 
 ```text
 不能重新指定 steps 欄位
@@ -811,9 +763,7 @@ class LifecycleSteps:
 
 但在 v1.3，使用 `List` 對教學與 YAML 轉換較直觀，可以先維持目前設計。
 
----
-
-# 13. RunnerConfig 的角色
+## RunnerConfig 的角色
 
 v1.3 的 `RunnerConfig`：
 
@@ -840,21 +790,11 @@ lifecycle: LifecycleConfig
 
 這是一個重要的 Domain Language 變化。
 
-v1.2：
+v1.2：`Runner 執行 Workflow`
 
-```text
-Runner 執行 Workflow
-```
+v1.3：`Runner 管理 Test Lifecycle`
 
-v1.3：
-
-```text
-Runner 管理 Test Lifecycle
-```
-
----
-
-# 14. LifecycleStepContent 的角色
+## LifecycleStepContent 的角色
 
 ```python
 @dataclass(frozen=True)
@@ -873,11 +813,7 @@ class LifecycleStepContent:
 config.lifecycle.setup.steps
 ```
 
-代表這些 Step 的 Stage 是：
-
-```text
-setup
-```
+代表這些 Step 的 Stage 是：`setup`
 
 因此不需要在 Configuration 中重複保存：
 
@@ -885,9 +821,7 @@ setup
 stage="setup"
 ```
 
----
-
-## Config 與 Result 的差異
+### Config 與 Result 的差異
 
 Configuration：
 
@@ -912,9 +846,7 @@ StepResult(
 
 因此 `StepResult` 需要保存 `stage`，才能知道結果來自哪一個階段。
 
----
-
-# 15. StepResult 的角色
+## StepResult 的角色
 
 ```python
 @dataclass(frozen=True)
@@ -952,15 +884,9 @@ run_youtube
 stop_youtube
 ```
 
----
+## StepResult 的 Identity
 
-# 16. StepResult 的 Identity
-
-一個 Step 的完整識別可以視為：
-
-```text
-{stage}.{name}
-```
+一個 Step 的完整識別可以視為：`{stage}.{name}`
 
 例如：
 
@@ -993,23 +919,13 @@ teardown:
     - name: clear_logs
 ```
 
-若只使用：
-
-```text
-clear_logs_stdout.log
-```
+若只使用：`clear_logs_stdout.log`
 
 檔案可能互相覆蓋。
 
-因此 v1.3 Artifact 命名建議包含：
+因此 v1.3 Artifact 命名建議包含：`stage + step_name`
 
-```text
-stage + step_name
-```
-
----
-
-# 17. StepResult.success 與 passed
+## StepResult.success 與 passed
 
 目前 StepResult 同時有：
 
@@ -1062,9 +978,7 @@ def passed(self) -> bool:
 
 目前版本若已經完成，可以先維持原 Model，但 Runner、Summary 與 Reporter 應統一使用 `success`，不要部分使用 `exit_code`、部分使用 `success`。
 
----
-
-# 18. CommandStepExecutor
+## CommandStepExecutor
 
 Executor 一次執行一個 `LifecycleStepContent`。
 
@@ -1096,9 +1010,7 @@ StepResult
 
 Executor 需要從 Runner 接收 `stage`，因為 `LifecycleStepContent` 本身不包含 stage。
 
----
-
-# 19. Executor Activity Diagram
+## Executor Activity Diagram
 
 ```mermaid
 flowchart TD
@@ -1132,9 +1044,7 @@ flowchart TD
     BuildResult --> Return
 ```
 
----
-
-# 20. Lifecycle Runner 的角色
+## Lifecycle Runner 的角色
 
 v1.3 的 `DeviceTestRunner` 是完整的 Lifecycle Orchestrator。
 
@@ -1155,9 +1065,7 @@ v1.3 的 `DeviceTestRunner` 是完整的 Lifecycle Orchestrator。
 13. 建立 `RunResult`
 14. 輸出 Artifact 與 Report
 
----
-
-# 21. 建議的 Runner 結構
+## 建議的 Runner 結構
 
 ```python
 class DeviceTestRunner:
@@ -1209,9 +1117,7 @@ _build_summary()
 _save_artifacts()
 ```
 
----
-
-# 22. Stage Execution 抽象
+## Stage Execution 抽象
 
 建議 Runner 提供：
 
@@ -1250,9 +1156,7 @@ def _execute_stage(
 
 這樣五個 Stage 可以共用同一套執行邏輯。
 
----
-
-# 23. Stage Mapping
+## Stage Mapping
 
 Runner 可以先建立固定 Stage 順序：
 
@@ -1296,9 +1200,7 @@ Cleanup Lifecycle
 └── global_teardown
 ```
 
----
-
-# 24. Main Flow 與 Cleanup Flow
+## Main Flow 與 Cleanup Flow
 
 ```mermaid
 flowchart TD
@@ -1344,9 +1246,7 @@ Lifecycle Runner 則應該是：
 → 仍進入 Cleanup Lifecycle
 ```
 
----
-
-# 25. Configured Steps 計算
+## Configured Steps 計算
 
 `ExecutionSummary.configured_steps` 表示 YAML 中總共設定了多少個 Step。
 
@@ -1375,15 +1275,9 @@ teardown: 1
 global_teardown: 1
 ```
 
-則：
+則：`configured_steps = 8`
 
-```text
-configured_steps = 8
-```
-
----
-
-# 26. Executed Steps
+## Executed Steps
 
 `executed_steps` 表示真正進入 Executor 的 Step 數量。
 
@@ -1400,9 +1294,7 @@ executed_steps = 5
 
 代表有 3 個 Step 因為前面失敗或 Lifecycle policy 而沒有被執行。
 
----
-
-# 27. Passed 與 Failed Steps
+## Passed 與 Failed Steps
 
 建議使用 `StepResult.success`：
 
@@ -1443,9 +1335,7 @@ failed_steps = sum(
 )
 ```
 
----
-
-# 28. Skipped Steps
+## Skipped Steps
 
 ```python
 skipped_steps = configured_steps - executed_steps
@@ -1481,9 +1371,7 @@ SKIPPED
 
 目前 v1.3 使用 Summary 層級統計即可。
 
----
-
-# 29. ExecutionSummary
+## ExecutionSummary
 
 ```python
 @dataclass(frozen=True)
@@ -1501,21 +1389,11 @@ class ExecutionSummary:
 
 > 將完整 StepResult 列表聚合成容易閱讀與查詢的統計資訊。
 
----
+### Summary 與 StepResult 的差異
 
-## Summary 與 StepResult 的差異
+`StepResult` 是詳細紀錄：`每個 Step 發生什麼事？`
 
-`StepResult` 是詳細紀錄：
-
-```text
-每個 Step 發生什麼事？
-```
-
-`ExecutionSummary` 是整體聚合：
-
-```text
-整次 Run 的狀態如何？
-```
+`ExecutionSummary` 是整體聚合：`整次 Run 的狀態如何？`
 
 架構關係：
 
@@ -1533,9 +1411,7 @@ flowchart LR
     Aggregator --> Summary
 ```
 
----
-
-# 30. Summary Invariants
+## Summary Invariants
 
 ExecutionSummary 的數值應符合：
 
@@ -1577,9 +1453,7 @@ assert (
 )
 ```
 
----
-
-# 31. Summary Status
+## Summary Status
 
 `ExecutionSummary.status` 建議使用固定值：
 
@@ -1610,17 +1484,11 @@ scenario: PASSED
 teardown: FAILED
 ```
 
-最終：
-
-```text
-status = FAILED
-```
+最終：`status = FAILED`
 
 因為 Test Lifecycle 沒有完整成功。
 
----
-
-# 32. RunMetadata
+## RunMetadata
 
 ```python
 @dataclass(frozen=True)
@@ -1649,9 +1517,7 @@ class RunMetadata:
 什麼時候結束？
 ```
 
----
-
-# 33. 為什麼 RunResult 不直接保存 RunnerConfig
+## 為什麼 RunResult 不直接保存 RunnerConfig
 
 一種設計可以是：
 
@@ -1670,15 +1536,13 @@ metadata: RunMetadata
 
 有幾個好處。
 
-## 保存執行快照
+### 保存執行快照
 
 `RunnerConfig` 是輸入設定；`RunMetadata` 是實際執行紀錄。
 
 兩者語意不同。
 
----
-
-## Reporter 比較容易序列化
+### Reporter 比較容易序列化
 
 `RunMetadata` 已經整理成扁平結構：
 
@@ -1689,9 +1553,7 @@ metadata.runner_version
 
 不需要 Reporter 再深入巢狀 Config。
 
----
-
-## 將 Input Model 與 Output Model 分開
+### 將 Input Model 與 Output Model 分開
 
 ```text
 RunnerConfig = 執行前輸入
@@ -1700,9 +1562,7 @@ RunMetadata = 執行後紀錄
 
 這是明確的 Input / Output Boundary。
 
----
-
-# 34. Metadata Builder
+## Metadata Builder
 
 Runner 可以提供：
 
@@ -1728,9 +1588,7 @@ def _build_metadata(
 
 這個轉換屬於 Runner orchestration 或 Result Builder 的責任。
 
----
-
-# 35. RunResult
+## RunResult
 
 v1.3 的 `RunResult`：
 
@@ -1762,9 +1620,7 @@ artifact_dir → 實體輸出位置
 
 這比 v1.2 的 RunResult 更適合正式 report。
 
----
-
-# 36. RunResult 結構圖
+## RunResult 結構圖
 
 ```mermaid
 flowchart TD
@@ -1786,9 +1642,7 @@ flowchart TD
     Artifact --> Files[Artifact Location]
 ```
 
----
-
-# 37. RunResult.passed 的注意事項
+## RunResult.passed 的注意事項
 
 目前：
 
@@ -1803,7 +1657,7 @@ def passed(self) -> bool:
 
 這有兩個值得注意的地方。
 
-## 空結果問題
+### 空結果問題
 
 Python：
 
@@ -1817,17 +1671,11 @@ all([])
 True
 ```
 
-如果完全沒有 Step 被執行，例如 global setup 前就發生 Runner internal error，可能會得到：
-
-```text
-RunResult.passed == True
-```
+如果完全沒有 Step 被執行，例如 global setup 前就發生 Runner internal error，可能會得到：`RunResult.passed == True`
 
 這通常不符合 Test Runner 語意。
 
----
-
-## 與 Summary Status 可能不一致
+### 與 Summary Status 可能不一致
 
 RunResult 已經有：
 
@@ -1846,9 +1694,7 @@ passed = True
 
 理論上不應發生，但如果 Builder 邏輯有 bug，就可能不一致。
 
----
-
-## 建議
+### 建議
 
 較一致的方式：
 
@@ -1858,11 +1704,7 @@ def passed(self) -> bool:
     return self.summary.status == "PASSED"
 ```
 
-如此：
-
-```text
-ExecutionSummary.status
-```
+如此：`ExecutionSummary.status`
 
 成為 Run-level status 的單一來源。
 
@@ -1880,9 +1722,7 @@ ExecutionSummary.status → 整體執行結果
 RunResult.passed → Summary 的便利介面
 ```
 
----
-
-# 38. Artifact Directory
+## Artifact Directory
 
 `RunResult` 新增：
 
@@ -1910,9 +1750,7 @@ RunResult(
 artifact_dir=None
 ```
 
----
-
-# 39. Artifact Directory Structure
+## Artifact Directory Structure
 
 v1.3 建議加入 Stage 名稱：
 
@@ -1945,9 +1783,7 @@ artifact/
 
 這比所有檔案放在同一層更能表達 Lifecycle。
 
----
-
-# 40. ArtifactManager 的角色
+## ArtifactManager 的角色
 
 v1.3 的 ArtifactManager 應支援 Stage-aware path。
 
@@ -1983,9 +1819,7 @@ result.name
 {artifact_dir}/{stage}/{step_name}_stderr.log
 ```
 
----
-
-# 41. report.json 結構
+## report.json 結構
 
 v1.3 的 RunResult 已經很接近 report.json 結構。
 
@@ -2030,15 +1864,9 @@ v1.3 的 RunResult 已經很接近 report.json 結構。
 }
 ```
 
----
+## ConfigLoader 的變化
 
-# 42. ConfigLoader 的變化
-
-v1.2 的 ConfigLoader 讀取：
-
-```text
-workflow.steps
-```
+v1.2 的 ConfigLoader 讀取：`workflow.steps`
 
 v1.3 改為讀取：
 
@@ -2083,9 +1911,7 @@ flowchart TD
     Lifecycle --> Config
 ```
 
----
-
-# 43. 空 Stage 的處理
+## 空 Stage 的處理
 
 因為 `LifecycleConfig` 使用：
 
@@ -2121,9 +1947,7 @@ Runner 不需要對缺少 Stage 的情況做特殊判斷，只需要執行空 li
 
 這降低了 Runner 中的分支數量。
 
----
-
-# 44. 建議 YAML 結構
+## 建議 YAML 結構
 
 ```yaml
 test_case:
@@ -2176,9 +2000,7 @@ artifact:
   output_dir: artifact/sample_device_config
 ```
 
----
-
-# 45. Sequence Diagram
+## Sequence Diagram
 
 ```mermaid
 sequenceDiagram
@@ -2232,9 +2054,7 @@ sequenceDiagram
     Runner-->>User: RunResult
 ```
 
----
-
-# 46. Component Diagram
+## Component Diagram
 
 ```mermaid
 flowchart LR
@@ -2292,13 +2112,11 @@ flowchart LR
     Reporter --> Files
 ```
 
----
-
-# 47. Error Propagation
+## Error Propagation
 
 v1.3 必須區分三種失敗。
 
-## Step Failure
+### Step Failure
 
 例如：
 
@@ -2316,9 +2134,7 @@ StepResult(success=False, ...)
 
 Runner 根據 Stage policy 決定後續流程。
 
----
-
-## Cleanup Failure
+### Cleanup Failure
 
 例如：
 
@@ -2327,17 +2143,11 @@ scenario PASSED
 teardown FAILED
 ```
 
-整體仍應標記：
-
-```text
-FAILED
-```
+整體仍應標記：`FAILED`
 
 因為 Lifecycle 沒有完整完成。
 
----
-
-## Runner Infrastructure Failure
+### Runner Infrastructure Failure
 
 例如：
 
@@ -2351,11 +2161,7 @@ Config 結構異常
 
 v1.3 可以先讓這些 exception 向上拋出，但不能靜默忽略。
 
-未來可再增加：
-
-```text
-INFRA_ERROR
-```
+未來可再增加：`INFRA_ERROR`
 
 或：
 
@@ -2363,9 +2169,7 @@ INFRA_ERROR
 RunError
 ```
 
----
-
-# 48. 建議目錄結構
+## 建議目錄結構
 
 ```text
 device-test-runner/
@@ -2414,9 +2218,7 @@ device-test-runner/
     └── architecture_v1.3.md
 ```
 
----
-
-# 49. 測試架構
+## 測試架構
 
 ```mermaid
 flowchart TD
@@ -2438,9 +2240,7 @@ flowchart TD
     ReporterTests --> IntegrationTests
 ```
 
----
-
-# 50. Model Tests
+## Model Tests
 
 應驗證：
 
@@ -2461,9 +2261,7 @@ def test_lifecycle_steps_use_independent_lists():
     assert first.steps is not second.steps
 ```
 
----
-
-# 51. ConfigLoader Tests
+## ConfigLoader Tests
 
 應驗證：
 
@@ -2485,9 +2283,7 @@ LifecycleConfig
 RunnerConfig
 ```
 
----
-
-# 52. Executor Tests
+## Executor Tests
 
 Executor Test 應驗證：
 
@@ -2512,25 +2308,19 @@ result = executor.execute(
 assert result.stage == "scenario"
 ```
 
----
-
-# 53. Lifecycle Runner Tests
+## Lifecycle Runner Tests
 
 Runner Test 是 v1.3 最重要的測試。
 
 應至少涵蓋以下情境。
 
-## 全部成功
+### 全部成功
 
-```text
-global_setup → setup → scenario → teardown → global_teardown
-```
+`global_setup → setup → scenario → teardown → global_teardown`
 
 全部執行。
 
----
-
-## global_setup 失敗
+### global_setup 失敗
 
 ```text
 global_setup FAILED
@@ -2541,9 +2331,7 @@ global_teardown EXECUTED
 
 是否執行 teardown，要由既定 policy 決定並保持一致。
 
----
-
-## setup 失敗
+### setup 失敗
 
 ```text
 setup FAILED
@@ -2552,9 +2340,7 @@ teardown EXECUTED
 global_teardown EXECUTED
 ```
 
----
-
-## scenario 失敗
+### scenario 失敗
 
 ```text
 scenario FAILED
@@ -2563,26 +2349,18 @@ teardown EXECUTED
 global_teardown EXECUTED
 ```
 
----
-
-## teardown 失敗
+### teardown 失敗
 
 ```text
 teardown FAILED
 global_teardown 仍然 EXECUTED
 ```
 
----
+### global_teardown 失敗
 
-## global_teardown 失敗
+`整體 Run FAILED`
 
-```text
-整體 Run FAILED
-```
-
----
-
-# 54. Summary Tests
+## Summary Tests
 
 應驗證：
 
@@ -2610,9 +2388,7 @@ assert (
 )
 ```
 
----
-
-# 55. Integration Test
+## Integration Test
 
 v1.3 Integration Test 應驗證完整資料流：
 
@@ -2652,9 +2428,7 @@ flowchart TD
 * Stage log directory 存在
 * report.json 與 RunResult 一致
 
----
-
-# 56. v1.2 與 v1.3 比較
+## v1.2 與 v1.3 比較
 
 | 架構項目              | v1.2                  | v1.3                     |
 | ----------------- | --------------------- | ------------------------ |
@@ -2674,9 +2448,7 @@ flowchart TD
 | Immutability      | 不一定                   | 全部 frozen dataclass      |
 | Runner 定位         | Workflow Orchestrator | Lifecycle Orchestrator   |
 
----
-
-# 57. v1.3 的架構價值
+## v1.3 的架構價值
 
 v1.3 的價值不只是多了五個欄位。
 
@@ -2690,21 +2462,11 @@ v1.3 的價值不只是多了五個欄位。
 哪些清理步驟仍必須執行
 ```
 
-這代表 Device Test Runner 從：
+這代表 Device Test Runner 從：`Sequential Command Runner`
 
-```text
-Sequential Command Runner
-```
+進一步成為：`Lifecycle-aware Test Runner`
 
-進一步成為：
-
-```text
-Lifecycle-aware Test Runner
-```
-
----
-
-# 58. v1.3 架構摘要
+## v1.3 架構摘要
 
 ```mermaid
 flowchart TD

@@ -1,6 +1,6 @@
 # Device Test Runner v1.2.0 Definition of Done
 
-Baseline: Git tag `v1.2.0`
+Version baseline: Git tag `v1.2.0`
 
 - [x] ArtifactManager and run-directory creation are implemented.
 - [x] Command logs and execution metadata are persisted.

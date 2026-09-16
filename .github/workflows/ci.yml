@@ -1,4 +1,4 @@
-name: Device Test Runner Ci
+name: Device Test Runner CI
 
 on:
     push:

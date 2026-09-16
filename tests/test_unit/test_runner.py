@@ -282,6 +282,75 @@ class MockCancellingExecutor:
         )
 
 
+class MockCleanupAwareExecutor:
+
+    def __init__(self):
+        self.execute_count = 0
+        self.previous_attempt_cleaned = True
+
+    def execute(
+        self,
+        step: LifecycleStepContent,
+        stage: str,
+        attempt: int,
+        log_writer: StepLogWriter,
+        working_directory: str | Path,
+        cancellation_token: CancellationToken,
+    ) -> StepAttemptResult:
+
+        #
+        # 下一個 attempt 啟動前
+        # 上一次一定已經 cleaned
+        #
+
+        assert self.previous_attempt_cleaned is True
+
+        self.execute_count += 1
+
+        #
+        # 模擬這次 process lifecycle
+        #
+        self.previous_attempt_cleaned = False
+
+        #
+        # Executor 在 return 前完成cleanup
+        #
+        self.previous_attempt_cleaned = True
+
+        if attempt == 1:
+            return StepAttemptResult(
+                attempt=attempt,
+                success=False,
+                failure_type=FailureType.TIMEOUT,
+                timed_out=True,
+                cancelled=False,
+                exit_code=None,
+                duration_seconds=0.01,
+                stdout="",
+                stderr="",
+                stdout_log_path=log_writer.stdout_path,
+                stderr_log_path=log_writer.stderr_path,
+                error="timeout",
+                artifact_validation_results=[],
+            )
+
+        return StepAttemptResult(
+            attempt=attempt,
+            success=True,
+            failure_type=FailureType.NONE,
+            timed_out=False,
+            cancelled=False,
+            exit_code=0,
+            duration_seconds=0.01,
+            stdout="",
+            stderr="",
+            stdout_log_path=str(log_writer.stdout_path),
+            stderr_log_path=str(log_writer.stderr_path),
+            error="",
+            artifact_validation_results=[],
+        )
+
+
 class MockRecordingArtifactValidator:
     def __init__(self):
         self.call_count = 0

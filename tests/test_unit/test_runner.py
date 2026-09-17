@@ -282,12 +282,11 @@ class MockCancellingExecutor:
         )
 
 
-class MockCleanupAwareExecutor:
+class MockLifecycleTrackingExecutor:
 
     def __init__(self):
-        self.execute_count = 0
-        self.previous_attempt_cleaned = True
-
+        self.events: list[str] = []
+        
     def execute(
         self,
         step: LifecycleStepContent,
@@ -298,26 +297,40 @@ class MockCleanupAwareExecutor:
         cancellation_token: CancellationToken,
     ) -> StepAttemptResult:
 
-        #
-        # 下一個 attempt 啟動前
-        # 上一次一定已經 cleaned
-        #
-
-        assert self.previous_attempt_cleaned is True
-
-        self.execute_count += 1
+        self.events.append(f"attempt_{attempt}_start")
 
         #
-        # 模擬這次 process lifecycle
+        # 模擬 process 開始執行
         #
-        self.previous_attempt_cleaned = False
 
-        #
-        # Executor 在 return 前完成cleanup
-        #
-        self.previous_attempt_cleaned = True
-
+        self.events.append(f"attempt_{attempt}_process_running")
+        
         if attempt == 1:
+
+            #
+            # 模擬 Attempt 1 發生 Timeout
+            #
+
+            self.events.append(f"attempt_{attempt}_timeout")
+
+            # 
+            # 這裡代表 Executor 內部：
+            #
+            # ProcessTerminator
+            #     ↓
+            # SIGTERM
+            #     ↓
+            # grace period
+            #     ↓
+            # SIGKILL (if needed)
+            #     ↓
+            # stdout/stderr join
+            #
+
+            self.events.append(f"attempt_{attempt}_process_cleanup")
+
+            self.events.append(f"attempt_{attempt}_retrun")
+
             return StepAttemptResult(
                 attempt=attempt,
                 success=False,
@@ -333,6 +346,16 @@ class MockCleanupAwareExecutor:
                 error="timeout",
                 artifact_validation_results=[],
             )
+
+        #
+        # Attempt 2
+        #
+
+        self.events.append(f"attempt_{attempt}_success")
+
+        self.events.append(f"attempt_{attempt}_process_cleanup")
+
+        self.events.append(f"attempt_{attempt}_return")
 
         return StepAttemptResult(
             attempt=attempt,
@@ -2151,6 +2174,10 @@ def test_cancel_before_run_only_runs_global_teardown(tmp_path: Path):
 
     result = runner.run(config=config, cancellation_token=token)
 
+    assert "global_setup" not in executor.executed_steps
+    assert "setup" not in executor.executed_steps
+    assert "scenario" not in executor.executed_steps
+    assert "teardown" not in executor.executed_steps
     assert executor.executed_steps == ["global_teardown"]
 
 
@@ -2439,3 +2466,89 @@ def test_cancel_during_retry_delay_stops_next_attempt_and_runs_cleanup(tmp_path,
     assert result.step_results[0].attempts == 1
     assert result.step_results[0].cancelled is True
     assert result.summary.status == "CANCELLED"
+
+def test_retry_starts_only_after_previous_attempt_cleanup(tmp_path: Path):
+
+    config = RunnerConfig(
+            test_case=DeviceTestCase(
+                id="power_001",
+                name="power_001",
+                description="Description",
+            ),
+            device=DeviceInfo(
+                serial="device_001",
+                product="pixel",
+                build="build_001",
+            ),
+            retry=RetryConfig(
+                max_attempts=3,
+                delay_seconds=1,
+                retry_on=[
+                    FailureType.TIMEOUT
+                ]
+            ),
+            lifecycle=LifecycleConfig(
+                global_setup=LifecycleSteps(steps=[]),
+                setup=LifecycleSteps(steps=[]),
+                scenario=LifecycleSteps(
+                    steps=[
+                        mock_step("scenario"),
+                    ]
+                ),
+                teardown=LifecycleSteps(steps=[]),
+                global_teardown=LifecycleSteps(steps=[]),
+            ),
+            artifact=ArtifactConfig(
+                output_dir=str(tmp_path),
+            ),
+        )
+
+    executor = MockLifecycleTrackingExecutor()
+
+    runner = DeviceTestRunner(
+        executor=executor,
+        artifact_manager=ArtifactManager(tmp_path),
+        artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
+        reporter=JsonReporter(),
+        show_console_output=False,
+    )
+
+    result = runner.run(config)
+
+    scenario_result = next(step_result for step_result in result.step_results if step_result.name == "scenario")
+
+    #
+    # Attempt 1 timeout
+    # -> retry
+    # -> Attempt 2 pass
+
+    assert scenario_result.attempts == 2
+    assert scenario_result.success is True
+
+    #
+    # 最重要的 assertion:
+    #
+    # Attempt 1 cleanup 必須發生在
+    # Attempt 2 start 之前
+    #
+
+    attempt_1_cleanup_index = executor.events.index("attempt_1_process_cleanup")
+
+    attempt_2_start_index = executor.events.index("attempt_2_start")
+
+    assert attempt_1_cleanup_index < attempt_2_start_index
+
+    assert executor.events == [
+    "attempt_1_start",
+    "attempt_1_process_running",
+    "attempt_1_timeout",
+    "attempt_1_process_cleanup",
+    "attempt_1_return",
+
+    "attempt_2_start",
+    "attempt_2_process_running",
+    "attempt_2_success",
+    "attempt_2_process_cleanup",
+    "attempt_2_return",
+    ]

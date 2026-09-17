@@ -1,4 +1,5 @@
 import os
+
 import subprocess
 import threading
 import time
@@ -12,6 +13,7 @@ from runner.models import FailureType, LifecycleStepContent
 from runner.process import ProcessTerminator
 
 PROJECT_ROOT = Path(__file__).resolve().parent
+
 
 
 def test_executor_cancels_running_process(tmp_path: Path):

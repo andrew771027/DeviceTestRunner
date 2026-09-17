@@ -286,7 +286,7 @@ class MockLifecycleTrackingExecutor:
 
     def __init__(self):
         self.events: list[str] = []
-        
+
     def execute(
         self,
         step: LifecycleStepContent,
@@ -304,7 +304,7 @@ class MockLifecycleTrackingExecutor:
         #
 
         self.events.append(f"attempt_{attempt}_process_running")
-        
+
         if attempt == 1:
 
             #
@@ -313,7 +313,7 @@ class MockLifecycleTrackingExecutor:
 
             self.events.append(f"attempt_{attempt}_timeout")
 
-            # 
+            #
             # 這裡代表 Executor 內部：
             #
             # ProcessTerminator
@@ -329,7 +329,7 @@ class MockLifecycleTrackingExecutor:
 
             self.events.append(f"attempt_{attempt}_process_cleanup")
 
-            self.events.append(f"attempt_{attempt}_retrun")
+            self.events.append(f"attempt_{attempt}_return")
 
             return StepAttemptResult(
                 attempt=attempt,
@@ -341,8 +341,8 @@ class MockLifecycleTrackingExecutor:
                 duration_seconds=0.01,
                 stdout="",
                 stderr="",
-                stdout_log_path=log_writer.stdout_path,
-                stderr_log_path=log_writer.stderr_path,
+                stdout_log_path=str(log_writer.stdout_path),
+                stderr_log_path=str(log_writer.stderr_path),
                 error="timeout",
                 artifact_validation_results=[],
             )
@@ -2350,7 +2350,7 @@ def test_cancellation_lifecycle_and_summary(
     report = json.loads(report_path.read_text(encoding="utf-8"))
 
     assert report["metadata"]["cancel_requested"] is True
-    assert report["metadata"]["runner_version"] == "1.6.0"
+    assert report["metadata"]["runner_version"] == "1.6.1"
     assert report["summary"]["status"] == "CANCELLED"
     assert report["summary"]["cancelled_steps"] == expected_cancelled_steps
     assert report["summary"]["failed_steps"] == 0
@@ -2467,41 +2467,36 @@ def test_cancel_during_retry_delay_stops_next_attempt_and_runs_cleanup(tmp_path,
     assert result.step_results[0].cancelled is True
     assert result.summary.status == "CANCELLED"
 
+
 def test_retry_starts_only_after_previous_attempt_cleanup(tmp_path: Path):
 
     config = RunnerConfig(
-            test_case=DeviceTestCase(
-                id="power_001",
-                name="power_001",
-                description="Description",
-            ),
-            device=DeviceInfo(
-                serial="device_001",
-                product="pixel",
-                build="build_001",
-            ),
-            retry=RetryConfig(
-                max_attempts=3,
-                delay_seconds=1,
-                retry_on=[
-                    FailureType.TIMEOUT
+        test_case=DeviceTestCase(
+            id="power_001",
+            name="power_001",
+            description="Description",
+        ),
+        device=DeviceInfo(
+            serial="device_001",
+            product="pixel",
+            build="build_001",
+        ),
+        retry=RetryConfig(max_attempts=3, delay_seconds=1, retry_on=[FailureType.TIMEOUT]),
+        lifecycle=LifecycleConfig(
+            global_setup=LifecycleSteps(steps=[]),
+            setup=LifecycleSteps(steps=[]),
+            scenario=LifecycleSteps(
+                steps=[
+                    mock_step("scenario"),
                 ]
             ),
-            lifecycle=LifecycleConfig(
-                global_setup=LifecycleSteps(steps=[]),
-                setup=LifecycleSteps(steps=[]),
-                scenario=LifecycleSteps(
-                    steps=[
-                        mock_step("scenario"),
-                    ]
-                ),
-                teardown=LifecycleSteps(steps=[]),
-                global_teardown=LifecycleSteps(steps=[]),
-            ),
-            artifact=ArtifactConfig(
-                output_dir=str(tmp_path),
-            ),
-        )
+            teardown=LifecycleSteps(steps=[]),
+            global_teardown=LifecycleSteps(steps=[]),
+        ),
+        artifact=ArtifactConfig(
+            output_dir=str(tmp_path),
+        ),
+    )
 
     executor = MockLifecycleTrackingExecutor()
 
@@ -2516,7 +2511,9 @@ def test_retry_starts_only_after_previous_attempt_cleanup(tmp_path: Path):
 
     result = runner.run(config)
 
-    scenario_result = next(step_result for step_result in result.step_results if step_result.name == "scenario")
+    scenario_result = next(
+        step_result for step_result in result.step_results if step_result.name == "scenario"
+    )
 
     #
     # Attempt 1 timeout
@@ -2540,15 +2537,14 @@ def test_retry_starts_only_after_previous_attempt_cleanup(tmp_path: Path):
     assert attempt_1_cleanup_index < attempt_2_start_index
 
     assert executor.events == [
-    "attempt_1_start",
-    "attempt_1_process_running",
-    "attempt_1_timeout",
-    "attempt_1_process_cleanup",
-    "attempt_1_return",
-
-    "attempt_2_start",
-    "attempt_2_process_running",
-    "attempt_2_success",
-    "attempt_2_process_cleanup",
-    "attempt_2_return",
+        "attempt_1_start",
+        "attempt_1_process_running",
+        "attempt_1_timeout",
+        "attempt_1_process_cleanup",
+        "attempt_1_return",
+        "attempt_2_start",
+        "attempt_2_process_running",
+        "attempt_2_success",
+        "attempt_2_process_cleanup",
+        "attempt_2_return",
     ]

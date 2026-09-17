@@ -6,6 +6,7 @@ from runner.artifact_validator import ArtifactValidator
 from runner.config import ConfigLoader
 from runner.executor import SubprocessExecutor
 from runner.failure import FailureClassifier
+from runner.process import ProcessTerminator
 from runner.reporter import JsonReporter
 from runner.runner import DeviceTestRunner
 
@@ -80,6 +81,7 @@ artifact:
         executor=SubprocessExecutor(
             project_directory=PROJECT_ROOT,
             failure_classifier=FailureClassifier(),
+            process_terminator=ProcessTerminator(),
         ),
         artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
@@ -146,7 +148,7 @@ artifact:
 
     report = json.loads((run_dir / "result.json").read_text(encoding="utf-8"))
 
-    assert report["metadata"]["runner_version"] == "1.6.0"
+    assert report["metadata"]["runner_version"] == "1.6.1"
 
     assert report["summary"]["status"] == "PASSED"
 
@@ -219,7 +221,9 @@ artifact:
 
     runner = DeviceTestRunner(
         executor=SubprocessExecutor(
-            project_directory=PROJECT_ROOT, failure_classifier=FailureClassifier()
+            project_directory=PROJECT_ROOT,
+            failure_classifier=FailureClassifier(),
+            process_terminator=ProcessTerminator(),
         ),
         artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
@@ -289,7 +293,7 @@ artifact:
 
     report = json.loads((run_dir / "result.json").read_text(encoding="utf-8"))
 
-    assert report["metadata"]["runner_version"] == "1.6.0"
+    assert report["metadata"]["runner_version"] == "1.6.1"
 
     assert report["summary"]["status"] == "FAILED"
 
@@ -365,6 +369,7 @@ def test_integration_steps_succeeds_after_party(tmp_path: Path):
         executor=SubprocessExecutor(
             project_directory=PROJECT_ROOT,
             failure_classifier=FailureClassifier(),
+            process_terminator=ProcessTerminator(),
         ),
         artifact_manager=ArtifactManager(output_dir=str(output_dir)),
         artifact_validator=ArtifactValidator(),
@@ -435,7 +440,9 @@ def test_real_subprocess_fails_after_retry_exhausted(tmp_path: Path):
     config = ConfigLoader().load(str(config_file))
     runner = DeviceTestRunner(
         executor=SubprocessExecutor(
-            project_directory=PROJECT_ROOT, failure_classifier=FailureClassifier()
+            project_directory=PROJECT_ROOT,
+            failure_classifier=FailureClassifier(),
+            process_terminator=ProcessTerminator(),
         ),
         artifact_manager=ArtifactManager(output_dir=str(output_dir)),
         artifact_validator=ArtifactValidator(),

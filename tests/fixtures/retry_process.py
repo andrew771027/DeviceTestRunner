@@ -1,10 +1,11 @@
 import os
-import sys
 import subprocess
+import sys
 import time
 from pathlib import Path
 
-def main() -> int: 
+
+def main() -> int:
 
     run_dir = Path(os.environ["RUN_ARTIFACT_DIR"])
 
@@ -14,7 +15,7 @@ def main() -> int:
     # 判斷現在是第幾次 attempt
     #
     if counter_file.exists():
-        attempt = int(counter_file.read_text(encoding="utf-8").strip() + 1)
+        attempt = int(counter_file.read_text(encoding="utf-8").strip()) + 1
     else:
         attempt = 1
 
@@ -49,17 +50,11 @@ def main() -> int:
             [
                 sys.executable,
                 "-c",
-                (
-                    "import time; "
-                    "time.sleep(30)"
-                ),
+                ("import time; " "time.sleep(30)"),
             ]
         )
 
-        child_pid_file = (
-            run_dir
-            / "attempt_1_child.pid"
-        )
+        child_pid_file = run_dir / "attempt_1_child.pid"
 
         child_pid_file.write_text(
             str(child.pid),
@@ -67,18 +62,12 @@ def main() -> int:
         )
 
         print(
-            (
-                f"attempt {attempt} pid="
-                f"{os.getpid()}"
-            ),
+            (f"attempt {attempt} pid=" f"{os.getpid()}"),
             flush=True,
         )
 
         print(
-            (
-                f"attempt {attempt} child pid="
-                f"{child.pid}"
-            ),
+            (f"attempt {attempt} child pid=" f"{child.pid}"),
             flush=True,
         )
 
@@ -102,6 +91,24 @@ def main() -> int:
     # 第二次直接成功
     #
     if attempt == 2:
+        #
+        # Attempt 2 一開始就檢查前一次的 parent / child。
+        # 這裡不能先 sleep，否則無法確認 retry 開始前是否已經清乾淨。
+        #
+        for filename in ("attempt_1.pid", "attempt_1_child.pid"):
+            pid = int((run_dir / filename).read_text(encoding="utf-8"))
+            try:
+                # signal 0 只檢查 process 是否存在。
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                # 前一次的 process 已經結束，繼續檢查下一個 PID。
+                continue
+
+            # 還找得到前一次的 process，代表 cleanup 沒有完成。
+            print(f"previous attempt still alive: {filename}={pid}", file=sys.stderr)
+            return 1
+        print("previous attempt tree cleaned before retry", flush=True)
+
         print(f"attempt {attempt} pid={os.getpid()}", flush=True)
 
         print(f"attempt {attempt} success", flush=True)
@@ -111,6 +118,7 @@ def main() -> int:
     print(f"Unexpected attempt={attempt}", file=sys.stderr, flush=True)
 
     return 1
+
 
 if __name__ == "__main__":
     sys.exit(main())

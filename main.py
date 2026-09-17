@@ -1,17 +1,17 @@
 import argparse
-import sys
 import signal
+import sys
 from pathlib import Path
 
 from runner.artifact import ArtifactManager
 from runner.artifact_validator import ArtifactValidator
+from runner.cancellation import CancellationToken
 from runner.config import ConfigLoader
 from runner.executor import SubprocessExecutor
 from runner.failure import FailureClassifier
+from runner.process import ProcessTerminator
 from runner.reporter import JsonReporter
 from runner.runner import DeviceTestRunner
-from runner.cancellation import CancellationToken
-from runner.process import ProcessTerminator
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 
@@ -32,9 +32,7 @@ class SignalCancellationHandler:
         self._signal_count += 1
 
         if self._signal_count == 1:
-            print("\nCancellaiton requested. "
-                  "Cleaning up..."
-                  )
+            print("\nCancellaiton requested. " "Cleaning up...")
 
             self.token.cancel()
 
@@ -44,11 +42,10 @@ class SignalCancellationHandler:
         # Optional:
         # second Ctrl + C = immediate interruption
         #
-        print(
-            "\nForce exit requested."
-        )
+        print("\nForce exit requested.")
 
         raise KeyboardInterrupt
+
 
 def main():
 
@@ -62,13 +59,15 @@ def main():
 
     signal_handler = SignalCancellationHandler(cancellation_token)
 
-    old_sigint_handler = signal_handler.signal(signal.SIGINT, signal_handler.handle_sigint)
-    
+    old_sigint_handler = signal.signal(signal.SIGINT, signal_handler.handle_sigint)
+
     process_terminator = ProcessTerminator(grace_period_seconds=2.0)
 
     runner = DeviceTestRunner(
         executor=SubprocessExecutor(
-            project_directory=PROJECT_ROOT, failure_classifier=failure_classifier, process_terminator=process_terminator
+            project_directory=PROJECT_ROOT,
+            failure_classifier=failure_classifier,
+            process_terminator=process_terminator,
         ),
         artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),

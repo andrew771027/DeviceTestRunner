@@ -1,19 +1,14 @@
-import sys
 import os
+import sys
 import time
 from pathlib import Path
 
 from runner.artifact import ArtifactManager
 from runner.artifact_validator import ArtifactValidator
+from runner.cancellation import CancellationToken
 from runner.config import ConfigLoader
 from runner.executor import SubprocessExecutor
 from runner.failure import FailureClassifier
-from runner.reporter import JsonReporter
-from runner.runner import DeviceTestRunner
-
-from runner.cancellation import (
-    CancellationToken,
-)
 from runner.models import (
     ArtifactConfig,
     DeviceInfo,
@@ -25,13 +20,12 @@ from runner.models import (
     RetryConfig,
     RunnerConfig,
 )
-from runner.process import (
-    ProcessTerminator,
-)
-
-
+from runner.process import ProcessTerminator
+from runner.reporter import JsonReporter
+from runner.runner import DeviceTestRunner
 
 PROJECT_ROOT = Path(__file__).resolve().parent
+
 
 def is_process_alive(pid: int) -> bool:
     try:
@@ -44,9 +38,10 @@ def is_process_alive(pid: int) -> bool:
         #
         # Process 存在
         # 只是目前沒有權限 singnal
-        # 
+        #
         return True
     return True
+
 
 def test_real_artifact_aware_retry(tmp_path: Path):
     """Acceptance scenario.
@@ -136,6 +131,7 @@ def test_real_artifact_aware_retry(tmp_path: Path):
         executor=SubprocessExecutor(
             project_directory=PROJECT_ROOT,
             failure_classifier=FailureClassifier(),
+            process_terminator=ProcessTerminator(),
         ),
         artifact_manager=ArtifactManager(output_dir=output_dir),
         artifact_validator=ArtifactValidator(),
@@ -176,10 +172,10 @@ def test_retry_does_not_leave_previous_attempt_process(tmp_path: Path):
     # Project root
     # ------------------------------------------------
     #
-    
+
     project_root = Path(__file__).resolve().parents[2]
 
-    fixture_script = project_root / "tests" / "fixture" / "retry_process.py"
+    fixture_script = project_root / "tests" / "fixtures" / "retry_process.py"
 
     assert fixture_script.exists()
 
@@ -187,10 +183,7 @@ def test_retry_does_not_leave_previous_attempt_process(tmp_path: Path):
     # 使用目前 pytest 所使用的 python
     #
     # 比直接寫 python 更穩定
-    command = (
-        f'"{sys.executable}" '
-        f'"{fixture_script}'
-    )
+    command = f'"{sys.executable}" "{fixture_script}"'
 
     #
     # ------------------------------------------
@@ -201,50 +194,31 @@ def test_retry_does_not_leave_previous_attempt_process(tmp_path: Path):
         test_case=DeviceTestCase(
             id="retry_process_test",
             name="retry_process_test",
-            description=(
-                "Verify process cleanup before retry"
-            )
+            description=("Verify process cleanup before retry"),
         ),
-        device=DeviceInfo(
-            serial="device_001",
-            product="pixel",
-            build="build_001"
-        ),
-        retry=RetryConfig(
-            max_attempts=2,
-            delay_seconds=0.01,
-            retry_on=[
-                FailureType.TIMEOUT
-            ]
-        ),
+        device=DeviceInfo(serial="device_001", product="pixel", build="build_001"),
+        retry=RetryConfig(max_attempts=2, delay_seconds=0.01, retry_on=[FailureType.TIMEOUT]),
         lifecycle=LifecycleConfig(
             global_setup=LifecycleSteps(steps=[]),
             setup=LifecycleSteps(steps=[]),
-            scenario=LifecycleConfig(
+            scenario=LifecycleSteps(
                 steps=[
                     LifecycleStepContent(
                         name="retry_process",
                         type="command",
                         command=command,
-
                         #
                         # Attempt 1 sleep 30 sec
                         # 所以一定會timeout
                         #
-                        timeout_second=1
+                        timeout_second=1,
                     )
                 ]
             ),
-            teardown=LifecycleSteps(
-                steps=[]
-            ),
-            global_teardown=LifecycleSteps(
-                steps=[]
-            )
+            teardown=LifecycleSteps(steps=[]),
+            global_teardown=LifecycleSteps(steps=[]),
         ),
-        artifact=ArtifactConfig(
-            output_dir=str(tmp_path)
-        )
+        artifact=ArtifactConfig(output_dir=str(tmp_path)),
     )
 
     #
@@ -260,7 +234,7 @@ def test_retry_does_not_leave_previous_attempt_process(tmp_path: Path):
     executor = SubprocessExecutor(
         project_directory=project_root,
         failure_classifier=failure_classifier,
-        process_terminator=process_terminator
+        process_terminator=process_terminator,
     )
 
     artifact_manager = ArtifactManager(tmp_path)
@@ -271,7 +245,7 @@ def test_retry_does_not_leave_previous_attempt_process(tmp_path: Path):
         artifact_validator=ArtifactValidator(),
         failure_classifier=failure_classifier,
         reporter=JsonReporter(),
-        show_console_output=False
+        show_console_output=False,
     )
 
     #
@@ -288,12 +262,7 @@ def test_retry_does_not_leave_previous_attempt_process(tmp_path: Path):
     # --------------------------------------------
     #
     scenario_result = next(
-        step_result
-        for step_result
-        in result.step_results
-        if (
-            step_result.name == "retry_process"
-        )
+        step_result for step_result in result.step_results if (step_result.name == "retry_process")
     )
 
     #
@@ -328,36 +297,24 @@ def test_retry_does_not_leave_previous_attempt_process(tmp_path: Path):
     assert attempt_2.failure_type == FailureType.NONE
 
     assert "attempt 2 success" in attempt_2.stdout
+    assert "previous attempt tree cleaned before retry" in attempt_2.stdout
 
     #
     # -----------------------------------------
     # Find run directory
     # -----------------------------------------
     #
-    # 如果你的 RunResult metadata 已經有
-    # run_dir，優先直接從 metadata 取得。
-    #
-    # 以下依你的 ArtifactManager API 調整。
+    # RunResult.artifact_dir 是此次執行的結果目錄。
     #
 
-    run_dir = Path(
-        result.metadata.run_dir
-    )
+    assert result.artifact_dir is not None
+    run_dir = Path(result.artifact_dir)
 
-    pid_file = (
-        run_dir
-        / "attempt_1.pid"
-    )
+    pid_file = run_dir / "attempt_1.pid"
 
     assert pid_file.exists()
 
-    attempt_1_pid = int(
-        pid_file
-        .read_text(
-            encoding="utf-8"
-        )
-        .strip()
-    )
+    attempt_1_pid = int(pid_file.read_text(encoding="utf-8").strip())
 
     #
     # -----------------------------------------
@@ -370,7 +327,7 @@ def test_retry_does_not_leave_previous_attempt_process(tmp_path: Path):
 
     deadline = time.monotonic() + 1.0
 
-    while (is_process_alive(attempt_1_pid) and time.monotonic() < deadline):
+    while is_process_alive(attempt_1_pid) and time.monotonic() < deadline:
 
         time.sleep(0.05)
 

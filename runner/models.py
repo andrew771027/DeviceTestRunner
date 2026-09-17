@@ -146,7 +146,7 @@ class StepAttemptResult:
     failure_type: FailureType
     timed_out: bool
     cancelled: bool
-    
+
     exit_code: Optional[int]
     duration_seconds: float
 

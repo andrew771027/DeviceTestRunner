@@ -4,13 +4,14 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import Callable, TextIO
+from typing import TextIO
 
 from runner.artifact import StepLogWriter
 from runner.cancellation import CancellationToken
 from runner.failure import FailureClassifier
 from runner.models import FailureType, LifecycleStepContent, StepAttemptResult
 from runner.process import ProcessTerminator
+
 
 class SubprocessExecutor:
     POLL_INTERVAL_SECONDS = 0.1
@@ -36,7 +37,9 @@ class SubprocessExecutor:
     ) -> StepAttemptResult:
 
         if log_writer is None:
-            log_writer = self._create_default_log_writer(stage=stage, step_name=step.name)
+            log_writer = self._create_default_log_writer(
+                stage=stage, step_name=step.name
+            )
 
         environment = os.environ.copy()
 
@@ -74,18 +77,17 @@ class SubprocessExecutor:
                 encoding="utf-8",
                 errors="replace",
                 bufsize=1,
-
-                # 
+                #
                 # Important:
-                # this attempt gets its own session / 
+                # this attempt gets its own session /
                 # process group
-                start_new_session=True
+                start_new_session=True,
             )
 
             if process.stdout is None or process.stderr is None:
                 raise RuntimeError("Unable to open subprocess streams.")
 
-            # 
+            #
             # --------------------------------------------
             # stdout reader
             # --------------------------------------------
@@ -98,7 +100,7 @@ class SubprocessExecutor:
                 daemon=True,
             )
 
-            # 
+            #
             # --------------------------------------------
             # stderr reader
             # --------------------------------------------
@@ -122,7 +124,7 @@ class SubprocessExecutor:
 
             while True:
 
-                # 
+                #
                 # 1. process 已經正常結束
                 #
                 if process.poll() is not None:
@@ -135,7 +137,7 @@ class SubprocessExecutor:
 
                     error_message = "Execution cancelled"
 
-                    self._stop_process(process)
+                    self.process_terminator.terminate_process_group(process)
 
                     break
 
@@ -247,7 +249,6 @@ class SubprocessExecutor:
                 error=error_message,
                 artifact_validation_results=[],
             )
-
 
     @staticmethod
     def _consume_stream(stream: TextIO, write_line) -> None:

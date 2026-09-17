@@ -25,3 +25,7 @@ Version scope: Failure Classification
 - Full command: `poetry run pytest -q`
 - Result: 112 passed
 - BDD description audit: 112 of 112 tests contain Given／When／Then
+
+## Pytest 用法
+
+Fixture、mock、參數化與執行方式請見 [測試指南 v1.5.2](../test_guide.md#v1-5-2)。

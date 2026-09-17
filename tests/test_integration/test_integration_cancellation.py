@@ -84,6 +84,12 @@ def test_executor_cancels_running_process(tmp_path: Path):
 
 def test_stdout_reader_thread_finishes_after_process_termination(tmp_path: Path):
 
+    """Acceptance scenario.
+
+    Given a real command prints start and waits.
+    When the token is cancelled during execution.
+    Then execution returns cancelled and retains the start output.
+    """
     token = CancellationToken()
 
     executor = SubprocessExecutor(
@@ -138,6 +144,12 @@ def test_stdout_reader_thread_finishes_after_process_termination(tmp_path: Path)
 
 def test_stderr_is_drained_after_cancellation(tmp_path: Path):
 
+    """Acceptance scenario.
+
+    Given a real command prints an error to stderr and waits.
+    When the token is cancelled during execution.
+    Then execution returns cancelled and retains the error output.
+    """
     token = CancellationToken()
 
     executor = SubprocessExecutor(
@@ -192,6 +204,12 @@ def test_stderr_is_drained_after_cancellation(tmp_path: Path):
 
 def test_process_group_termination_cleans_child_processes(tmp_path: Path):
 
+    """Acceptance scenario.
+
+    Given a shell has started a child whose PID is recorded.
+    When the terminator stops its process group.
+    Then the child PID no longer exists.
+    """
     child_pid_file = tmp_path / "child.pid"
 
     command = f"""
@@ -271,6 +289,12 @@ def test_executor_cleans_entire_tree_and_drains_readers(
     # default: child / grandchild 正常接受 SIGTERM。
     # ignore: child / grandchild 忽略 SIGTERM，必須靠 SIGKILL 結束。
     #
+    """Acceptance scenario.
+
+    Given a parent, child and grandchild run with descendants accepting or ignoring SIGTERM.
+    When the executor observes timeout or cancellation.
+    Then all three PIDs disappear, both readers finish, and both output logs match the result.
+    """
     fixture_script = Path(__file__).resolve().parents[1] / "fixtures" / "process_tree.py"
 
     #

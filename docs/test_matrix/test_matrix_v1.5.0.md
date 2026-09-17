@@ -13,3 +13,7 @@ Version baseline: Git tag `v1.5.0`
 | Real subprocess retry | Integration | A transient command can pass on a later attempt; exhaustion fails | `tests/test_integration.py` |
 
 Out of scope: artifact validation as an attempt-level retry trigger.
+
+## Pytest 用法
+
+Fixture、mock、參數化與執行方式請見 [測試指南 v1.5.0](../test_guide.md#v1-5-0)。

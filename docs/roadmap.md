@@ -1,6 +1,6 @@
 # Device Test Runner Roadmap
 
-目前已實作 v1.6.0 的基本取消功能。接下來依序處理程序終止、run 逾時與取消後的清理，再加入 YAML 變數與 recorder 管理。
+目前已實作 v1.6.1 的程序群組終止、reader 收尾與 SIGINT handler，並通過本機測試。套件版本同步、平台驗證與發佈仍待完成。接下來處理 run 逾時與取消後的清理，再加入 YAML 變數與 recorder 管理。
 
 本文件保留各版本的功能規劃。`Completed` 表示該節記錄的功能已完成；`Planned` 與 `Future` 表示尚未實作。實際發佈條件與驗證結果請見各版本的完成條件文件。
 
@@ -98,13 +98,7 @@ Device Test Runner 負責流程控制，但不應承擔所有硬體測試細節�
 * DeviceTestRunner orchestration
 * 基本 PASSED／FAILED 判定
 
-#### 相關技術
-
-* Configuration loading
-* Data model design
-* subprocess
-* orchestration basics
-* input／output flow
+相關技術：Configuration loading、Data model design、subprocess、orchestration basics、input／output flow。
 
 #### 狀態
 
@@ -125,12 +119,7 @@ Completed
 * 更新 unit tests
 * 更新 integration tests
 
-#### 相關技術
-
-* Naming consistency
-* Refactoring
-* backward compatibility
-* test maintenance
+相關技術：Naming consistency、Refactoring、backward compatibility、test maintenance。
 
 #### 狀態
 
@@ -164,13 +153,7 @@ artifacts/
     └── stderr/
 ```
 
-#### 相關技術
-
-* Artifact ownership
-* Output organization
-* metadata design
-* serialization
-* separation of concerns
+相關技術：Artifact ownership、Output organization、metadata design、serialization、separation of concerns。
 
 #### 狀態
 
@@ -209,13 +192,7 @@ global_teardown
 * teardown execution foundation
 * lifecycle report structure
 
-#### 相關技術
-
-* Test lifecycle
-* stage orchestration
-* execution ordering
-* state transitions
-* status aggregation
+相關技術：Test lifecycle、stage orchestration、execution ordering、state transitions、status aggregation。
 
 #### 狀態
 
@@ -284,13 +261,7 @@ artifact:
 }
 ```
 
-#### 相關技術
-
-* Validation abstraction
-* policy separation
-* domain-independent validation
-* status aggregation
-* post-execution verification
+相關技術：Validation abstraction、policy separation、domain-independent validation、status aggregation、post-execution verification。
 
 #### 狀態
 
@@ -336,13 +307,7 @@ retry:
 * validation failure
 * non-retryable configuration error
 
-#### 相關技術
-
-* Policy objects
-* attempt tracking
-* transient failure
-* error classification
-* idempotency
+相關技術：Policy objects、attempt tracking、transient failure、error classification、idempotency。
 
 #### 狀態
 
@@ -478,7 +443,7 @@ Foundation implemented and locally tested; release pending. 不將完整 Timeout
 
 v1.6.0 已有直接 `Popen` 程序的 terminate → 固定兩秒等待 → kill，以及正常路徑的 stdout／stderr thread join。本版本擴充到 process group、後代程序與各種結束路徑的收尾保證，不重做 cancellation token。
 
-目前使用 `shell=True`，沒有建立獨立 process group；reader join 沒有等待上限。Runner 雖然等待 executor 返回才 retry，但不代表前一次的後代程序已清乾淨；既有 retry cleanup 主要處理 required artifact targets。`main.py` 尚未接上 SIGINT。
+目前使用 `shell=True, start_new_session=True`，注入 `ProcessTerminator` 管理同群組的後代程序。SIGTERM 後確認整個群組退出，必要時 SIGKILL；每個 reader 的 join 上限為 2 秒。真實 retry 測試在第二次 attempt 開始時檢查前次 parent／child PID。`main.py` 已接上第一次 SIGINT 取消、第二次 KeyboardInterrupt。
 
 #### 驗收重點
 
@@ -489,7 +454,11 @@ v1.6.0 已有直接 `Popen` 程序的 terminate → 固定兩秒等待 → kill�
 
 #### 狀態
 
-Planned
+Implemented; locally verified. Release pending.
+
+已驗證 timeout／cancel 下的 parent、child、grandchild 清理、忽略 SIGTERM 的後代、reader 結束與 log 落盤。SIGINT 目前是直接呼叫 handler 的單元測試。尚未驗證真實 CLI signal 路徑、Linux CI、脫離群組的後代，以及正常完成後留下背景程序的處理。
+
+Runtime 為 `1.6.1`，套件仍為 `1.6.0`。完整結果與發佈待辦見 [v1.6.1 完成條件](definition_of_done/definition_of_done_v1.6.1.md)。
 
 ### v1.6.2 — Run-level Timeout
 
@@ -741,14 +710,7 @@ collect recorder artifacts
 * health command
 * process running check
 
-#### 相關技術
-
-* Background process
-* process synchronization
-* readiness
-* start／stop lifecycle
-* concurrent execution
-* resource ownership
+相關技術：Background process、process synchronization、readiness、start／stop lifecycle、concurrent execution、resource ownership。
 
 #### 狀態
 
@@ -798,13 +760,7 @@ cleanup_errors:
   teardown command failed
 ```
 
-#### 相關技術
-
-* try／finally
-* failure preservation
-* cleanup guarantees
-* hooks
-* multi-error reporting
+相關技術：try／finally、failure preservation、cleanup guarantees、hooks、multi-error reporting。
 
 #### 狀態
 
@@ -861,13 +817,7 @@ First Failure:
 - Exit Code: 1
 ```
 
-#### 相關技術
-
-* Aggregation
-* reporting model
-* observability
-* diagnostics
-* exit code design
+相關技術：Aggregation、reporting model、observability、diagnostics、exit code design。
 
 #### 狀態
 
@@ -996,15 +946,7 @@ Device + Recorder + Test Scripts
 * centralized report storage
 * execution history
 
-#### 相關技術
-
-* Distributed systems
-* controller／worker architecture
-* dispatch
-* remote execution
-* state machines
-* failure recovery
-* resource scheduling
+相關技術：Distributed systems、controller／worker architecture、dispatch、remote execution、state machines、failure recovery、resource scheduling。
 
 #### 狀態
 
@@ -1296,10 +1238,10 @@ Done
 
 ## 開發優先順序
 
-目前已實作並本機驗證 v1.6.0 cancellation foundation；完整取消保證與發佈仍待完成。接下來的開發優先順序：
+目前已實作並本機驗證 v1.6.1 process-group cleanup；完整取消保證與發佈仍待完成。接下來的開發優先順序：
 
 ```text
-1. v1.6.1 Safe Process Termination
+1. v1.6.1 平台驗證、套件版本同步與發佈確認
 2. v1.6.2 Run-level Timeout
 3. v1.6.3 Cancellation-aware Cleanup
 4. v1.7.x YAML Variables, Environment and Runtime Context
@@ -1320,7 +1262,7 @@ Done
 * 過早的 microservices 拆分
 * 完整 distributed scheduling
 
-目前最重要的是先建立可靠的單機 execution lifecycle。
+先完成單機 execution lifecycle，再擴充遠端執行。
 
 ## 長期方向
 
@@ -1345,18 +1287,3 @@ Controller
    ↓
 Device Test Platform
 ```
-
-這個專案同時也是以下能力的實作練習：
-
-* Python software design
-* Test architecture
-* Test lifecycle
-* Orchestration
-* Process management
-* Artifact management
-* Error handling
-* Reliability
-* Distributed systems
-* Developer productivity
-* Test infrastructure
-* Platform engineering

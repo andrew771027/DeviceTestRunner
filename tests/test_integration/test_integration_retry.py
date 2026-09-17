@@ -173,6 +173,12 @@ def test_retry_does_not_leave_previous_attempt_process(tmp_path: Path):
     # ------------------------------------------------
     #
 
+    """Acceptance scenario.
+
+    Given the first real attempt starts a child and exceeds its timeout.
+    When the runner retries the step.
+    Then attempt two verifies both previous PIDs are absent before succeeding.
+    """
     project_root = Path(__file__).resolve().parents[2]
 
     fixture_script = project_root / "tests" / "fixtures" / "retry_process.py"

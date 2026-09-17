@@ -1585,7 +1585,7 @@ Validation Result 應該提供清楚的 error。
 
 或者：`Artifact size below minimum: expected >= 1024 bytes, actual=128 bytes`
 
-這會讓 `report.json` 本身具備 Debug 價值。
+可直接從 `report.json` 查閱失敗原因。
 
 ## Artifact Path Resolution
 
@@ -2400,31 +2400,7 @@ Run status reflects artifact validity?
 
 ## v1.4.0 的設計價值
 
-v1.3.5 之前，Runner 大部分依賴：`Process-level truth`
-
-具體規則：
-
-```text
-exit code
-stdout
-stderr
-timeout
-```
-
-v1.4.0 開始引入：`Test-output-level truth`
-
-具體規則：
-
-```text
-expected artifact
-actual artifact
-validation rule
-validation result
-```
-
-這表示 Test Runner 開始不再完全相信：`Process 說自己成功`
-
-而是會確認：`成功的證據到底有沒有產生`
+Runner 除了檢查 exit code，也依 validation rules 檢查預期的 artifact，將驗證結果納入 run 狀態。
 
 ## v1.3.5 與 v1.4.0 比較
 

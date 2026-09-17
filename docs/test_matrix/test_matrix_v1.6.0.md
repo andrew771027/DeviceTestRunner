@@ -38,3 +38,7 @@ All 150 Python test functions under `tests/` were audited for meaningful Given�
 * `test_retry_policy_retries_failure_before_max_attempts` actually supplies `FailureType.NONE` and asserts false for attempts one and two. Its docstring now describes those assertions; it is not evidence for failure retry. Other policy and runner tests cover actual failure retry.
 * `test_artifact_retry_defaults_to_false` checks an explicit optional rule and absent `after_step`, not a removed `retry_on_failure` default.
 * `configs/sample.yaml` is a demonstration configuration, not a proven all-pass acceptance run; see Definition of Done for the observed sample result.
+
+## Pytest 用法
+
+Fixture、mock、參數化與執行方式請見 [測試指南 v1.6.0](../test_guide.md#v1-6-0)。

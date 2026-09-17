@@ -7,6 +7,12 @@ from runner.process import ProcessTerminator
 
 def test_terminated_process_does_not_need_cleanup(monkeypatch):
 
+    """Acceptance scenario.
+
+    Given the direct process has already exited with code zero.
+    When the terminator is called.
+    Then no group signal is sent and the result reports no termination or kill.
+    """
     process = subprocess.Popen(
         ["true"],
         start_new_session=True,
@@ -33,6 +39,12 @@ def test_terminated_process_does_not_need_cleanup(monkeypatch):
 
 def test_process_group_terminates_gracefully():
 
+    """Acceptance scenario.
+
+    Given a real process runs in a separate session.
+    When the terminator sends SIGTERM.
+    Then the process exits without SIGKILL.
+    """
     process = subprocess.Popen(
         [
             sys.executable,
@@ -53,6 +65,12 @@ def test_process_group_terminates_gracefully():
 
 def test_process_is_killed_when_sigterm_is_ignored():
 
+    """Acceptance scenario.
+
+    Given a real process confirms its SIGTERM ignore handler is ready.
+    When the termination grace period expires.
+    Then the terminator uses SIGKILL and the process exits.
+    """
     command = (
         "import signal, time;"
         "signal.signal("
@@ -94,6 +112,12 @@ def test_group_probe_permission_error_does_not_abort_cleanup(monkeypatch):
     # 檢查 process group 時，暫時沒有權限不代表 process 已經結束。
     # 應該繼續等待，直到確認群組不存在。
     #
+    """Acceptance scenario.
+
+    Given a fake group probe raises PermissionError before reporting that the group is gone.
+    When the terminator sends SIGTERM and polls the group.
+    Then the probe is retried and cleanup completes without SIGKILL.
+    """
     class FakeProcess:
         def __init__(self):
             self.pid = 123

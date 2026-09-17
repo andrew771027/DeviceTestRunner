@@ -6,11 +6,11 @@
 
 Device Test Runner 使用 YAML 定義裝置測試流程，執行既有的 Bash、Python、ADB 等命令，並保存每次執行的輸出與 JSON 報告。它負責安排測試步驟、驗證輸出檔案，以及依設定重試失敗步驟；裝置操作仍由你的腳本處理。
 
-目前版本為 **v1.6.0**，支援五階段測試流程、步驟逾時、選擇性重試、必要與選用的輸出檔案驗證，以及 Python API 取消。Recorder 管理與遠端執行仍在規劃中。
+目前 runtime／報告版本為 **v1.6.1**，支援五階段測試流程、步驟逾時、選擇性重試、輸出檔案驗證、程序群組清理與 Ctrl+C 取消。`pyproject.toml` 仍為 `1.6.0`，套件版本同步與發佈確認列於 [完成條件](docs/definition_of_done/definition_of_done_v1.6.1.md)。Recorder 管理與遠端執行仍在規劃中。
 
 ## 安裝
 
-需要 Python 3.10+ 與 Poetry 2.x。在專案目錄執行：
+需要 Python 3.10+ 與 Poetry 2.x。程序群組清理使用 POSIX signal API；目前本機驗證為 macOS，沒有 Windows 支援驗證。在專案目錄執行：
 
 ```bash
 git clone git@github.com:andrew771027/DeviceTestRunner.git
@@ -77,7 +77,7 @@ global_teardown
 | `teardown` | 記錄失敗但繼續執行該 stage 的剩餘 steps，之後執行 `global_teardown` |
 | `global_teardown` | 記錄失敗但繼續執行該 stage 的剩餘 steps |
 
-上述為一般失敗路由。v1.6.0 進入 setup 區塊後，即使 setup／scenario 取消，仍執行兩個 cleanup stages；run 開始前或 global_setup 取消時只執行 global_teardown。如果 global_setup 成功後、進入 setup 區塊前已觀察到取消，也會跳過 teardown。Cleanup attempt 使用新的 token；這些是受控流程的 best effort，不涵蓋未處理 Python exception 或 KeyboardInterrupt。
+上述為一般失敗路由。進入 setup 區塊後，即使 setup／scenario 取消，仍執行兩個 cleanup stages；run 開始前或 global_setup 取消時只執行 global_teardown。如果 global_setup 成功後、進入 setup 區塊前已觀察到取消，也會跳過 teardown。Cleanup attempt 使用新的 token；這些是受控流程的 best effort，不涵蓋未處理 Python exception 或 KeyboardInterrupt。
 
 最終 `summary.status` 以 `CANCELLED` 優先；沒有取消時，failed step、skipped step 或 required artifact failure 任一存在即為 `FAILED`，其餘為 `PASSED`。
 
@@ -160,11 +160,13 @@ artifact:
         min_rows: 1
 ```
 
-`after_step` 將 validation rule 綁定到指定 step，runner 會在該 step 每次 command 成功後立即驗證。`required` 預設為 `true`：required rule 失敗會使 attempt 失敗，且只有 failure type 出現在 `retry.retry_on`、尚未達 `max_attempts` 時才重試；`required: false` 的失敗仍寫入 report，但不影響 step 或 run 狀態。Lifecycle 結束後會再次對所有規則執行 final validation，包括有 `after_step` 的規則。YAML 未設定 `retry_on` 時預設為空清單，因此不重試；`none`、`cancelled` 與未知值會被拒絕。直接使用 Python `RetryConfig()` 的預設清單不同，詳見 v1.6.0 Architecture。
+`after_step` 將 validation rule 綁定到指定 step，runner 會在該 step 每次 command 成功後立即驗證。`required` 預設為 `true`：required rule 失敗會使 attempt 失敗，且只有 failure type 出現在 `retry.retry_on`、尚未達 `max_attempts` 時才重試；`required: false` 的失敗仍寫入 report，但不影響 step 或 run 狀態。Lifecycle 結束後會再次對所有規則執行 final validation，包括有 `after_step` 的規則。YAML 未設定 `retry_on` 時預設為空清單，因此不重試；`none`、`cancelled` 與未知值會被拒絕。直接使用 Python `RetryConfig()` 的預設清單不同，詳見 [v1.6.0 的設定說明](docs/architecture/architecture_v1.6.0.md)。
 
 ## 透過 Python API 取消
 
-取消由呼叫端持有 token 並呼叫 `cancel()`；`main.py` 尚未將 Ctrl+C／SIGTERM 轉為 token cancellation。以下示範沿用載入的 configuration，在兩秒後提出取消請求：
+CLI 第一次 Ctrl+C／SIGINT 會呼叫 `token.cancel()`；第二次會拋出 `KeyboardInterrupt`，可能中斷 cleanup 與報告寫入。CLI 正常完成回傳 0、FAILED 回傳 1、CANCELLED 或 run 期間的 KeyboardInterrupt 回傳 130。SIGTERM 尚未接到 token。
+
+Python API 由呼叫端持有 token 並呼叫 `cancel()`。以下示範沿用載入的 configuration，在兩秒後提出取消請求：
 
 ```python
 from pathlib import Path
@@ -176,13 +178,18 @@ from runner.cancellation import CancellationToken
 from runner.config import ConfigLoader
 from runner.executor import SubprocessExecutor
 from runner.failure import FailureClassifier
+from runner.process import ProcessTerminator
 from runner.reporter import JsonReporter
 from runner.runner import DeviceTestRunner
 
 config = ConfigLoader().load("configs/sample.yaml")
 classifier = FailureClassifier()
 runner = DeviceTestRunner(
-    executor=SubprocessExecutor(Path.cwd(), classifier),
+    executor=SubprocessExecutor(
+        project_directory=Path.cwd(),
+        failure_classifier=classifier,
+        process_terminator=ProcessTerminator(),
+    ),
     artifact_manager=ArtifactManager(config.artifact.output_dir),
     artifact_validator=ArtifactValidator(),
     failure_classifier=classifier,
@@ -200,9 +207,11 @@ finally:
     timer.join()
 ```
 
-Executor 以 0.1 秒 polling 檢查取消與 timeout，對直接子程序 terminate、等待兩秒後必要時 kill。尚未處理整棵 process tree，後代程序持有 stdout／stderr pipe 時，完成時間可能延長；上述 timer 不是兩秒內返回的保證。Cancelled attempt 不做 attempt validation 或 retry，但 run 最後仍驗證所有 artifacts。
+Executor 每 0.1 秒檢查取消與 timeout。每次 attempt 建立獨立 session，清理時對 process group 送 SIGTERM，預設等待 2 秒；仍有程序則送 SIGKILL，再等最多 2 秒。stdout／stderr reader 各有 2 秒 join 上限。上述 timer 不是兩秒內返回的保證。
 
-升級至 v1.6.0 時，Python 呼叫端需調整 `SubprocessExecutor.execute(..., cancellation_token=...)`，以及手動建構 result dataclasses 時的新欄位。`run(config)` 仍可不傳 token。完整差異見 [Architecture](docs/architecture/architecture_v1.6.0.md)。
+同群組的 child／grandchild 已有清理測試；自行脫離群組的程序，以及直接 process 正常退出後留下的背景程序，不在目前保證內。詳見 [Process Lifecycle](docs/process_lifecycle.md)。Cancelled attempt 不做 attempt validation 或 retry，但 run 最後仍驗證所有 artifacts。
+
+從 v1.6.0 升級時，`SubprocessExecutor` 建構子需新增 `process_terminator`。從更舊版本升級時，Python 呼叫端也需調整 `SubprocessExecutor.execute(..., cancellation_token=...)`，以及手動建構 result dataclasses 時的新欄位。`run(config)` 仍可不傳 token。完整差異見 [Architecture](docs/architecture/architecture_v1.6.1.md)。
 
 ## 輸出檔案
 
@@ -258,7 +267,7 @@ artifacts/
     "device_serial": "demo",
     "device_product": "demo",
     "device_build": "demo",
-    "runner_version": "1.6.0",
+    "runner_version": "1.6.1",
     "started_at": "2026-09-12T00:00:00+00:00",
     "finished_at": "2026-09-12T00:00:01+00:00",
     "cancel_requested": false
@@ -333,22 +342,6 @@ DeviceTestRunner
        result.json / per-attempt logs / validation results
 ```
 
-Device Test Runner 的核心資料流：
-
-```text
-Config
-  ↓
-Runner
-  ↓
-Executor
-  ↓
-StepResult
-  ↓
-ArtifactManager
-        ↓
-RunResult / result.json
-```
-
 ## 執行專案測試
 
 執行所有測試：
@@ -383,6 +376,8 @@ poetry run pytest -m artifact
 
 歷史驗證紀錄（2026-09-12，Python 3.14）：`.venv/bin/python -m pytest -q` → **153 passed in 39.39s**。150 個測試函式皆有 Given／When／Then 說明；參數化後共 153 個案例。
 
+本次 v1.6.1 驗證與 162 個測試函式／168 個案例的對照，見 [完成條件](docs/definition_of_done/definition_of_done_v1.6.1.md) 與 [測試矩陣](docs/test_matrix/test_matrix_v1.6.1.md)。
+
 ## 持續整合
 
 [CI workflow](.github/workflows/ci.yml) 會在 push 至 `main` 或建立以 `main` 為目標的 pull request 時執行。流程安裝 Python、Poetry 與專案依賴後，執行 pytest。
@@ -406,7 +401,7 @@ Repository secret 名稱為 `OPENAI_API_KEY`，在 CLI invocation 映射成 `COD
 
 目前先補齊單機執行與取消流程，再加入可重用設定與 recorder 管理：
 
-1. v1.6.1：程序群組終止、輸出串流收尾與 CLI 取消訊號。
+1. v1.6.1：已實作程序群組終止、輸出串流收尾與 SIGINT handler；平台驗證、版本同步與發佈待完成。
 2. v1.6.2：整次 run 的逾時設定。
 3. v1.6.3：取消後的清理範圍、時間限制與部分結果保存。
 4. v1.7.0～v1.7.2：YAML 靜態變數、環境變數與執行資訊。
@@ -419,9 +414,10 @@ Repository secret 名稱為 `OPENAI_API_KEY`，在 CLI invocation 映射成 `COD
 
 | 文件 | 用途 |
 | --- | --- |
-| [架構 v1.6.0](docs/architecture/architecture_v1.6.0.md) | 元件、取消路由、報告欄位與相容性 |
-| [測試矩陣 v1.6.0](docs/test_matrix/test_matrix_v1.6.0.md) | 功能對應的測試與覆蓋限制 |
-| [驗收條件 v1.6.0](docs/acceptance_criteria/acceptance_criteria_v1.6.0.md) | 可觀察的預期行為 |
-| [完成條件 v1.6.0](docs/definition_of_done/definition_of_done_v1.6.0.md) | 驗證紀錄與待完成的發佈項目 |
+| [架構 v1.6.1](docs/architecture/architecture_v1.6.1.md) | 元件、取消路由、報告欄位與相容性 |
+| [測試指南](docs/test_guide.md) | Pytest 工具、fixture、Mock 與各版用法 |
+| [測試矩陣 v1.6.1](docs/test_matrix/test_matrix_v1.6.1.md) | 功能對應的測試與覆蓋限制 |
+| [驗收條件 v1.6.1](docs/acceptance_criteria/acceptance_criteria_v1.6.1.md) | 可觀察的預期行為 |
+| [完成條件 v1.6.1](docs/definition_of_done/definition_of_done_v1.6.1.md) | 驗證紀錄與待完成的發佈項目 |
 
 `docs/` 內的舊版文件保留當時的設計與介面，使用時請確認版本。

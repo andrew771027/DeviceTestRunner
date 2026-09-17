@@ -11,3 +11,7 @@ Version baseline: Git tag `v1.2.0`
 | JSON report | Integration | A run produces persisted output and report data | `tests/test_integration.py` |
 
 Out of scope: lifecycle failure routing, streaming console output, artifact validation, and retry.
+
+## Pytest 用法
+
+Fixture、mock、參數化與執行方式請見 [測試指南 v1.2.0](../test_guide.md#v1-2-0)。

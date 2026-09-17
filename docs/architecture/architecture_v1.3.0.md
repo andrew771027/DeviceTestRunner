@@ -2450,21 +2450,7 @@ flowchart TD
 
 ## v1.3 的架構價值
 
-v1.3 的價值不只是多了五個欄位。
-
-真正的改變是 Runner 開始理解：
-
-```text
-哪些步驟是準備
-哪些步驟是主要測試
-哪些步驟是清理
-失敗後哪些步驟應停止
-哪些清理步驟仍必須執行
-```
-
-這代表 Device Test Runner 從：`Sequential Command Runner`
-
-進一步成為：`Lifecycle-aware Test Runner`
+Runner 區分準備、測試與清理階段，依失敗位置決定停止哪些步驟，以及繼續哪些清理工作。
 
 ## v1.3 架構摘要
 

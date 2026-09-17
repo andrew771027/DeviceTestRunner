@@ -8,6 +8,12 @@ from runner.cancellation import CancellationToken
 
 def test_first_sigint_cancels_token():
 
+    """Acceptance scenario.
+
+    Given a signal handler has an active token.
+    When its SIGINT handler is called once.
+    Then the token is cancelled without interrupting the test.
+    """
     token = CancellationToken()
     handler = SignalCancellationHandler(token)
 
@@ -20,6 +26,12 @@ def test_first_sigint_cancels_token():
 
 def test_second_sigint_raises_keyboard_interrupt():
 
+    """Acceptance scenario.
+
+    Given a signal handler has received its first SIGINT.
+    When its SIGINT handler is called again.
+    Then KeyboardInterrupt is raised and the token remains cancelled.
+    """
     token = CancellationToken()
     handler = SignalCancellationHandler(token)
 

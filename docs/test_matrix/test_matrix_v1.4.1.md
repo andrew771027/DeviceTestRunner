@@ -12,3 +12,7 @@ Version baseline: Git tag `v1.4.1`
 | Content validation | Integration | Valid content passes; invalid CSV/JSON makes the run fail | `tests/test_integration_artifact_validation.py` |
 
 Regression focus: all v1.4.0 file and directory rules remain supported.
+
+## Pytest 用法
+
+Fixture、mock、參數化與執行方式請見 [測試指南 v1.4.1](../test_guide.md#v1-4-1)。

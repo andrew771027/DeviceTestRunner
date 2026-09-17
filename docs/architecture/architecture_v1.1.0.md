@@ -1251,20 +1251,7 @@ RunResult
 
 ## v1.1 架構價值
 
-v1.1 的主要價值不是單純把 YAML 改成 List。
-
-真正的架構變化是：`一個大 Script`
-
-被拆成：`多個有名稱、有 timeout、有結果的 WorkflowStep`
-
-因此系統開始具備 Workflow Orchestration 的基本能力：
-
-* 步驟有順序
-* 步驟可以獨立執行
-* 步驟可以獨立紀錄
-* 步驟可以獨立判斷成功或失敗
-* Runner 可以控制失敗後的行為
-* RunResult 可以顯示具體失敗位置
+v1.1 將流程拆成有名稱、timeout 與結果的 WorkflowStep。Runner 依序執行步驟、處理失敗，RunResult 保留各步驟的結果。
 
 ## v1.1 架構摘要
 

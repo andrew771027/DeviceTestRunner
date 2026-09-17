@@ -12,3 +12,7 @@ Version baseline: Git tag `v1.3.0`
 | Lifecycle execution | Integration | YAML executes across the complete lifecycle | `tests/test_integration.py` |
 
 Regression focus: v1.2 artifact and executor behavior remains compatible with lifecycle orchestration.
+
+## Pytest 用法
+
+Fixture、mock、參數化與執行方式請見 [測試指南 v1.3.0](../test_guide.md#v1-3-0)。

@@ -2470,6 +2470,12 @@ def test_cancel_during_retry_delay_stops_next_attempt_and_runs_cleanup(tmp_path,
 
 def test_retry_starts_only_after_previous_attempt_cleanup(tmp_path: Path):
 
+    """Acceptance scenario.
+
+    Given a tracking executor records cleanup before returning a timed-out first attempt.
+    When the runner retries and the second attempt succeeds.
+    Then the recorded first cleanup precedes the second start and the full event order matches.
+    """
     config = RunnerConfig(
         test_case=DeviceTestCase(
             id="power_001",

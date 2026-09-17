@@ -6,7 +6,7 @@ Artifact-aware retry.
 
 Historical baseline: the working tree after tag `v1.5.0` (release candidate)
 
-This document preserves the recorded acceptance state for this version. Test results and release checks below are historical records; they have not been rerun or reverified by this formatting update.
+Historical acceptance record. Tests and release checks were not rerun for this editorial update.
 
 ## Acceptance criteria
 

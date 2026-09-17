@@ -8,29 +8,48 @@ on:
         branches:
             - main
 
+permissions:
+    contents: read
+
 jobs:
     test:
+        name: Code Quality and Tests
         runs-on: ubuntu-latest
         steps:
+            # Step 1: Get source code
             - name: Checkout respository
               uses: actions/checkout@v7
 
+            # Step 2: Setup Python
             - name: Set up Python
               uses: actions/setup-python@v7
               with:
-                python-version: "3.12"
+                python-version: "3.14"
 
+            # Step 3: Install Poetry
             - name: Install Poetry
               run: pip install poetry
 
+            # Step 4: Install Python version
             - name: Show Python version
               run: python --version
 
+            # Step 5: Check Poetry version
             - name: Show Poetry version
               run: poetry --version
 
+            # Step 6: Install dependencies
             - name: Install dependencies
               run: poetry install
 
+            # Step 7: Ruff lint
+            - name: Ruff Lint
+              run: poetry run ruff check .
+
+            # Step 8: Ruff formatting
+            - name: Ruff Format Checkt
+              run: poetry run ruff check format --check .
+
+            # Step 9: Pytest
             - name: Run tests
               run: poetry run pytest

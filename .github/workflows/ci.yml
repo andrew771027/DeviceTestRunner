@@ -3,7 +3,8 @@ name: Device Test Runner CI
 on:
     push:
         branches:
-            - main
+            # - main
+            - '*'
     pull_request:
         branches:
             - main
@@ -19,6 +20,9 @@ jobs:
             # Step 1: Get source code
             - name: Checkout respository
               uses: actions/checkout@v7
+
+            - name: Display Branch Name
+              run: 'echo "Current Branch: ${{ github.ref }}"'
 
             # Step 2: Setup Python
             - name: Set up Python

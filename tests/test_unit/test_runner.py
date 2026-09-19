@@ -2108,7 +2108,7 @@ def test_cancel_stops_remaining_scenario_steps(tmp_path: Path):
         show_console_output=False,
     )
 
-    result = runner.run(config=config, cancellation_token=token)
+    runner.run(config=config, cancellation_token=token)
 
     assert "scenario" in executor.executed_steps
     assert "scenario_2" not in executor.executed_steps
@@ -2124,6 +2124,7 @@ def test_cancel_before_run_only_runs_global_teardown(tmp_path: Path):
     When the runner receives that token.
     Then only global_teardown is executed.
     """
+
     config = RunnerConfig(
         test_case=DeviceTestCase(
             id="power_001",
@@ -2172,7 +2173,7 @@ def test_cancel_before_run_only_runs_global_teardown(tmp_path: Path):
         show_console_output=False,
     )
 
-    result = runner.run(config=config, cancellation_token=token)
+    runner.run(config=config, cancellation_token=token)
 
     assert "global_setup" not in executor.executed_steps
     assert "setup" not in executor.executed_steps
@@ -2188,36 +2189,6 @@ def test_cancel_during_retry_delay(tmp_path: Path, monkeypatch):
     When the token is cancelled during the first polling sleep.
     Then the wait returns true after one 0.1-second sleep.
     """
-    config = RunnerConfig(
-        test_case=DeviceTestCase(
-            id="power_001",
-            name="power_001",
-            description="Description",
-        ),
-        device=DeviceInfo(
-            serial="device_001",
-            product="pixel",
-            build="build_001",
-        ),
-        retry=RetryConfig(
-            max_attempts=3,
-            delay_seconds=1,
-        ),
-        lifecycle=LifecycleConfig(
-            global_setup=LifecycleSteps(steps=[mock_step("global_setup")]),
-            setup=LifecycleSteps(steps=[mock_step("setup")]),
-            scenario=LifecycleSteps(
-                steps=[
-                    mock_step("scenario"),
-                ]
-            ),
-            teardown=LifecycleSteps(steps=[mock_step("teardown")]),
-            global_teardown=LifecycleSteps(steps=[mock_step("global_teardown")]),
-        ),
-        artifact=ArtifactConfig(
-            output_dir=str(tmp_path),
-        ),
-    )
 
     token = CancellationToken()
 
@@ -2469,7 +2440,6 @@ def test_cancel_during_retry_delay_stops_next_attempt_and_runs_cleanup(tmp_path,
 
 
 def test_retry_starts_only_after_previous_attempt_cleanup(tmp_path: Path):
-
     """Acceptance scenario.
 
     Given a tracking executor records cleanup before returning a timed-out first attempt.

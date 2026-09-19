@@ -3,7 +3,7 @@ name: Device Test Runner CI
 on:
     push:
         branches:
-            - '**'
+            - main
     pull_request:
         branches:
             - main
@@ -16,43 +16,31 @@ jobs:
         name: Code Quality and Tests
         runs-on: ubuntu-latest
         steps:
-            # Step 1: Get source code
-            - name: Checkout respository
+            - name: Checkout repository
               uses: actions/checkout@v7
 
-            - name: Display Branch Name
-              run: 'echo "Current Branch: ${{ github.ref }}"'
-
-            # Step 2: Setup Python
             - name: Set up Python
               uses: actions/setup-python@v7
               with:
                 python-version: "3.14"
 
-            # Step 3: Install Poetry
             - name: Install Poetry
-              run: pip install poetry
+              run: python -m pip install "poetry>=2,<3"
 
-            # Step 4: Install Python version
             - name: Show Python version
               run: python --version
 
-            # Step 5: Check Poetry version
             - name: Show Poetry version
               run: poetry --version
 
-            # Step 6: Install dependencies
+            - name: Check dependency lock file
+              run: poetry check --lock
+
             - name: Install dependencies
-              run: poetry install
+              run: poetry install --no-interaction
 
-            # Step 7: Ruff lint
-            - name: Ruff Lint
-              run: poetry run ruff check .
+            - name: Code Quality
+              run: poetry run pre-commit run --all-files --show-diff-on-failure
 
-            # Step 8: Ruff formatting
-            - name: Ruff Format Checkt
-              run: poetry run ruff check format --check .
-
-            # Step 9: Pytest
             - name: Run tests
               run: poetry run pytest

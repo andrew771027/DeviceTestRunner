@@ -12,3 +12,7 @@ Version baseline: Git tag `v1.4.0`
 | Validation report | Integration | Validation results are persisted in `result.json` | `tests/test_integration_artifact_validation.py` |
 
 Out of scope: CSV/JSON semantic validation and retry.
+
+## Pytest 用法
+
+Fixture、mock、參數化與執行方式請見 [測試指南 v1.4.0](../test_guide.md#v1-4-0)。

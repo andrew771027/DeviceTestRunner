@@ -1868,7 +1868,7 @@ assert (
 
 ## Run Status Tests
 
-最重要的四個 case：
+四個主要 case：
 
 ```python
 @pytest.mark.parametrize(
@@ -1970,7 +1970,7 @@ RunResult.status = FAILED
 
 ## Integration Test：Execution FAIL / Artifact Exists
 
-另一個很有價值的案例：
+另一個案例：
 
 ```bash
 #!/bin/bash
@@ -2253,29 +2253,7 @@ How do I make execution and validation results consistent?
 
 ## v1.4.1 的架構價值
 
-v1.4.0 最大的功能突破是：`Runner 不再只相信 exit code。`
-
-v1.4.1 的最大架構突破則是：`Runner 開始有清楚的 Result Model hierarchy。`
-
-具體規則：
-
-```text
-StepResult
-        ↓
-ExecutionSummary
-
-ArtifactValidationResult
-        ↓
-ValidationSummary
-
-ExecutionSummary
-+
-ValidationSummary
-        ↓
-RunResult.status
-```
-
-每一層負責自己的 truth。
+StepResult 彙整為 ExecutionSummary，ArtifactValidationResult 彙整為 ValidationSummary，兩者共同決定 RunResult.status。
 
 ## Result Hierarchy
 

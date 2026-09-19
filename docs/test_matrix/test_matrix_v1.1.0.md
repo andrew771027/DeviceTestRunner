@@ -11,3 +11,7 @@ Version baseline: Git tag `v1.1.0`
 | End-to-end compatibility | Integration | The renamed model pipeline still executes a sample configuration | `tests/test_integration.py` |
 
 Regression focus: v1.0 behavior remains intact after naming and model refactoring.
+
+## Pytest 用法
+
+Fixture、mock、參數化與執行方式請見 [測試指南 v1.1.0](../test_guide.md#v1-1-0)。

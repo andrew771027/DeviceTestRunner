@@ -11,3 +11,7 @@ Version baseline: Git tag `v1.0.0`
 | End-to-end execution | Integration | Sample YAML runs through executor and produces JSON output | `tests/test_integration.py` |
 
 Out of scope: artifact directories, full lifecycle stages, validation, retry, and timeout cancellation.
+
+## Pytest 用法
+
+Fixture、mock、參數化與執行方式請見 [測試指南 v1.0.0](../test_guide.md#v1-0-0)。

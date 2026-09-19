@@ -10,6 +10,7 @@ from runner.artifact import StepLogWriter
 from runner.cancellation import CancellationToken
 from runner.failure import FailureClassifier
 from runner.models import FailureType, LifecycleStepContent, StepAttemptResult
+from runner.process import ProcessTerminator
 
 
 class SubprocessExecutor:
@@ -19,9 +20,11 @@ class SubprocessExecutor:
         self,
         project_directory: str | Path,
         failure_classifier: FailureClassifier,
+        process_terminator: ProcessTerminator,
     ):
         self.project_directory = Path(project_directory).resolve()
         self.failure_classifier = failure_classifier
+        self.process_terminator = process_terminator
 
     def execute(
         self,
@@ -34,7 +37,9 @@ class SubprocessExecutor:
     ) -> StepAttemptResult:
 
         if log_writer is None:
-            log_writer = self._create_default_log_writer(stage=stage, step_name=step.name)
+            log_writer = self._create_default_log_writer(
+                stage=stage, step_name=step.name
+            )
 
         environment = os.environ.copy()
 
@@ -46,13 +51,21 @@ class SubprocessExecutor:
 
         process: subprocess.Popen[str] | None = None
 
-        error_message: str | None = None
+        stdout_thread: threading.Thread | None = None
+        stderr_thread: threading.Thread | None = None
 
         timed_out: bool = False
-
         cancelled: bool = False
 
+        error_message: str | None = None
+
         try:
+            #
+            # ----------------------------------------------
+            # Start process group
+            # ----------------------------------------------
+            #
+
             process = subprocess.Popen(
                 step.command,
                 shell=True,
@@ -64,10 +77,21 @@ class SubprocessExecutor:
                 encoding="utf-8",
                 errors="replace",
                 bufsize=1,
+                #
+                # Important:
+                # this attempt gets its own session /
+                # process group
+                start_new_session=True,
             )
 
             if process.stdout is None or process.stderr is None:
                 raise RuntimeError("Unable to open subprocess streams.")
+
+            #
+            # --------------------------------------------
+            # stdout reader
+            # --------------------------------------------
+            #
 
             stdout_thread = threading.Thread(
                 target=self._consume_stream,
@@ -75,6 +99,12 @@ class SubprocessExecutor:
                 name=f"{stage}-{step.name}-stdout",
                 daemon=True,
             )
+
+            #
+            # --------------------------------------------
+            # stderr reader
+            # --------------------------------------------
+            #
 
             stderr_thread = threading.Thread(
                 target=self._consume_stream,
@@ -86,23 +116,34 @@ class SubprocessExecutor:
             stdout_thread.start()
             stderr_thread.start()
 
+            #
+            # --------------------------------------------
+            # Process monitoring loop
+            # --------------------------------------------
+            #
+
             while True:
 
+                #
                 # 1. process 已經正常結束
+                #
                 if process.poll() is not None:
                     break
-
+                #
                 # 2. 外部要求取消
+                #
                 if cancellation_token.is_cancelled:
                     cancelled = True
 
                     error_message = "Execution cancelled"
 
-                    self._stop_process(process)
+                    self.process_terminator.terminate_process_group(process)
 
                     break
 
+                #
                 # 3. timeout
+                #
                 elapsed_seconds = time.perf_counter() - start_time
 
                 if elapsed_seconds >= step.timeout_second:
@@ -110,18 +151,38 @@ class SubprocessExecutor:
 
                     error_message = f"Command timeout after {step.timeout_second}"
 
-                    self._stop_process(process)
+                    self.process_terminator.terminate_process_group(process)
 
                     break
 
                 time.sleep(self.POLL_INTERVAL_SECONDS)
 
-            stdout_thread.join()
-            stderr_thread.join()
+            #
+            # -----------------------------------------
+            # Make sure direct child has been reaped
+            # -----------------------------------------
+            #
 
-            exit_code = process.returncode
+            if process.poll() is None:
+                process.wait()
+
+            #
+            # ----------------------------------------
+            # Drain stdout/stderr
+            # ----------------------------------------
+            #
+
+            self._join_reader_thread(stdout_thread)
+
+            self._join_reader_thread(stderr_thread)
 
             duration_seconds = time.perf_counter() - start_time
+
+            #
+            # ---------------------------------------
+            # Classifiaction
+            # ---------------------------------------
+            #
 
             if cancelled:
 
@@ -131,7 +192,7 @@ class SubprocessExecutor:
 
             else:
 
-                success = not timed_out and exit_code == 0
+                success = not timed_out and process.returncode == 0
 
                 failure_type = self.failure_classifier.classify_process_failure(
                     process_success=success,
@@ -146,35 +207,37 @@ class SubprocessExecutor:
                 failure_type=failure_type,
                 timed_out=timed_out,
                 cancelled=cancelled,
-                exit_code=exit_code,
+                exit_code=process.returncode,
                 duration_seconds=duration_seconds,
                 stdout=log_writer.stdout,
                 stderr=log_writer.stderr,
                 stdout_log_path=str(log_writer.stdout_path),
                 stderr_log_path=str(log_writer.stderr_path),
                 error=error_message,
+                artifact_validation_results=[],
             )
 
-        except OSError as error:
+        except (OSError, RuntimeError) as error:
             duration_seconds = time.perf_counter() - start_time
             error_message = f"Unable to execute command: {error}"
 
             log_writer.write_stderr(f"{error_message}\n")
 
-            failure_type = self.failure_classifier.classify_process_failure(
-                process_success=False,
-                timed_out=False,
-                stderr=log_writer.stderr,
-                error=error_message,
-            )
+            #
+            # Exception 發生時也不能留下 process
+            #
 
-            if process is not None:
-                self._stop_process(process)
+            if process is not None and process.poll() is None:
+                self.process_terminator.terminate_process_group(process)
+
+            self._join_reader_thread(stdout_thread)
+
+            self._join_reader_thread(stderr_thread)
 
             return StepAttemptResult(
                 attempt=attempt,
                 success=False,
-                failure_type=failure_type,
+                failure_type=FailureType.PROCESS_ERROR,
                 timed_out=False,
                 cancelled=False,
                 exit_code=process.returncode if process is not None else None,
@@ -184,37 +247,7 @@ class SubprocessExecutor:
                 stdout_log_path=str(log_writer.stdout_path),
                 stderr_log_path=str(log_writer.stderr_path),
                 error=error_message,
-            )
-
-        except RuntimeError as error:
-            duration_seconds = time.perf_counter() - start_time
-            error_message = str(error)
-
-            log_writer.write_stderr(f"{error_message}\n")
-
-            failure_type = self.failure_classifier.classify_process_failure(
-                process_success=False,
-                timed_out=False,
-                stderr=log_writer.stderr,
-                error=error_message,
-            )
-
-            if process is not None:
-                self._stop_process(process)
-
-            return StepAttemptResult(
-                attempt=attempt,
-                success=False,
-                failure_type=failure_type,
-                timed_out=False,
-                cancelled=False,
-                exit_code=process.returncode if process is not None else None,
-                duration_seconds=duration_seconds,
-                stdout=log_writer.stdout,
-                stderr=log_writer.stderr,
-                stdout_log_path=str(log_writer.stdout_path),
-                stderr_log_path=str(log_writer.stderr_path),
-                error=error_message,
+                artifact_validation_results=[],
             )
 
     @staticmethod
@@ -226,17 +259,14 @@ class SubprocessExecutor:
             stream.close()
 
     @staticmethod
-    def _stop_process(process: subprocess.Popen[str]) -> None:
-        if process.poll() is not None:
+    def _join_reader_thread(thread: threading.Thread | None) -> None:
+        if thread is None:
             return
 
-        process.terminate()
+        thread.join(timeout=2)
 
-        try:
-            process.wait(timeout=2)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait()
+        if thread.is_alive():
+            raise RuntimeError("Output reader thread did not stop.")
 
     @staticmethod
     def _create_default_log_writer(stage: str, step_name: str) -> StepLogWriter:

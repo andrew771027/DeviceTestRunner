@@ -11,3 +11,7 @@ Version baseline: Git tag `v1.3.5`
 | End-to-end log pipeline | Integration | Console/executor/artifact output remains synchronized | `tests/test_integration.py` |
 
 Regression focus: lifecycle routing from v1.3.0 remains unchanged.
+
+## Pytest 用法
+
+Fixture、mock、參數化與執行方式請見 [測試指南 v1.3.5](../test_guide.md#v1-3-5)。

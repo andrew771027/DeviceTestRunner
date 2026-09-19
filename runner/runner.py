@@ -26,7 +26,7 @@ from runner.retry import RetryPolicy
 
 
 class DeviceTestRunner:
-    VERSION = "1.6.0"
+    VERSION = "1.6.1"
 
     def __init__(
         self,

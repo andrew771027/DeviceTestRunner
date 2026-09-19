@@ -2004,7 +2004,7 @@ Runner 不需要知道 Executor 內部用了：
 * terminate
 * kill
 
-這是封裝的重要價值。
+這讓呼叫端不必處理檔案細節。
 
 ```text
 Runner knows WHAT happened.
@@ -2358,7 +2358,7 @@ Mock 需要模擬行為，而不只是資料。
 
 因此 v1.3.5 的 Executor Test 本質上開始接近：`Process lifecycle simulation`
 
-這也是 v1.3.5 比 v1.3 更重要的學習價值。
+
 
 ## v1.3 與 v1.3.5 比較
 
@@ -2384,34 +2384,7 @@ Mock 需要模擬行為，而不只是資料。
 
 ## v1.3.5 的架構價值
 
-v1.3.5 的價值不是單純把：
-
-```python
-subprocess.run()
-```
-
-換成：
-
-```python
-subprocess.Popen()
-```
-
-真正的架構變化是 Runner 開始處理一個外部 Process 的完整執行生命週期：
-
-```text
-建立 Process
-監控 Process
-同時讀取兩條輸出流
-即時保存執行紀錄
-處理 timeout
-終止 Process
-等待 Reader 完成
-建立執行結果
-```
-
-這使 Device Test Runner 從：`Command Wrapper`
-
-進一步成為：`Process-aware Execution Engine`
+Executor 建立並監看 process，同時讀取 stdout／stderr、保存 log、處理 timeout，等待 readers 結束後建立結果。
 
 ## v1.3.5 架構摘要
 

@@ -282,6 +282,98 @@ class MockCancellingExecutor:
         )
 
 
+class MockLifecycleTrackingExecutor:
+
+    def __init__(self):
+        self.events: list[str] = []
+
+    def execute(
+        self,
+        step: LifecycleStepContent,
+        stage: str,
+        attempt: int,
+        log_writer: StepLogWriter,
+        working_directory: str | Path,
+        cancellation_token: CancellationToken,
+    ) -> StepAttemptResult:
+
+        self.events.append(f"attempt_{attempt}_start")
+
+        #
+        # 模擬 process 開始執行
+        #
+
+        self.events.append(f"attempt_{attempt}_process_running")
+
+        if attempt == 1:
+
+            #
+            # 模擬 Attempt 1 發生 Timeout
+            #
+
+            self.events.append(f"attempt_{attempt}_timeout")
+
+            #
+            # 這裡代表 Executor 內部：
+            #
+            # ProcessTerminator
+            #     ↓
+            # SIGTERM
+            #     ↓
+            # grace period
+            #     ↓
+            # SIGKILL (if needed)
+            #     ↓
+            # stdout/stderr join
+            #
+
+            self.events.append(f"attempt_{attempt}_process_cleanup")
+
+            self.events.append(f"attempt_{attempt}_return")
+
+            return StepAttemptResult(
+                attempt=attempt,
+                success=False,
+                failure_type=FailureType.TIMEOUT,
+                timed_out=True,
+                cancelled=False,
+                exit_code=None,
+                duration_seconds=0.01,
+                stdout="",
+                stderr="",
+                stdout_log_path=str(log_writer.stdout_path),
+                stderr_log_path=str(log_writer.stderr_path),
+                error="timeout",
+                artifact_validation_results=[],
+            )
+
+        #
+        # Attempt 2
+        #
+
+        self.events.append(f"attempt_{attempt}_success")
+
+        self.events.append(f"attempt_{attempt}_process_cleanup")
+
+        self.events.append(f"attempt_{attempt}_return")
+
+        return StepAttemptResult(
+            attempt=attempt,
+            success=True,
+            failure_type=FailureType.NONE,
+            timed_out=False,
+            cancelled=False,
+            exit_code=0,
+            duration_seconds=0.01,
+            stdout="",
+            stderr="",
+            stdout_log_path=str(log_writer.stdout_path),
+            stderr_log_path=str(log_writer.stderr_path),
+            error="",
+            artifact_validation_results=[],
+        )
+
+
 class MockRecordingArtifactValidator:
     def __init__(self):
         self.call_count = 0
@@ -2016,7 +2108,7 @@ def test_cancel_stops_remaining_scenario_steps(tmp_path: Path):
         show_console_output=False,
     )
 
-    result = runner.run(config=config, cancellation_token=token)
+    runner.run(config=config, cancellation_token=token)
 
     assert "scenario" in executor.executed_steps
     assert "scenario_2" not in executor.executed_steps
@@ -2032,6 +2124,7 @@ def test_cancel_before_run_only_runs_global_teardown(tmp_path: Path):
     When the runner receives that token.
     Then only global_teardown is executed.
     """
+
     config = RunnerConfig(
         test_case=DeviceTestCase(
             id="power_001",
@@ -2080,8 +2173,12 @@ def test_cancel_before_run_only_runs_global_teardown(tmp_path: Path):
         show_console_output=False,
     )
 
-    result = runner.run(config=config, cancellation_token=token)
+    runner.run(config=config, cancellation_token=token)
 
+    assert "global_setup" not in executor.executed_steps
+    assert "setup" not in executor.executed_steps
+    assert "scenario" not in executor.executed_steps
+    assert "teardown" not in executor.executed_steps
     assert executor.executed_steps == ["global_teardown"]
 
 
@@ -2092,36 +2189,6 @@ def test_cancel_during_retry_delay(tmp_path: Path, monkeypatch):
     When the token is cancelled during the first polling sleep.
     Then the wait returns true after one 0.1-second sleep.
     """
-    config = RunnerConfig(
-        test_case=DeviceTestCase(
-            id="power_001",
-            name="power_001",
-            description="Description",
-        ),
-        device=DeviceInfo(
-            serial="device_001",
-            product="pixel",
-            build="build_001",
-        ),
-        retry=RetryConfig(
-            max_attempts=3,
-            delay_seconds=1,
-        ),
-        lifecycle=LifecycleConfig(
-            global_setup=LifecycleSteps(steps=[mock_step("global_setup")]),
-            setup=LifecycleSteps(steps=[mock_step("setup")]),
-            scenario=LifecycleSteps(
-                steps=[
-                    mock_step("scenario"),
-                ]
-            ),
-            teardown=LifecycleSteps(steps=[mock_step("teardown")]),
-            global_teardown=LifecycleSteps(steps=[mock_step("global_teardown")]),
-        ),
-        artifact=ArtifactConfig(
-            output_dir=str(tmp_path),
-        ),
-    )
 
     token = CancellationToken()
 
@@ -2254,7 +2321,7 @@ def test_cancellation_lifecycle_and_summary(
     report = json.loads(report_path.read_text(encoding="utf-8"))
 
     assert report["metadata"]["cancel_requested"] is True
-    assert report["metadata"]["runner_version"] == "1.6.0"
+    assert report["metadata"]["runner_version"] == "1.6.1"
     assert report["summary"]["status"] == "CANCELLED"
     assert report["summary"]["cancelled_steps"] == expected_cancelled_steps
     assert report["summary"]["failed_steps"] == 0
@@ -2370,3 +2437,90 @@ def test_cancel_during_retry_delay_stops_next_attempt_and_runs_cleanup(tmp_path,
     assert result.step_results[0].attempts == 1
     assert result.step_results[0].cancelled is True
     assert result.summary.status == "CANCELLED"
+
+
+def test_retry_starts_only_after_previous_attempt_cleanup(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a tracking executor records cleanup before returning a timed-out first attempt.
+    When the runner retries and the second attempt succeeds.
+    Then the recorded first cleanup precedes the second start and the full event order matches.
+    """
+    config = RunnerConfig(
+        test_case=DeviceTestCase(
+            id="power_001",
+            name="power_001",
+            description="Description",
+        ),
+        device=DeviceInfo(
+            serial="device_001",
+            product="pixel",
+            build="build_001",
+        ),
+        retry=RetryConfig(max_attempts=3, delay_seconds=1, retry_on=[FailureType.TIMEOUT]),
+        lifecycle=LifecycleConfig(
+            global_setup=LifecycleSteps(steps=[]),
+            setup=LifecycleSteps(steps=[]),
+            scenario=LifecycleSteps(
+                steps=[
+                    mock_step("scenario"),
+                ]
+            ),
+            teardown=LifecycleSteps(steps=[]),
+            global_teardown=LifecycleSteps(steps=[]),
+        ),
+        artifact=ArtifactConfig(
+            output_dir=str(tmp_path),
+        ),
+    )
+
+    executor = MockLifecycleTrackingExecutor()
+
+    runner = DeviceTestRunner(
+        executor=executor,
+        artifact_manager=ArtifactManager(tmp_path),
+        artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
+        reporter=JsonReporter(),
+        show_console_output=False,
+    )
+
+    result = runner.run(config)
+
+    scenario_result = next(
+        step_result for step_result in result.step_results if step_result.name == "scenario"
+    )
+
+    #
+    # Attempt 1 timeout
+    # -> retry
+    # -> Attempt 2 pass
+
+    assert scenario_result.attempts == 2
+    assert scenario_result.success is True
+
+    #
+    # 最重要的 assertion:
+    #
+    # Attempt 1 cleanup 必須發生在
+    # Attempt 2 start 之前
+    #
+
+    attempt_1_cleanup_index = executor.events.index("attempt_1_process_cleanup")
+
+    attempt_2_start_index = executor.events.index("attempt_2_start")
+
+    assert attempt_1_cleanup_index < attempt_2_start_index
+
+    assert executor.events == [
+        "attempt_1_start",
+        "attempt_1_process_running",
+        "attempt_1_timeout",
+        "attempt_1_process_cleanup",
+        "attempt_1_return",
+        "attempt_2_start",
+        "attempt_2_process_running",
+        "attempt_2_success",
+        "attempt_2_process_cleanup",
+        "attempt_2_return",
+    ]

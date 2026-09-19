@@ -8,6 +8,38 @@
 - Edited versioned documentation for clearer headings, shorter explanations and readable acceptance conditions.
 - Expanded the commit checklist with concrete documentation and release checks.
 
+## [1.6.1]
+
+Version scope: Safe Process Termination. Runtime is 1.6.1; distribution remains 1.6.0. This entry describes source changes, not a verified release.
+
+### Added
+
+- ProcessTerminator sends SIGTERM to an attempt process group, then SIGKILL after the grace period when needed.
+- First SIGINT requests cancellation; the second raises KeyboardInterrupt. CLI run results use exit codes 0, 1 and 130.
+- Real parent/child/grandchild tests cover timeout, cancellation, ignored SIGTERM, reader completion and saved stdout/stderr.
+- Retry fixtures verify previous parent and child PIDs are absent when attempt two starts.
+- Dedicated SIGINT handler tests and v1.6.1 architecture, test matrix, acceptance criteria and definition of done.
+
+### Changed
+
+- Executor starts a separate session for each attempt and requires an injected ProcessTerminator.
+- Each output reader join has a two-second limit; cleanup failures can report PROCESS_ERROR or propagate if recovery also fails.
+- Runtime and report metadata identify 1.6.1; result schema is unchanged from 1.6.0.
+- Added Given/When/Then docstrings to 12 tests without changing their executable AST.
+
+### Fixed
+
+- Cleanup waits for the process group rather than treating parent exit as proof that descendants stopped.
+- PermissionError during group probing no longer aborts the wait immediately.
+- Retry tests use the correct fixture path, command quoting, lifecycle type, integer counter and artifact directory field.
+- Executor timeout tests model the injected terminator; runner test log paths serialize as strings.
+
+### Verification and limitations
+
+- Local evidence and exact commands are recorded in [v1.6.1 Definition of Done](docs/definition_of_done/definition_of_done_v1.6.1.md).
+- Detached descendants, normal completion with surviving children, Linux CI and end-to-end CLI signals remain unverified. SIGTERM is not wired to cancellation.
+- Package version synchronization, tag, issue/milestone status and GitHub Release publication remain pending.
+
 ## [1.6.0]
 
 Version scope: Cancellation Foundation. Runtime implementation is present; release tag and publication are not verified.

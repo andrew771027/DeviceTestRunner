@@ -23,3 +23,7 @@ Version scope: Selective Retry and Artifact Criticality
 
 * Command: `poetry run pytest -q`
 * Result: **134 passed in 25.45s** (verified 2026-09-04)
+
+## Pytest 用法
+
+Fixture、mock、參數化與執行方式請見 [測試指南 v1.5.3](../test_guide.md#v1-5-3)。

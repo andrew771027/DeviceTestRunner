@@ -6,6 +6,7 @@ from runner.artifact_validator import ArtifactValidator
 from runner.config import ConfigLoader
 from runner.executor import SubprocessExecutor
 from runner.failure import FailureClassifier
+from runner.process import ProcessTerminator
 from runner.reporter import JsonReporter
 from runner.runner import DeviceTestRunner
 
@@ -76,7 +77,9 @@ def test_command_creates_and_validates_artifact(tmp_path: Path):
 
     runner = DeviceTestRunner(
         executor=SubprocessExecutor(
-            project_directory=PROJECT_ROOT, failure_classifier=FailureClassifier()
+            project_directory=PROJECT_ROOT,
+            failure_classifier=FailureClassifier(),
+            process_terminator=ProcessTerminator(),
         ),
         artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
@@ -161,7 +164,9 @@ def test_run_fails_when_command_does_not_create_artifact(tmp_path: Path):
     config = ConfigLoader().load(config_path)
     runner = DeviceTestRunner(
         executor=SubprocessExecutor(
-            project_directory=PROJECT_ROOT, failure_classifier=FailureClassifier()
+            project_directory=PROJECT_ROOT,
+            failure_classifier=FailureClassifier(),
+            process_terminator=ProcessTerminator(),
         ),
         artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
@@ -234,7 +239,9 @@ def test_command_runs_inside_run_directory(tmp_path: Path):
     config = ConfigLoader().load(config_path)
     runner = DeviceTestRunner(
         executor=SubprocessExecutor(
-            project_directory=PROJECT_ROOT, failure_classifier=FailureClassifier()
+            project_directory=PROJECT_ROOT,
+            failure_classifier=FailureClassifier(),
+            process_terminator=ProcessTerminator(),
         ),
         artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
@@ -328,6 +335,7 @@ def test_csv_and_json_content_validation(tmp_path: Path):
         executor=SubprocessExecutor(
             project_directory=PROJECT_ROOT,
             failure_classifier=FailureClassifier(),
+            process_terminator=ProcessTerminator(),
         ),
         artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
@@ -353,7 +361,7 @@ def test_csv_and_json_content_validation(tmp_path: Path):
         (Path(result.artifact_dir) / "result.json").read_text(encoding="utf-8")
     )
 
-    assert saved_report["metadata"]["runner_version"] == "1.6.0"
+    assert saved_report["metadata"]["runner_version"] == "1.6.1"
     assert saved_report["summary"]["status"] == "PASSED"
 
 
@@ -412,6 +420,7 @@ def test_run_fails_when_csv_content_invalid(tmp_path: Path):
         executor=SubprocessExecutor(
             project_directory=PROJECT_ROOT,
             failure_classifier=FailureClassifier(),
+            process_terminator=ProcessTerminator(),
         ),
         artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),
@@ -495,7 +504,9 @@ def test_run_fails_when_json_status_invalid(tmp_path: Path):
     config = ConfigLoader().load(config_file)
     runner = DeviceTestRunner(
         executor=SubprocessExecutor(
-            project_directory=PROJECT_ROOT, failure_classifier=FailureClassifier()
+            project_directory=PROJECT_ROOT,
+            failure_classifier=FailureClassifier(),
+            process_terminator=ProcessTerminator(),
         ),
         artifact_manager=ArtifactManager(output_dir=config.artifact.output_dir),
         artifact_validator=ArtifactValidator(),

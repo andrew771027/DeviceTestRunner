@@ -1726,27 +1726,7 @@ report content matches RunResult
 
 ## v1.2 的架構價值
 
-v1.1 已經可以正確執行 Workflow，但比較像：`執行工具`
-
-v1.2 開始變成：`可追蹤的 Test Runner`
-
-因為一個成熟的 Test Runner 不只需要知道：`現在執行成功或失敗`
-
-還需要回答：
-
-```text
-是哪一個 Test Case？
-在哪一台 Device？
-使用哪一個 Build？
-什麼時間執行？
-每個 Step 執行多久？
-哪一個 Step 失敗？
-stdout 是什麼？
-stderr 是什麼？
-結果檔案放在哪裡？
-```
-
-ArtifactManager 與 JsonReporter 讓這些資訊可以被保存與重現。
+ArtifactManager 與 JsonReporter 保存 test case、裝置、build、執行時間、步驟結果及 stdout／stderr，供執行後追查。
 
 ## v1.2 的責任分離
 
@@ -1859,5 +1839,3 @@ flowchart TD
 Device Test Runner v1.2 的核心架構可以濃縮成：
 
 > `DeviceTestRunner` 依序執行 `WorkflowStep`，由 `CommandStepExecutor` 產生 `StepResult`；`ArtifactManager` 將每個 Step 的原始 stdout 與 stderr 保存到獨立 Run Directory；`JsonReporter` 再將 `RunnerConfig`、`RunResult` 與執行 metadata 彙整成 `report.json`。
-
-v1.2 是 Device Test Runner 從「可以執行 Workflow」走向「可以保存、追蹤與分析每一次 Test Run」的重要版本。

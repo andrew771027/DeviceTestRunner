@@ -5,6 +5,7 @@ from runner.cancellation import CancellationToken
 from runner.executor import SubprocessExecutor
 from runner.failure import FailureClassifier
 from runner.models import FailureType, LifecycleStepContent
+from runner.process import ProcessTerminator
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 
@@ -35,6 +36,7 @@ def test_executor_classifies_timeout(tmp_path: Path):
     executor = SubprocessExecutor(
         project_directory=tmp_path,
         failure_classifier=FailureClassifier(),
+        process_terminator=ProcessTerminator(),
     )
 
     with writer:
@@ -85,6 +87,7 @@ def test_executor_classifies_device_offline(tmp_path: Path):
     executor = SubprocessExecutor(
         project_directory=PROJECT_ROOT,
         failure_classifier=FailureClassifier(),
+        process_terminator=ProcessTerminator(),
     )
 
     with writer:
@@ -132,6 +135,7 @@ def test_executor_classifies_process_error(tmp_path: Path):
     executor = SubprocessExecutor(
         project_directory=PROJECT_ROOT,
         failure_classifier=FailureClassifier(),
+        process_terminator=ProcessTerminator(),
     )
 
     with writer:

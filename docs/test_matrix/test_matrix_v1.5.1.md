@@ -14,3 +14,7 @@ Historical baseline: the working tree after tag `v1.5.0` (release candidate; no 
 | Real artifact-aware retry | Integration | Invalid first artifact retries and valid second artifact passes | `tests/test_integration/test_integration_retry.py` — currently blocked by invalid YAML fixture |
 
 Targeted test result recorded for this candidate: 24 passed, 2 failed. The two failures above must be resolved before release acceptance.
+
+## Pytest 用法
+
+Fixture、mock、參數化與執行方式請見 [測試指南 v1.5.1](../test_guide.md#v1-5-1)。

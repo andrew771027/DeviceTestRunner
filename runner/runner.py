@@ -124,7 +124,7 @@ class DeviceTestRunner:
                     )
 
             #
-            # teardown 是 cleanup lifecycle。
+            # CLEANUP LIFECYCLE
             #
             # 即使 cancellation token 已經是 cancelled，
             # teardown 還是要執行。
@@ -163,29 +163,29 @@ class DeviceTestRunner:
                 rules=config.artifact.validation.rules, base_dir=run_dir
             )
 
-            finished_at = datetime.now(timezone.utc)
-
-            duration_deconds = time.perf_counter() - started_counter
-
-            run_result = self._build_run_result(
-                config=config,
-                run_dir=run_dir,
-                step_results=step_results,
-                artifact_results=artifact_results,
-                started_at=started_at,
-                finished_at=finished_at,
-                duration_seconds=duration_deconds,
-                cancellation_token=cancellation_token,
-            )
-
-            self.reporter.save(result=run_result, output_dir=str(run_dir))
-
-            return run_result
-
         finally:
 
             if watchdog is not None:
                 watchdog.stop()
+
+        finished_at = datetime.now(timezone.utc)
+
+        duration_deconds = time.perf_counter() - started_counter
+
+        run_result = self._build_run_result(
+            config=config,
+            run_dir=run_dir,
+            step_results=step_results,
+            artifact_results=artifact_results,
+            started_at=started_at,
+            finished_at=finished_at,
+            duration_seconds=duration_deconds,
+            cancellation_token=cancellation_token,
+        )
+
+        self.reporter.save(result=run_result, output_dir=str(run_dir))
+
+        return run_result
 
     def _run_stage(
         self,

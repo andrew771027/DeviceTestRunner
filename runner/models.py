@@ -121,6 +121,7 @@ class RunnerConfig:
     lifecycle: LifecycleConfig
     retry: RetryConfig
     artifact: ArtifactConfig
+    run_timeout_seconds: float | None = None
 
 
 @dataclass(frozen=True)
@@ -164,10 +165,6 @@ class StepAttemptResult:
     # v1.5.1
     artifact_validation_results: list[ArtifactValidationResult] = field(default_factory=list)
 
-    @property
-    def passed(self) -> bool:
-        return self.exit_code == 0
-
 
 @dataclass(frozen=True)
 class StepResult:
@@ -193,6 +190,9 @@ class RunMetadata:
     started_at: str
     finished_at: str
     cancel_requested: bool
+    cancel_reason: str | None = None
+    run_timeout_seconds: float | None = None
+    run_timeout_out: bool = False
 
 
 @dataclass(frozen=True)
@@ -224,4 +224,4 @@ class RunResult:
 
     @property
     def passed(self) -> bool:
-        return all(step_result.success for step_result in self.step_results)
+        return self.summary.status == "PASSED"

@@ -1,3 +1,4 @@
+import math
 from typing import Any
 
 import yaml
@@ -47,9 +48,12 @@ class ConfigLoader:
 
         retry = self._load_retry(raw)
 
+        run_timeout_seconds = self._load_run_timeout_seconds(raw)
+
         return RunnerConfig(
             test_case=test_case,
             device=device,
+            run_timeout_seconds=run_timeout_seconds,
             retry=retry,
             lifecycle=lifecycle,
             artifact=artifact,
@@ -155,9 +159,28 @@ class ConfigLoader:
             if failure_type == FailureType.CANCELLED:
                 raise ValueError("retry.retry_on cannot contain 'cancelled'")
 
-
             if failure_type not in retry_on:
 
                 retry_on.append(failure_type)
 
         return retry_on
+
+    @staticmethod
+    def _load_run_timeout_seconds(raw: dict[str, Any]) -> float | None:
+
+        raw_run_timeout = raw.get("run_timeout_seconds")
+
+        run_timeout_seconds = None
+
+        if raw_run_timeout is None:
+            run_timeout_seconds = None
+
+        if isinstance(raw_run_timeout, bool) or not isinstance(raw_run_timeout, (int, float)):
+            raise ValueError("run_timeout_seconds must be a number")
+
+        run_timeout_seconds = float(raw_run_timeout)
+
+        if not math.isfinite(run_timeout_seconds) or run_timeout_seconds <= 0:
+            raise ValueError("run_timeout_seconds must be finite and > 0")
+
+        return run_timeout_seconds

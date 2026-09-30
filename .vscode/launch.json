@@ -27,7 +27,7 @@
             "args": [
                 "tests/test_unit/test_runner.py",
                 "-k",
-                "test_artifact_missing_retries"
+                "test_cancelled_step_is_not_retried"
 
             ]
         }

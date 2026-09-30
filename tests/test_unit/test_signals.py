@@ -7,7 +7,6 @@ from runner.cancellation import CancellationToken
 
 
 def test_first_sigint_cancels_token():
-
     """Acceptance scenario.
 
     Given a signal handler has an active token.
@@ -25,7 +24,6 @@ def test_first_sigint_cancels_token():
 
 
 def test_second_sigint_raises_keyboard_interrupt():
-
     """Acceptance scenario.
 
     Given a signal handler has received its first SIGINT.

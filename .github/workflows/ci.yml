@@ -3,7 +3,7 @@ name: Device Test Runner CI
 on:
     push:
         branches:
-            - main
+            - "**"
     pull_request:
         branches:
             - main
@@ -12,8 +12,8 @@ permissions:
     contents: read
 
 jobs:
-    test:
-        name: Code Quality and Tests
+    code-quailiry:
+        name: Code Quality
         runs-on: ubuntu-latest
         steps:
             - name: Checkout repository
@@ -27,20 +27,48 @@ jobs:
             - name: Install Poetry
               run: python -m pip install "poetry>=2,<3"
 
-            - name: Show Python version
-              run: python --version
-
-            - name: Show Poetry version
-              run: poetry --version
-
-            - name: Check dependency lock file
-              run: poetry check --lock
-
             - name: Install dependencies
               run: poetry install --no-interaction
 
-            - name: Code Quality
-              run: poetry run pre-commit run --all-files --show-diff-on-failure
+            - name: Run pre-commit
+              run: poetry run pre-commit run --all-files
+    unit-tests:
+        name: Unit Tests
+        runs-on: ubuntu-latest
+        steps:
+          - name: Checkout repository
+            uses: actions/checkout@v7
 
-            - name: Run tests
-              run: poetry run pytest
+          - name: Set up Python
+            uses: actions/setup-python@v7
+            with:
+              python-version: "3.14"
+
+          - name: Install Poetry
+            run: python -m pip install "poetry>=2,<3"
+
+          - name: Install dependencies
+            run: poetry install --no-interaction
+
+          - name: Run Unit Test
+            run: poetry run pytest tests/test_unit
+    integration-tests:
+        name: Integration Tests
+        runs-on: ubuntu-latest
+        steps:
+          - name: Checkout repository
+            uses: actions/checkout@v7
+
+          - name: Set up Python
+            uses: actions/setup-python@v7
+            with:
+              python-version: "3.14"
+
+          - name: Install Poetry
+            run: python -m pip install "poetry>=2,<3"
+
+          - name: Install dependencies
+            run: poetry install --no-interaction
+
+          - name: Run Integration Test
+            run: poetry run pytest tests/test_integration

@@ -6,7 +6,7 @@
 
 Device Test Runner 使用 YAML 定義裝置測試流程，執行既有的 Bash、Python、ADB 等命令，並保存每次執行的輸出與 JSON 報告。它負責安排測試步驟、驗證輸出檔案，以及依設定重試失敗步驟；裝置操作仍由你的腳本處理。
 
-目前 runtime／報告版本為 **v1.6.2**，支援五階段測試流程、整次 run 與步驟逾時、選擇性重試、輸出檔案驗證、程序群組清理與 Ctrl+C 取消。`pyproject.toml` 仍為 `1.6.0`，套件版本同步與發佈確認列於 [完成條件](docs/definition_of_done/definition_of_done_v1.6.2.md)。Recorder 管理與遠端執行仍在規劃中。
+目前 runtime／報告版本為 **v1.6.2**，支援五階段測試流程、整次 run 與步驟逾時、選擇性重試、輸出檔案驗證、程序群組清理與 Ctrl+C 取消。套件、runtime 與報告版本已同步為 `1.6.2`，發佈確認列於 [完成條件](docs/definition_of_done/definition_of_done_v1.6.2.md)。Recorder 管理與遠端執行仍在規劃中。
 
 ## 安裝
 
@@ -418,7 +418,7 @@ Repository secret 名稱為 `OPENAI_API_KEY`，在 CLI invocation 映射成 `COD
 
 目前先補齊單機執行與取消流程，再加入可重用設定與 recorder 管理：
 
-1. v1.6.1：已實作程序群組終止、輸出串流收尾與 SIGINT handler；平台驗證、版本同步與發佈待完成。
+1. v1.6.1：已實作程序群組終止、輸出串流收尾與 SIGINT handler；平台驗證與發佈待完成。
 2. v1.6.2：已實作 run-level timeout 與取消原因；CLI timeout exit code 與發佈確認仍待完成。
 3. v1.6.3：取消後的清理範圍、時間限制與部分結果保存。
 4. v1.7.0～v1.7.2：YAML 靜態變數、環境變數與執行資訊。

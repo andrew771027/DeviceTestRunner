@@ -4,7 +4,7 @@
 
 ## 提交前
 
-- [ ] 確認版本號；需要升版時，同步套件、runtime 與報告版本。
+- [ ] 確認版本號；需要升版時，依下方「版本號更新步驟」同步套件、runtime 與報告版本。
 - [ ] 檢查程式變更是否符合需求，移除暫存程式與除錯輸出。
 - [ ] 更新受影響的測試，執行相關測試並記錄結果。
 - [ ] 檢查 `tests/` 下每個 Python 測試函式的 docstring，使用具體的 `Given`、`When`、`Then` 行說明前提、操作與預期結果。
@@ -22,6 +22,15 @@
 - [ ] 新增測試結果時，只記錄本次實際觀察到的命令、環境與結果；歷史紀錄保留原本的日期與基準。
 - [ ] 檢查文件：先說用途，使用短句與具體動詞；保留必要術語，刪除空泛宣傳與重複結論。
 - [ ] 執行 `git diff --check`，檢查連結、命令與範例。
+
+## 版本號更新步驟
+
+1. 修改 `pyproject.toml` 的 `[project].version`，使用不含 `v` 的版本號，例如 `version = "1.6.2"`。
+2. 核對 `runner/runner.py` 的 `DeviceTestRunner.VERSION` 與套件版本一致。報告的 `metadata.runner_version` 由此值產生。
+3. 同步 README、CHANGELOG、Roadmap 及該版本架構、驗收與完成條件中的版本狀態；保留舊版文件的歷史紀錄。
+4. 執行 `poetry check --lock` 確認設定與 lock file 一致。僅修改專案版本時，不需手動改寫依賴版本或 lock file；若另有依賴設定變更，重新產生並檢查 lock diff。
+5. 執行 `poetry version --short` 核對套件版本，並確認 `DeviceTestRunner.VERSION` 與報告建構程式使用的版本一致。更新已安裝套件時，另執行 `poetry install --no-interaction`。
+6. 執行相關檢查及 `git diff --check`，提交時納入 `pyproject.toml`、必要的 runtime 修改與文件。版本同步不代表已建立 tag 或發布 GitHub Release。
 
 ## 發佈前
 

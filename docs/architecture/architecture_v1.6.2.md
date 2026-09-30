@@ -87,7 +87,7 @@ Watchdog 持續到 cleanup 與 final validation 結束，因此這些階段也�
 
 | 欄位／結果 | v1.6.2 行為 |
 | --- | --- |
-| metadata.runner_version | `1.6.2`，distribution 仍為 `1.6.0` |
+| metadata.runner_version | `1.6.2`，與 pyproject.toml 的 distribution version 一致 |
 | metadata.cancel_reason | `user_request`、`run_timeout` 或 null |
 | metadata.run_timeout_seconds | 設定數值或 null |
 | metadata.run_timed_out | RUN_TIMEOUT 時為 true，其餘為 false |

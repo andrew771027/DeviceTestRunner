@@ -19,4 +19,4 @@ Tests and boundaries are mapped in the [test matrix](../test_matrix/test_matrix_
 
 ## Acceptance limits
 
-Run timeout is not a hard upper bound on cleanup, artifact validation or report writing. CLI currently returns 0 for TIMED_OUT; nonzero CLI timeout handling is not accepted as complete. Unexpected-exception finalization, Linux CI, detached descendants, version synchronization and publication remain open. Local tests do not establish release readiness for these boundaries.
+Run timeout is not a hard upper bound on cleanup, artifact validation or report writing. CLI currently returns 0 for TIMED_OUT; nonzero CLI timeout handling is not accepted as complete. Unexpected-exception finalization, Linux CI, detached descendants, publication remain open. Local tests do not establish release readiness for these boundaries.

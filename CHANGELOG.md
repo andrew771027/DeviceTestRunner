@@ -2,7 +2,7 @@
 
 ## [1.6.2]
 
-Version scope: Run-level Timeout. Runtime/report is 1.6.2; distribution remains 1.6.0. This entry describes the working tree, not a verified release.
+Version scope: Run-level Timeout. Distribution, runtime and report versions are synchronized to 1.6.2. This entry describes the working tree, not a verified release.
 
 ### Added
 
@@ -32,7 +32,7 @@ Version scope: Run-level Timeout. Runtime/report is 1.6.2; distribution remains 
 
 - Current commands and results: [v1.6.2 Definition of Done](docs/definition_of_done/definition_of_done_v1.6.2.md).
 - CLI TIMED_OUT currently returns 0; cleanup has no independent total deadline. Exception finalization, platform checks and detached-process handling remain open.
-- Package synchronization, tag and GitHub Release remain pending.
+- Package version is synchronized; tag and GitHub Release remain pending.
 
 ## [1.6.1]
 

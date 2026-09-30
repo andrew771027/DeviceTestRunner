@@ -38,7 +38,7 @@ Documentation-stage verification: `.venv/bin/python -m pytest -q` — **205 pass
 
 ## Release and follow-up
 
-- [ ] Synchronize distribution `1.6.0` with runtime/report `1.6.2`; product metadata was not changed by this documentation task.
+- [x] Distribution version in pyproject.toml is `1.6.2`, matching runtime/report version.
 - [ ] Handle TIMED_OUT with a nonzero CLI exit code and add CLI integration coverage; current code falls through to 0.
 - [x] Standardize source and report metadata on `run_timed_out`; assert true for timeout and false by default.
 - [ ] Correct CancellationToken.cancel return annotation.

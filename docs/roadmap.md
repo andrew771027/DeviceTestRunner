@@ -1,6 +1,6 @@
 # Device Test Runner Roadmap
 
-目前已實作 v1.6.1 的程序群組終止、reader 收尾與 SIGINT handler，並通過本機測試。套件版本同步、平台驗證與發佈仍待完成。接下來處理 run 逾時與取消後的清理，再加入 YAML 變數與 recorder 管理。
+目前已實作 v1.6.2 run-level timeout、程序群組終止、reader 收尾與 SIGINT handler，並通過本機測試。套件、runtime 與報告版本已同步為 1.6.2；平台驗證與發佈仍待完成。接下來處理取消後的清理，再加入 YAML 變數與 recorder 管理。
 
 本文件保留各版本的功能規劃。`Completed` 表示該節記錄的功能已完成；`Planned` 與 `Future` 表示尚未實作。實際發佈條件與驗證結果請見各版本的完成條件文件。
 
@@ -470,7 +470,7 @@ Runtime 為 `1.6.1`，套件仍為 `1.6.0`。完整結果與發佈待辦見 [v1.
 
 Implemented; locally tested working tree. Release pending.
 
-Watchdog 在 global_setup 前啟動，到 cleanup 與 final validation 後才停止；cleanup 使用新 token，尚無獨立總預算。真實短 steps 累計 deadline、cleanup 期間逾時與例外後 report 仍缺少驗證。CLI TIMED_OUT 目前回傳 0，需修正與增加 CLI 測試。套件仍為 1.6.0；版本同步、Linux CI 與發佈另行完成。
+Watchdog 在 global_setup 前啟動，到 cleanup 與 final validation 後才停止；cleanup 使用新 token，尚無獨立總預算。真實短 steps 累計 deadline、cleanup 期間逾時與例外後 report 仍缺少驗證。CLI TIMED_OUT 目前回傳 0，需修正與增加 CLI 測試。套件、runtime 與報告版本已同步為 1.6.2；Linux CI 與發佈另行完成。
 
 介面與邊界見 [架構](architecture/architecture_v1.6.2.md)，證據見 [完成條件](definition_of_done/definition_of_done_v1.6.2.md)。v1.6.3 的 cleanup scope／總預算仍是規劃，不能視為本版保證。
 
@@ -1225,7 +1225,7 @@ Done
 目前已實作 v1.6.2 run-level timeout 與 process-group cleanup；完整取消保證與發佈仍待完成。接下來的開發優先順序：
 
 ```text
-1. v1.6.1 平台驗證、套件版本同步與發佈確認
+1. 程序清理的平台驗證與發佈確認
 2. v1.6.2 CLI timeout exit code、平台驗證與發佈
 3. v1.6.3 Cancellation-aware Cleanup
 4. v1.7.x YAML Variables, Environment and Runtime Context

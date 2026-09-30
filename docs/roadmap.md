@@ -462,33 +462,17 @@ Runtime 為 `1.6.1`，套件仍為 `1.6.0`。完整結果與發佈待辦見 [v1.
 
 ### v1.6.2 — Run-level Timeout
 
-#### 目標
+#### 目標與實作
 
-在既有 per-step timeout 之外，限制一般 run 工作的總執行時間，並透過統一 cancellation 流程停止工作。
-
-#### 功能範圍
-
-* 新增 `run_timeout_seconds` 設定與驗證，未設定時維持既有行為。
-* Run timeout 轉為 cancellation request，停止一般 stages、執行中的 command 與 retry delay。
-* 明確區分 step timeout 與 run timeout，報告保留取消原因。
-* Step timeout 可依 `retry_on` 重試；run timeout 不應因下一次 attempt 而重設 deadline 或繼續一般工作。
-
-#### Relationship to v1.6.0
-
-v1.6.0 只有 `timeout_second` 的 step deadline，沒有 run deadline。現有 token 只有取消狀態，`cancel_requested` 也不記錄原因，因此需要擴充原因資訊，避免將 run timeout 和使用者取消混為一談。
-
-相容性方向：沿用 cancellation 執行路徑；保留既有 attempt `timed_out` 對 step timeout 的意義。Run-level 原因欄位與最終 status 的 schema 在實作時明確定義，不能僅將 run timeout 冒充為某一步的 TIMEOUT。
-
-#### 驗收重點
-
-* 多個未超時的 steps 累計仍可觸發 run timeout。
-* Retry delay 與 attempts 共用同一個 run deadline。
-* Run deadline 停止一般工作後仍進入 cleanup；cleanup 使用 v1.6.3 的獨立 scope／timeout。
-* 明確定義計時起點、涵蓋階段與 report finalization 邊界；run timeout 不等同整個程序必須立即退出。
+已新增可省略的 `run_timeout_seconds`、monotonic watchdog、first-reason-wins cancellation 與 TIMED_OUT status。一般 steps 與 retry delay 共用同一 deadline；step timeout 的 TIMEOUT 分類保持不變。Setup timeout 後可執行 teardown 與 global_teardown，報告保留原始 attempt history。
 
 #### 狀態
 
-Planned
+Implemented; locally tested working tree. Release pending.
+
+Watchdog 在 global_setup 前啟動，到 cleanup 與 final validation 後才停止；cleanup 使用新 token，尚無獨立總預算。真實短 steps 累計 deadline、cleanup 期間逾時與例外後 report 仍缺少驗證。CLI TIMED_OUT 目前回傳 0，需修正與增加 CLI 測試。套件仍為 1.6.0；版本同步、Linux CI 與發佈另行完成。
+
+介面與邊界見 [架構](architecture/architecture_v1.6.2.md)，證據見 [完成條件](definition_of_done/definition_of_done_v1.6.2.md)。v1.6.3 的 cleanup scope／總預算仍是規劃，不能視為本版保證。
 
 ### v1.6.3 — Cancellation-aware Cleanup
 
@@ -1238,11 +1222,11 @@ Done
 
 ## 開發優先順序
 
-目前已實作並本機驗證 v1.6.1 process-group cleanup；完整取消保證與發佈仍待完成。接下來的開發優先順序：
+目前已實作 v1.6.2 run-level timeout 與 process-group cleanup；完整取消保證與發佈仍待完成。接下來的開發優先順序：
 
 ```text
 1. v1.6.1 平台驗證、套件版本同步與發佈確認
-2. v1.6.2 Run-level Timeout
+2. v1.6.2 CLI timeout exit code、平台驗證與發佈
 3. v1.6.3 Cancellation-aware Cleanup
 4. v1.7.x YAML Variables, Environment and Runtime Context
 5. v1.8 Recorder Lifecycle

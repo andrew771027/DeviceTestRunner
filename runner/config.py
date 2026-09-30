@@ -170,10 +170,8 @@ class ConfigLoader:
 
         raw_run_timeout = raw.get("run_timeout_seconds")
 
-        run_timeout_seconds = None
-
         if raw_run_timeout is None:
-            run_timeout_seconds = None
+            return None
 
         if isinstance(raw_run_timeout, bool) or not isinstance(raw_run_timeout, (int, float)):
             raise ValueError("run_timeout_seconds must be a number")

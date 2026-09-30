@@ -59,7 +59,7 @@ class RunTimeoutWatchdog:
 
                 return
 
-            stopped = self._stop_event.eait(timeout=remaining)
+            stopped = self._stop_event.wait(timeout=remaining)
 
             if stopped:
                 return

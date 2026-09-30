@@ -192,7 +192,7 @@ class RunMetadata:
     cancel_requested: bool
     cancel_reason: str | None = None
     run_timeout_seconds: float | None = None
-    run_timeout_out: bool = False
+    run_timed_out: bool = False
 
 
 @dataclass(frozen=True)

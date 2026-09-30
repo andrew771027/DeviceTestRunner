@@ -156,7 +156,7 @@ def test_save_result_json(
 
     Given a completed run contains metadata, summaries, steps, and artifact results.
     When the reporter serializes the run result.
-    Then the generated JSON preserves metadata, summary counts, step results, and artifact validation results.
+    Then JSON preserves all result fields and defaults run_timed_out to false.
     """
 
     run_result = RunResult(
@@ -175,6 +175,7 @@ def test_save_result_json(
     saved = json.loads(output_path.read_text(encoding="utf-8"))
 
     assert saved["metadata"] == asdict(metadata)
+    assert saved["metadata"]["run_timed_out"] is False
     assert saved["summary"] == asdict(summary)
     assert saved["step_results"] == [asdict(result) for result in step_results]
     assert saved["artifact_dir"] == str(tmp_path)

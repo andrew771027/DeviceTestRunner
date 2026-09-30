@@ -1,17 +1,32 @@
+import os
 import signal
 import subprocess
 import sys
+import time
+from pathlib import Path
 
 from runner.process import ProcessTerminator
 
 
-def test_terminated_process_does_not_need_cleanup(monkeypatch):
+def is_process_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
 
+    except ProcessLookupError:
+        return False
+
+    except PermissionError:
+        return True
+
+    return True
+
+
+def test_terminated_process_does_not_need_cleanup(monkeypatch):
     """Acceptance scenario.
 
-    Given the direct process has already exited with code zero.
+    Given the direct process has exited with code zero and its group is gone.
     When the terminator is called.
-    Then no group signal is sent and the result reports no termination or kill.
+    Then only a group probe is sent and the result reports no termination or kill.
     """
     process = subprocess.Popen(
         ["true"],
@@ -24,6 +39,8 @@ def test_terminated_process_does_not_need_cleanup(monkeypatch):
 
     def fake_killpg(process_group_id, signal_number):
         signal_calls.append((process_group_id, signal_number))
+        assert signal_number == 0
+        raise ProcessLookupError()
 
     monkeypatch.setattr("runner.process.os.killpg", fake_killpg)
 
@@ -34,11 +51,10 @@ def test_terminated_process_does_not_need_cleanup(monkeypatch):
     assert result.terminated is False
     assert result.killed is False
     assert result.return_code == 0
-    assert signal_calls == []
+    assert signal_calls == [(process.pid, 0)]
 
 
 def test_process_group_terminates_gracefully():
-
     """Acceptance scenario.
 
     Given a real process runs in a separate session.
@@ -64,7 +80,6 @@ def test_process_group_terminates_gracefully():
 
 
 def test_process_is_killed_when_sigterm_is_ignored():
-
     """Acceptance scenario.
 
     Given a real process confirms its SIGTERM ignore handler is ready.
@@ -118,6 +133,7 @@ def test_group_probe_permission_error_does_not_abort_cleanup(monkeypatch):
     When the terminator sends SIGTERM and polls the group.
     Then the probe is retried and cleanup completes without SIGKILL.
     """
+
     class FakeProcess:
         def __init__(self):
             self.pid = 123
@@ -166,3 +182,83 @@ def test_group_probe_permission_error_does_not_abort_cleanup(monkeypatch):
         (123, 0),
         (123, 0),
     ]
+
+
+def test_terminator_cleans_group_even_when_direct_child_has_exited(
+    tmp_path: Path,
+):
+    """Acceptance scenario.
+
+    Given a reaped direct child leaves a live descendant in its process group.
+    When the terminator cleans the original group.
+    Then the descendant exits and the result records termination.
+    """
+    project_root = Path(__file__).resolve().parents[2]
+
+    fixture_script = project_root / "tests" / "fixtures" / "orphan_process.py"
+
+    assert fixture_script.exists()
+
+    child_pid_file = tmp_path / "child.pid"
+
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            str(fixture_script),
+            str(child_pid_file),
+        ],
+        start_new_session=True,
+    )
+
+    #
+    # Wait for direct parent to exit.
+    #
+    process.wait(timeout=5)
+
+    assert process.poll() is not None
+
+    #
+    # Fixture must have created the child.
+    #
+    assert child_pid_file.exists()
+
+    child_pid = int(child_pid_file.read_text(encoding="utf-8"))
+
+    #
+    # Critical precondition:
+    #
+    # direct Popen process is dead,
+    # but descendant is still alive.
+    #
+    assert is_process_alive(child_pid) is True
+
+    terminator = ProcessTerminator(
+        grace_period_seconds=0.2,
+        poll_interval_seconds=0.05,
+    )
+
+    try:
+        result = terminator.terminate_process_group(process)
+
+        deadline = time.monotonic() + 2
+
+        while is_process_alive(child_pid) and time.monotonic() < deadline:
+            time.sleep(0.05)
+
+        assert is_process_alive(child_pid) is False
+
+        assert result.terminated is True
+
+    finally:
+        #
+        # Defensive cleanup in case the
+        # implementation under test is broken.
+        #
+        if is_process_alive(child_pid):
+            try:
+                os.kill(
+                    child_pid,
+                    9,
+                )
+            except ProcessLookupError:
+                pass

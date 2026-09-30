@@ -6,7 +6,7 @@
 
 Device Test Runner 使用 YAML 定義裝置測試流程，執行既有的 Bash、Python、ADB 等命令，並保存每次執行的輸出與 JSON 報告。它負責安排測試步驟、驗證輸出檔案，以及依設定重試失敗步驟；裝置操作仍由你的腳本處理。
 
-目前 runtime／報告版本為 **v1.6.1**，支援五階段測試流程、步驟逾時、選擇性重試、輸出檔案驗證、程序群組清理與 Ctrl+C 取消。`pyproject.toml` 仍為 `1.6.0`，套件版本同步與發佈確認列於 [完成條件](docs/definition_of_done/definition_of_done_v1.6.1.md)。Recorder 管理與遠端執行仍在規劃中。
+目前 runtime／報告版本為 **v1.6.2**，支援五階段測試流程、整次 run 與步驟逾時、選擇性重試、輸出檔案驗證、程序群組清理與 Ctrl+C 取消。`pyproject.toml` 仍為 `1.6.0`，套件版本同步與發佈確認列於 [完成條件](docs/definition_of_done/definition_of_done_v1.6.2.md)。Recorder 管理與遠端執行仍在規劃中。
 
 ## 安裝
 
@@ -28,7 +28,7 @@ poetry run python main.py --config configs/sample.yaml
 
 範例設定會示範失敗情境。2026-09-12 的本機驗證結果為 `FAILED`：`run_unstable_command` 失敗後未重試，下一步被跳過，另有五項必要檔案驗證失敗。完整紀錄見 [v1.6.0 完成條件](docs/definition_of_done/definition_of_done_v1.6.0.md)。
 
-每次執行會建立獨立的輸出目錄，保存 `result.json` 與各次嘗試的 stdout、stderr。請讀取報告中的 `summary.status` 判斷結果：`PASSED`、`FAILED` 或 `CANCELLED`。
+每次執行會建立獨立的輸出目錄，保存 `result.json` 與各次嘗試的 stdout、stderr。請讀取報告中的 `summary.status` 判斷結果：`PASSED`、`FAILED`、`CANCELLED` 或 `TIMED_OUT`。
 
 ## 常用詞彙
 
@@ -79,7 +79,7 @@ global_teardown
 
 上述為一般失敗路由。進入 setup 區塊後，即使 setup／scenario 取消，仍執行兩個 cleanup stages；run 開始前或 global_setup 取消時只執行 global_teardown。如果 global_setup 成功後、進入 setup 區塊前已觀察到取消，也會跳過 teardown。Cleanup attempt 使用新的 token；這些是受控流程的 best effort，不涵蓋未處理 Python exception 或 KeyboardInterrupt。
 
-最終 `summary.status` 以 `CANCELLED` 優先；沒有取消時，failed step、skipped step 或 required artifact failure 任一存在即為 `FAILED`，其餘為 `PASSED`。
+最終 `summary.status` 先依取消原因判定：RUN_TIMEOUT 為 `TIMED_OUT`，USER_REQUEST 為 `CANCELLED`；沒有取消原因但有 cancelled step 也為 `CANCELLED`。沒有取消時，failed step、skipped step 或 required artifact failure 任一存在即為 `FAILED`，其餘為 `PASSED`。
 
 ## 設定測試流程
 
@@ -211,7 +211,21 @@ Executor 每 0.1 秒檢查取消與 timeout。每次 attempt 建立獨立 sessio
 
 同群組的 child／grandchild 已有清理測試；自行脫離群組的程序，以及直接 process 正常退出後留下的背景程序，不在目前保證內。詳見 [Process Lifecycle](docs/process_lifecycle.md)。Cancelled attempt 不做 attempt validation 或 retry，但 run 最後仍驗證所有 artifacts。
 
-從 v1.6.0 升級時，`SubprocessExecutor` 建構子需新增 `process_terminator`。從更舊版本升級時，Python 呼叫端也需調整 `SubprocessExecutor.execute(..., cancellation_token=...)`，以及手動建構 result dataclasses 時的新欄位。`run(config)` 仍可不傳 token。完整差異見 [Architecture](docs/architecture/architecture_v1.6.1.md)。
+從 v1.6.0 升級時，`SubprocessExecutor` 建構子需新增 `process_terminator`。從更舊版本升級時，Python 呼叫端也需調整 `SubprocessExecutor.execute(..., cancellation_token=...)`，以及手動建構 result dataclasses 時的新欄位。`run(config)` 仍可不傳 token。完整差異見 [Architecture](docs/architecture/architecture_v1.6.2.md)。
+
+## Run-level timeout（v1.6.2）
+
+在既有 YAML 頂層加入：
+
+```yaml
+run_timeout_seconds: 300
+```
+
+省略或 null 代表不設 run deadline；step 的 `timeout_second` 仍有效。只接受有限正數，拒絕 bool、字串、零、負數、NaN 與 Infinity。Deadline 在 global_setup 前啟動，不隨 retry 重設。
+
+Run timeout 透過 cancellation 停止一般工作，report 為 `TIMED_OUT`、`cancel_reason: run_timeout`。被中斷的 attempt 仍是 CANCELLED，`timed_out` 專指 step timeout。Retry delay 中逾時會保留前一次失敗，不新增 attempt。第一個取消原因不會被後續請求覆寫。
+
+Cleanup 使用新 token 與自己的 step timeout；final validation 不會被取消中斷。Watchdog 在上述工作結束後停止，因此不保證 CLI 在設定秒數內返回。`metadata.run_timed_out` 在取消原因為 RUN_TIMEOUT 時是 `true`，其他情況為 `false`。CLI 目前沒有 TIMED_OUT 專用非零 exit code，會回傳 0；自動化應檢查 `summary.status`，不能只依 exit code 判定成功。
 
 ## 輸出檔案
 
@@ -267,10 +281,13 @@ artifacts/
     "device_serial": "demo",
     "device_product": "demo",
     "device_build": "demo",
-    "runner_version": "1.6.1",
+    "runner_version": "1.6.2",
     "started_at": "2026-09-12T00:00:00+00:00",
     "finished_at": "2026-09-12T00:00:01+00:00",
-    "cancel_requested": false
+    "cancel_requested": false,
+    "cancel_reason": null,
+    "run_timeout_seconds": null,
+    "run_timed_out": false
   },
   "summary": {
     "status": "PASSED",
@@ -319,7 +336,7 @@ artifacts/
 }
 ```
 
-結果消費端應以 `summary.status` 判斷 run；`RunResult.passed` 目前只檢查 step success，無法完整反映取消請求或 final artifact failure。`StepAttemptResult.passed` 也只檢查 exit code，請使用 `success` 與 failure flags。
+結果消費端應以 `summary.status` 判斷 run；`RunResult.passed` 在 v1.6.2 只於 status 為 PASSED 時回傳 true。`StepAttemptResult.passed` 已移除，請使用 `success` 與 failure flags。
 
 ## 架構
 
@@ -376,7 +393,7 @@ poetry run pytest -m artifact
 
 歷史驗證紀錄（2026-09-12，Python 3.14）：`.venv/bin/python -m pytest -q` → **153 passed in 39.39s**。150 個測試函式皆有 Given／When／Then 說明；參數化後共 153 個案例。
 
-本次 v1.6.1 驗證與 162 個測試函式／168 個案例的對照，見 [完成條件](docs/definition_of_done/definition_of_done_v1.6.1.md) 與 [測試矩陣](docs/test_matrix/test_matrix_v1.6.1.md)。
+本次 v1.6.2 驗證與測試案例的對照，見 [完成條件](docs/definition_of_done/definition_of_done_v1.6.2.md) 與 [測試矩陣](docs/test_matrix/test_matrix_v1.6.2.md)。
 
 ## 持續整合
 
@@ -402,7 +419,7 @@ Repository secret 名稱為 `OPENAI_API_KEY`，在 CLI invocation 映射成 `COD
 目前先補齊單機執行與取消流程，再加入可重用設定與 recorder 管理：
 
 1. v1.6.1：已實作程序群組終止、輸出串流收尾與 SIGINT handler；平台驗證、版本同步與發佈待完成。
-2. v1.6.2：整次 run 的逾時設定。
+2. v1.6.2：已實作 run-level timeout 與取消原因；CLI timeout exit code 與發佈確認仍待完成。
 3. v1.6.3：取消後的清理範圍、時間限制與部分結果保存。
 4. v1.7.0～v1.7.2：YAML 靜態變數、環境變數與執行資訊。
 5. v1.8 之後：recorder、hooks、執行摘要、批次與並行執行。
@@ -414,10 +431,10 @@ Repository secret 名稱為 `OPENAI_API_KEY`，在 CLI invocation 映射成 `COD
 
 | 文件 | 用途 |
 | --- | --- |
-| [架構 v1.6.1](docs/architecture/architecture_v1.6.1.md) | 元件、取消路由、報告欄位與相容性 |
+| [架構 v1.6.2](docs/architecture/architecture_v1.6.2.md) | 元件、取消路由、報告欄位與相容性 |
 | [測試指南](docs/test_guide.md) | Pytest 工具、fixture、Mock 與各版用法 |
-| [測試矩陣 v1.6.1](docs/test_matrix/test_matrix_v1.6.1.md) | 功能對應的測試與覆蓋限制 |
-| [驗收條件 v1.6.1](docs/acceptance_criteria/acceptance_criteria_v1.6.1.md) | 可觀察的預期行為 |
-| [完成條件 v1.6.1](docs/definition_of_done/definition_of_done_v1.6.1.md) | 驗證紀錄與待完成的發佈項目 |
+| [測試矩陣 v1.6.2](docs/test_matrix/test_matrix_v1.6.2.md) | 功能對應的測試與覆蓋限制 |
+| [驗收條件 v1.6.2](docs/acceptance_criteria/acceptance_criteria_v1.6.2.md) | 可觀察的預期行為 |
+| [完成條件 v1.6.2](docs/definition_of_done/definition_of_done_v1.6.2.md) | 驗證紀錄與待完成的發佈項目 |
 
 `docs/` 內的舊版文件保留當時的設計與介面，使用時請確認版本。

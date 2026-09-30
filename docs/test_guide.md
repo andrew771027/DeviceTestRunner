@@ -25,11 +25,14 @@
 | `@pytest.mark.parametrize` | Decorator | 同一段測試用不同資料執行 | [v1.0.0](#v1-0-0) |
 | `capsys`、`readouterr()` | 內建 fixture 與方法 | 擷取 console 的 stdout／stderr | [v1.3.5](#v1-3-5) |
 | `pytest.raises()` | 例外檢查工具 | 驗證操作拋出指定例外 | [v1.2.0](#v1-2-0)；[v1.6.1](#v1-6-1) 的 KeyboardInterrupt |
+| `shlex.quote()`、`repr()` | 標準函式庫／內建函式 | 分別處理 shell 參數與 Python 字串常值 | [v1.6.2 命令引用](#v1-6-2-command-quoting) |
 | 模擬時鐘 | 測試技巧 | 由測試推進時間，不必真的等待 | [v1.6.0](#v1-6-0) |
 | `pytest.approx()` | 比較工具 | 容許浮點數計算的小誤差 | [v1.6.0](#v1-6-0) |
 | `@pytest.mark.retry` 等 | 自訂 marker | 將測試分類，方便選擇執行 | [v1.5.0](#v1-5-0) |
 | `-m`、`-k`、`檔案::函式` | 執行選項 | 分別依 marker、名稱或指定函式選擇測試 | 各版本的「執行與定位案例」 |
 | `-q`、`-v` | 輸出選項 | 顯示精簡結果或逐一列出案例 | 各版本的執行範例 |
+
+本版新增案例也使用 `json.loads` 讀取落盤報告，以及 `time.monotonic` 搭配有上限的輪詢；兩者是標準函式庫，不是 pytest fixture。見 [v1.6.2](#v1-6-2)。
 
 <a id="fixtures"></a>
 
@@ -37,7 +40,7 @@
 
 Pytest fixture 是 pytest 準備後交給測試的資源。測試參數中的 `tmp_path`、`monkeypatch` 與 `capsys` 都是內建 fixture；不需要自己宣告 `@pytest.fixture`。
 
-`@pytest.fixture` 用來定義自訂 fixture。本次核對的版本沒有這種自訂定義，因此不將它列為已使用功能。一般 helper 函式需要由程式呼叫，不會因為名稱有 mock 就自動注入測試。
+`@pytest.fixture` 用來定義自訂 fixture。目前 executor、reporter 等測試使用此 decorator 準備輸入與預期資料。一般 helper 函式需要由程式呼叫，不會因為名稱有 mock 就自動注入測試。
 
 `tests/fixtures/` 則是專案放置輔助腳本的資料夾。v1.6.1 的 `process_tree.py` 與 `retry_process.py` 由 subprocess 執行，並不是 pytest 自動注入的 fixture。詳細流程見 [v1.6.1](#v1-6-1)。
 
@@ -119,6 +122,7 @@ python -m pytest -k timeout -v
 
 | 版本 | 閱讀重點 | 測試覆蓋與證據 |
 | --- | --- | --- |
+| [v1.6.2](#v1-6-2) | Watchdog、設定邊界、JSON attempt history、orphan process | [Test matrix](test_matrix/test_matrix_v1.6.2.md) |
 | [v1.0.0](#v1-0-0) | tmp_path、參數化與基本斷言 | [Test matrix](test_matrix/test_matrix_v1.0.0.md) |
 | [v1.1.0](#v1-1-0) | 模型更名後的案例與參數化 | [Test matrix](test_matrix/test_matrix_v1.1.0.md) |
 | [v1.2.0](#v1-2-0) | monkeypatch.setattr、Mock、TimeoutExpired | [Test matrix](test_matrix/test_matrix_v1.2.0.md) |
@@ -359,3 +363,117 @@ python -m pytest -k timeout -v
 | `tests/test_unit/test_runner.py::test_retry_waits_between_attempts` | 模擬時鐘與 `pytest.approx` |
 
 自訂 marker：`cancelled`, `test_lifecycle`, `artifact`, `retry`。
+
+<a id="v1-6-2"></a>
+
+## v1.6.2 — Run-level Timeout
+
+基準為 `eea8507` 加工作目錄修正，對照 v1.6.1 tag。本節不重述舊版測試結果。
+
+- `test_config_loader.py` 使用 tmp_path 寫入省略 timeout 的 YAML，走完整 loader；參數化 NaN、±Infinity、零、負數與 bool 則直接測試 timeout parser。parser 測試不能證明所有 YAML 型別轉換。
+- `test_run_timeout.py` 使用真實 thread、短 deadline 與最長兩秒輪詢，在 finally stop watchdog；不斷言精確排程時間。Stop 測試確認 join 完成與 token 未取消，未另等原期限。
+- `test_run_status.py` 以 tuple 參數列驗證狀態優先順序；set 無序，不適合表示 reason／expected 的配對。
+- `test_run_timeout_between_steps_stops_next_step` 使用專案自訂 fake executor 注入 RUN_TIMEOUT。它驗證 stage routing，不證明真實多步累計時間。
+- `long_running.py` 與 `orphan_process.py` 是 subprocess 輔助腳本，不是 pytest fixtures。Fixture 路徑從巢狀測試檔的 `parents[2]` 找到專案根目錄。
+- Runner integration tests 讀取 `result.json`，比對取消原因、狀態、attempt 數量與 flags；retry delay 情境保留 PROCESS_ERROR。這比僅檢查記憶體結果多驗證了序列化邊界，但仍未涵蓋 CLI exit code。
+- Orphan test 先等待 direct child 結束，確認 descendant 仍活著，再呼叫 terminator；finally 防禦性清理測試程序。這只驗證同一 process group。
+
+<a id="v1-6-2-command-quoting"></a>
+
+### 組合 shell 命令：shlex.quote 與 repr
+
+`test_integration_runner_timeout.py` 的 cleanup command 會經過兩層解析：先由 POSIX shell 拆解命令，再由 `python -c` 執行 Python 程式碼。因此，shell 參數與 Python 字串常值需要分別處理。
+
+| 寫法 | 輸出用途 | 本次測試中的位置 |
+| --- | --- | --- |
+| `str(path)` | 將 Path 轉為路徑文字；不加引號或跳脫 | 傳給 quote 或 repr 前 |
+| `shlex.quote(text)` | 將文字表示成一個 POSIX shell 參數 | Python executable、fixture 路徑、完整 `-c` 程式碼 |
+| `repr(text)` | 將字串表示成可放入 Python 原始碼的字串常值，含引號與必要跳脫 | `Path(...)` 的參數 |
+
+這些是 Python 標準函式庫／內建函式，不是 pytest 工具。`sys.executable` 指向目前執行測試的 Python，可讓 subprocess 使用同一個虛擬環境。
+
+#### 1. shlex.quote：保留一個 shell 參數
+
+```python
+import shlex
+
+fixture_path = "/tmp/test project/long_running.py"
+quoted = shlex.quote(fixture_path)
+
+assert quoted == "'/tmp/test project/long_running.py'"
+assert shlex.split(quoted) == [fixture_path]
+```
+
+路徑包含空白時，直接拼接會被 shell 拆成多個參數。`quote()` 讓它保留為一個參數，也處理單引號、`$` 等 shell 特殊字元。它不一定每次都加引號：沒有特殊字元的字串可能原樣返回。
+
+測試中的用法是分別引用每個參數，再組成命令：
+
+```python
+python = shlex.quote(sys.executable)
+fixture = shlex.quote(str(fixture_script))
+command = f"{python} {fixture}"
+```
+
+此片段接續測試中的 import 與 `fixture_script` 定義。不要對整條 `python fixture.py` 命令只呼叫一次 quote，否則 shell 會將整條文字視為單一參數。
+
+#### 2. repr：產生 Python 字串常值
+
+```python
+import ast
+
+path_text = "/tmp/test project/Andrew's cleanup.txt"
+marker_path = repr(path_text)
+
+assert ast.literal_eval(marker_path) == path_text
+```
+
+`repr()` 在這裡接收的是字串，因此結果可以嵌入 Python 程式碼。例如 `f"Path({marker_path})"` 會產生帶有正確引號的 `Path(...)` 呼叫。直接用 `str(marker)` 插入會缺少字串引號；手動包單引號又可能被路徑中的單引號截斷。
+
+`repr()` 不是 shell quoting，不能代替 `shlex.quote()`。一般物件的 repr 也不保證是可執行的 Python 表達式；此技巧限定於本例的 `repr(str(marker))`。`f"{str(marker)!r}"` 是同樣的字串 repr 寫法。
+
+#### 3. 組合兩層引用：完整可執行範例
+
+以下示範與 cleanup 測試相同的組法，使用含空白與單引號的暫存路徑。範例會建立 marker、檢查內容，離開區塊後移除暫存目錄；它是教學範例，不是新增的 pytest 案例。
+
+```python
+import shlex
+import subprocess
+import sys
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+with TemporaryDirectory(prefix="runner example ") as directory:
+    marker = Path(directory) / "Andrew's cleanup.txt"
+
+    python = shlex.quote(sys.executable)
+    marker_path = repr(str(marker))
+
+    code = (
+        "from pathlib import Path; "
+        f"Path({marker_path}).write_text("
+        "'cleanup completed', encoding='utf-8')"
+    )
+    cleanup_command = f"{python} -c " + shlex.quote(code)
+
+    subprocess.run(cleanup_command, shell=True, check=True)
+
+    assert marker.read_text(encoding="utf-8") == "cleanup completed"
+```
+
+處理順序是：`repr(str(marker))` 先保護 Python 程式碼中的路徑常值，再用 `shlex.quote(code)` 將完整程式碼保留成 `-c` 的單一參數。Shell 移除外層引用後，Python 才解析內層字串常值。
+
+本專案 executor 使用 `shell=True`，因此需要 shell quoting。若直接使用 subprocess 的參數清單且不經 shell，則可寫成 `subprocess.run([sys.executable, "-c", code], check=True)`，不要再對清單元素呼叫 `shlex.quote()`；`code` 內嵌路徑仍需要 repr。`shlex.quote()` 適用於 POSIX shell，不應視為 Windows cmd.exe 或 PowerShell 的 quoting 方法。
+
+現有 integration tests 驗證 cleanup marker 與報告結果，沒有專門參數化所有特殊字元路徑；本節範例也不代表該覆蓋已加入測試矩陣。
+
+### 執行與定位案例
+
+以下是可重跑的命令，實際觀察結果另見 [完成條件](definition_of_done/definition_of_done_v1.6.2.md)。
+
+```bash
+.venv/bin/python -m pytest -q
+.venv/bin/python -m pytest tests/test_unit/test_run_timeout.py tests/test_unit/test_run_status.py -q
+.venv/bin/python -m pytest tests/test_integration/test_integration_runner_timeout.py -q
+```
+
+AI 協作新增與修正案例、原始缺口及驗證限制集中於 [v1.6.2 matrix](test_matrix/test_matrix_v1.6.2.md)。本次文件補充以 AST 移除 docstring 後比較，確認可執行測試行為不變。

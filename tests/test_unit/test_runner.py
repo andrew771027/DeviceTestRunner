@@ -6,7 +6,7 @@ import pytest
 
 from runner.artifact import ArtifactManager, StepLogWriter
 from runner.artifact_validator import ArtifactValidator
-from runner.cancellation import CancellationToken
+from runner.cancellation import CancellationReason, CancellationToken
 from runner.failure import FailureClassifier
 from runner.models import (
     ArtifactConfig,
@@ -372,6 +372,47 @@ class MockLifecycleTrackingExecutor:
             error="",
             artifact_validation_results=[],
         )
+
+
+class MockCancelAfterFirstStepExecutor:
+    def __init__(
+        self,
+        token: CancellationToken,
+    ):
+        self.token = token
+        self.executed_steps: list[str] = []
+
+    def execute(
+        self,
+        step,
+        stage,
+        attempt,
+        log_writer,
+        working_directory,
+        cancellation_token,
+    ):
+        self.executed_steps.append(step.name)
+
+        result = StepAttemptResult(
+            attempt=attempt,
+            success=True,
+            failure_type=FailureType.NONE,
+            timed_out=False,
+            cancelled=False,
+            exit_code=0,
+            duration_seconds=0.01,
+            stdout="success",
+            stderr="",
+            stdout_log_path=str(log_writer.stdout_path),
+            stderr_log_path=str(log_writer.stderr_path),
+            error="",
+            artifact_validation_results=[],
+        )
+
+        if step.name == "step_1":
+            self.token.cancel(CancellationReason.RUN_TIMEOUT)
+
+        return result
 
 
 class MockRecordingArtifactValidator:
@@ -2321,7 +2362,7 @@ def test_cancellation_lifecycle_and_summary(
     report = json.loads(report_path.read_text(encoding="utf-8"))
 
     assert report["metadata"]["cancel_requested"] is True
-    assert report["metadata"]["runner_version"] == "1.6.1"
+    assert report["metadata"]["runner_version"] == "1.6.2"
     assert report["summary"]["status"] == "CANCELLED"
     assert report["summary"]["cancelled_steps"] == expected_cancelled_steps
     assert report["summary"]["failed_steps"] == 0
@@ -2524,3 +2565,101 @@ def test_retry_starts_only_after_previous_attempt_cleanup(tmp_path: Path):
         "attempt_2_process_cleanup",
         "attempt_2_return",
     ]
+
+
+def test_run_timeout_between_steps_stops_next_step(
+    tmp_path: Path,
+):
+    """Acceptance scenario.
+
+    Given a fake executor requests RUN_TIMEOUT after its first successful step.
+    When the runner considers the next scenario step.
+    Then only the first step ran and its success is preserved while the run is TIMED_OUT.
+    """
+    token = CancellationToken()
+
+    executor = MockCancelAfterFirstStepExecutor(token)
+
+    config = RunnerConfig(
+        test_case=DeviceTestCase(
+            id="between_steps",
+            name="between_steps",
+            description=("Run timeout between steps"),
+        ),
+        device=DeviceInfo(
+            serial="device_001",
+            product="pixel",
+            build="build_001",
+        ),
+        #
+        # Don't start a real watchdog.
+        #
+        # This test controls cancellation
+        # deterministically through Executor.
+        #
+        run_timeout_seconds=None,
+        retry=RetryConfig(
+            max_attempts=1,
+            delay_seconds=0,
+            retry_on=[],
+        ),
+        lifecycle=LifecycleConfig(
+            global_setup=LifecycleSteps(steps=[]),
+            setup=LifecycleSteps(steps=[]),
+            scenario=LifecycleSteps(
+                steps=[
+                    LifecycleStepContent(
+                        name="step_1",
+                        type="command",
+                        command="ignored",
+                        timeout_second=10,
+                    ),
+                    LifecycleStepContent(
+                        name="step_2",
+                        type="command",
+                        command="ignored",
+                        timeout_second=10,
+                    ),
+                ]
+            ),
+            teardown=LifecycleSteps(steps=[]),
+            global_teardown=LifecycleSteps(steps=[]),
+        ),
+        artifact=ArtifactConfig(
+            output_dir=str(tmp_path),
+        ),
+    )
+
+    runner = DeviceTestRunner(
+        executor=executor,
+        artifact_manager=ArtifactManager(tmp_path),
+        artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
+        reporter=JsonReporter(),
+        show_console_output=False,
+    )
+
+    result = runner.run(
+        config=config,
+        cancellation_token=token,
+    )
+
+    assert executor.executed_steps == ["step_1"]
+
+    assert token.is_cancelled is True
+
+    assert token.reason == CancellationReason.RUN_TIMEOUT
+
+    assert result.summary.status == "TIMED_OUT"
+
+    step_1_result = next(
+        step_result for step_result in result.step_results if step_result.name == "step_1"
+    )
+
+    assert step_1_result.success is True
+    assert step_1_result.attempts == 1
+
+    assert not any(
+        step_result.name == "step_2" and step_result.attempts > 0
+        for step_result in result.step_results
+    )

@@ -18,7 +18,8 @@ def test_yaml_to_result_json(tmp_path):
 
     Given a complete YAML-defined device-test workflow is available.
     When the workflow is executed through the real runner boundary.
-    Then the end-to-end run produces a result JSON matching the YAML workflow and observed command outputs.
+    Then the end-to-end run produces a result JSON matching the YAML workflow and observed
+    command outputs.
     """
     config_file = tmp_path / "intergration.yaml"
     config_file.write_text(
@@ -32,7 +33,7 @@ device:
   serial: xxx_003
   product: product_003
   build: test_001
-
+run_timeout_seconds: 300
 lifecycle:
   global_setup:
       steps:
@@ -148,7 +149,7 @@ artifact:
 
     report = json.loads((run_dir / "result.json").read_text(encoding="utf-8"))
 
-    assert report["metadata"]["runner_version"] == "1.6.1"
+    assert report["metadata"]["runner_version"] == "1.6.2"
 
     assert report["summary"]["status"] == "PASSED"
 
@@ -175,7 +176,7 @@ device:
   serial: xxx_003
   product: product_003
   build: test_003
-
+run_timeout_seconds: 300
 lifecycle:
   global_setup:
     steps:
@@ -293,7 +294,7 @@ artifact:
 
     report = json.loads((run_dir / "result.json").read_text(encoding="utf-8"))
 
-    assert report["metadata"]["runner_version"] == "1.6.1"
+    assert report["metadata"]["runner_version"] == "1.6.2"
 
     assert report["summary"]["status"] == "FAILED"
 
@@ -305,7 +306,8 @@ def test_integration_steps_succeeds_after_party(tmp_path: Path):
 
     Given a complete YAML-defined device-test workflow is available.
     When the workflow is executed through the real runner boundary.
-    Then a transient subprocess failure is retried and the later successful attempt completes the workflow.
+    Then a transient subprocess failure is retried and the later successful attempt completes
+    the workflow.
     """
     output_dir = tmp_path / "artifacts"
     config_file = tmp_path / "config.yaml"
@@ -320,6 +322,7 @@ def test_integration_steps_succeeds_after_party(tmp_path: Path):
           serial: fake_serial
           product: fake_product
           build: fake_build
+        run_timeout_seconds: 300
         retry:
           max_attempts: 3
           delay_seconds: 1
@@ -409,6 +412,7 @@ def test_real_subprocess_fails_after_retry_exhausted(tmp_path: Path):
           serial: fake_serial
           product: fake_product
           build: fake_build
+        run_timeout_seconds: 300
         retry:
           max_attempts: 3
           delay_seconds: 1

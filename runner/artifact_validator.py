@@ -85,7 +85,7 @@ class ArtifactValidator:
             path=str(path),
             passed=passed,
             required=rule.required,
-            failure_type=FailureType.NONE if passed else FailureType.ARTIFACT_INVALID,
+            failure_type=FailureType.NONE if passed else FailureType.ARTIFACT_MISSING,
             message=message,
         )
 
@@ -123,8 +123,10 @@ class ArtifactValidator:
                 passed=False,
                 required=rule.required,
                 failure_type=FailureType.ARTIFACT_INVALID,
-                message=f"File size {actual_size} bytes is smaller than the minimum \
-                          required size of {rule.min_size_bytes} bytes.",
+                message=(
+                    f"File size {actual_size} bytes is smaller than the minimum "
+                    f"required size of {rule.min_size_bytes} bytes."
+                ),
                 actual_size_bytes=actual_size,
             )
 
@@ -136,8 +138,10 @@ class ArtifactValidator:
                 passed=False,
                 required=rule.required,
                 failure_type=FailureType.ARTIFACT_INVALID,
-                message=f"File size {actual_size} bytes exceeds the maximum allowed \
-                          size of {rule.max_size_bytes} bytes.",
+                message=(
+                    f"File size {actual_size} bytes exceeds the maximum allowed "
+                    f"size of {rule.max_size_bytes} bytes."
+                ),
                 actual_size_bytes=actual_size,
             )
 

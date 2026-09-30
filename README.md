@@ -83,7 +83,7 @@ global_teardown
 
 ## 設定測試流程
 
-以下設定示範裝置命令、重試與 CSV 驗證：
+以下設定示範裝置命令、run-level timeout、重試與 CSV 驗證。`run_timeout_seconds` 與 [sample.yaml](configs/sample.yaml) 同樣設為 3600 秒：
 
 ```yaml
 test_case:
@@ -95,6 +95,8 @@ device:
   serial: ABC123
   product: pixel
   build: build_12345
+
+run_timeout_seconds: 3600
 
 retry:
   max_attempts: 3
@@ -218,7 +220,7 @@ Executor 每 0.1 秒檢查取消與 timeout。每次 attempt 建立獨立 sessio
 在既有 YAML 頂層加入：
 
 ```yaml
-run_timeout_seconds: 300
+run_timeout_seconds: 3600
 ```
 
 省略或 null 代表不設 run deadline；step 的 `timeout_second` 仍有效。只接受有限正數，拒絕 bool、字串、零、負數、NaN 與 Infinity。Deadline 在 global_setup 前啟動，不隨 retry 重設。

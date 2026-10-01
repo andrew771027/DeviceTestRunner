@@ -6,31 +6,124 @@
 
 Device Test Runner 使用 YAML 定義裝置測試流程，執行既有的 Bash、Python、ADB 等命令，並保存每次執行的輸出與 JSON 報告。它負責安排測試步驟、驗證輸出檔案，以及依設定重試失敗步驟；裝置操作仍由你的腳本處理。
 
-目前 runtime／報告版本為 **v1.6.2**，支援五階段測試流程、整次 run 與步驟逾時、選擇性重試、輸出檔案驗證、程序群組清理與 Ctrl+C 取消。套件、runtime 與報告版本已同步為 `1.6.2`，發佈確認列於 [完成條件](docs/definition_of_done/definition_of_done_v1.6.2.md)。Recorder 管理與遠端執行仍在規劃中。
+目前版本為 **v1.6.2**。支援五階段測試流程、整次執行與步驟逾時、選擇性重試、輸出檔案驗證、程序群組清理與 Ctrl+C 取消。
+
+## 解決的痛點
+
+- 測試命令散落在不同腳本：用 YAML 統一描述準備、測試與清理順序，沿用既有 Bash、Python 或 ADB 命令。
+- 命令成功不代表產物正確：檢查檔案是否存在、大小、副檔名、目錄內容，以及 CSV／JSON 內容。
+- 偶發失敗難以重現：依失敗類型重試，為每次嘗試保留獨立 stdout／stderr。
+- 測試卡住或中途停止：設定逾時、提出取消請求，並依生命週期規則執行清理。
+- 人工整理結果費時：每次執行產生獨立目錄與 JSON 報告，供檢查與自動化處理。
+
+## 專案架構
+
+```text
+YAML Configuration
+        ↓
+Config Loader
+        ↓
+RunnerConfig
+        ↓
+DeviceTestRunner
+        ├── Lifecycle Orchestration
+        ├── CancellationToken
+        ├── RetryPolicy
+        ├── SubprocessExecutor
+        ├── ArtifactManager
+        ├── ArtifactValidator
+        └── JsonReporter
+                ↓
+       result.json / per-attempt logs / validation results
+```
+
+| 路徑 | 用途 |
+| --- | --- |
+| `main.py` | CLI 入口，載入設定並啟動測試 |
+| `runner/` | 流程控制、命令執行、重試、取消、產物驗證與報告 |
+| `configs/` | YAML 設定範例 |
+| `scripts/` | 供測試流程呼叫的腳本 |
+| `tests/` | 專案自動化測試 |
+| `docs/` | 架構、測試、驗收與版本文件 |
 
 ## 安裝
 
 需要 Python 3.10+ 與 Poetry 2.x。程序群組清理使用 POSIX signal API；目前本機驗證為 macOS，沒有 Windows 支援驗證。在專案目錄執行：
 
 ```bash
-git clone git@github.com:andrew771027/DeviceTestRunner.git
+git clone https://github.com/andrew771027/DeviceTestRunner.git
 cd DeviceTestRunner
 poetry install
 ```
 
 Poetry 會建立虛擬環境，依 `poetry.lock` 安裝專案與開發依賴。後續指令都透過 `poetry run` 執行。
 
-## 執行測試流程
+## 使用手冊（User Manual）
+
+### 建立並執行第一個流程
+
+將以下內容存為 `configs/hello.yaml`。此範例不需要連接裝置，會產生一份 CSV 並檢查內容。五個 lifecycle 階段都需提供 `steps`；不使用的階段填入 `[]`。
+
+```yaml
+test_case:
+  id: hello
+  name: Hello Runner
+  description: Create and validate a CSV file.
+device:
+  serial: demo
+  product: demo
+  build: demo
+lifecycle:
+  global_setup:
+    steps: []
+  setup:
+    steps: []
+  scenario:
+    steps:
+      - name: write_csv
+        type: command
+        command: 'printf "timestamp,power\n1,110\n" > result.csv'
+        timeout_second: 10
+  teardown:
+    steps: []
+  global_teardown:
+    steps: []
+artifact:
+  output_dir: artifacts
+  validation:
+    rules:
+      - name: check_csv
+        type: csv_content
+        path: result.csv
+        required_columns: [timestamp, power]
+        min_rows: 1
+```
+
+在專案根目錄執行：
+
+```bash
+poetry run python main.py --config configs/hello.yaml
+```
+
+CLI 會顯示最終狀態。到 `artifacts/` 下該次執行目錄查看 `result.json`、`result.csv` 與步驟的 stdout／stderr log。以報告的 `summary.status` 判斷結果：`PASSED`、`FAILED`、`CANCELLED` 或 `TIMED_OUT`。
+
+接著可將 `command` 替換成自己的腳本或裝置命令。命令的工作目錄是該次 run directory；引用專案內腳本時使用 `$DEVICE_TEST_RUNNER_ROOT`，取得輸出目錄則使用 `$RUN_ARTIFACT_DIR`。例如：
+
+```yaml
+command: bash "$DEVICE_TEST_RUNNER_ROOT/scripts/run_scenario.sh"
+```
+
+使用 ADB 等外部命令前，需自行安裝工具並確認裝置連線。`device` 欄位用於報告資料，裝置選擇仍需在命令中指定。
+
+專案另提供 [sample.yaml](configs/sample.yaml)，展示多個階段、重試與驗證規則：
 
 ```bash
 poetry run python main.py --config configs/sample.yaml
 ```
 
-範例設定會示範失敗情境。2026-09-12 的本機驗證結果為 `FAILED`：`run_unstable_command` 失敗後未重試，下一步被跳過，另有五項必要檔案驗證失敗。完整紀錄見 [v1.6.0 完成條件](docs/definition_of_done/definition_of_done_v1.6.0.md)。
+此設定包含失敗命令與缺少產物的情境，適合觀察失敗處理，不應以全部通過作為安裝成功的條件。
 
-每次執行會建立獨立的輸出目錄，保存 `result.json` 與各次嘗試的 stdout、stderr。請讀取報告中的 `summary.status` 判斷結果：`PASSED`、`FAILED`、`CANCELLED` 或 `TIMED_OUT`。
-
-## 常用詞彙
+### 常用詞彙
 
 | 詞彙 | 意義 |
 | --- | --- |
@@ -41,7 +134,7 @@ poetry run python main.py --config configs/sample.yaml
 | Artifact | 測試產生的檔案，例如 log、CSV 或 JSON |
 | Cleanup | 清理作業，包括 `teardown` 與 `global_teardown` |
 
-## 測試生命週期
+### 測試生命週期
 
 測試依序執行五個階段：
 
@@ -81,9 +174,9 @@ global_teardown
 
 最終 `summary.status` 先依取消原因判定：RUN_TIMEOUT 為 `TIMED_OUT`，USER_REQUEST 為 `CANCELLED`；沒有取消原因但有 cancelled step 也為 `CANCELLED`。沒有取消時，failed step、skipped step 或 required artifact failure 任一存在即為 `FAILED`，其餘為 `PASSED`。
 
-## 設定測試流程
+### 設定測試流程
 
-以下設定示範裝置命令、run-level timeout、重試與 CSV 驗證。`run_timeout_seconds` 與 [sample.yaml](configs/sample.yaml) 同樣設為 3600 秒：
+以下設定示範裝置命令、整次執行逾時、重試與 CSV 驗證。可另存為 YAML 後透過 `--config` 指定；請先將裝置序號 `ABC123` 換成自己的序號：
 
 ```yaml
 test_case:
@@ -162,9 +255,9 @@ artifact:
         min_rows: 1
 ```
 
-`after_step` 將 validation rule 綁定到指定 step，runner 會在該 step 每次 command 成功後立即驗證。`required` 預設為 `true`：required rule 失敗會使 attempt 失敗，且只有 failure type 出現在 `retry.retry_on`、尚未達 `max_attempts` 時才重試；`required: false` 的失敗仍寫入 report，但不影響 step 或 run 狀態。Lifecycle 結束後會再次對所有規則執行 final validation，包括有 `after_step` 的規則。YAML 未設定 `retry_on` 時預設為空清單，因此不重試；`none`、`cancelled` 與未知值會被拒絕。直接使用 Python `RetryConfig()` 的預設清單不同，詳見 [v1.6.0 的設定說明](docs/architecture/architecture_v1.6.0.md)。
+`after_step` 將 validation rule 綁定到指定 step，runner 會在該 step 每次 command 成功後立即驗證。`required` 預設為 `true`：required rule 失敗會使 attempt 失敗，且只有 failure type 出現在 `retry.retry_on`、尚未達 `max_attempts` 時才重試；`required: false` 的失敗仍寫入 report，但不影響 step 或 run 狀態。Lifecycle 結束後會再次對所有規則執行 final validation，包括有 `after_step` 的規則。YAML 未設定 `retry_on` 時預設為空清單，因此不重試；`none`、`cancelled` 與未知值會被拒絕。直接使用 Python `RetryConfig()` 的預設清單不同，使用 Python API 時請明確指定重試條件。
 
-## 透過 Python API 取消
+### 透過 Python API 取消
 
 CLI 第一次 Ctrl+C／SIGINT 會呼叫 `token.cancel()`；第二次會拋出 `KeyboardInterrupt`，可能中斷 cleanup 與報告寫入。CLI 正常完成回傳 0、FAILED 回傳 1、CANCELLED 或 run 期間的 KeyboardInterrupt 回傳 130。SIGTERM 尚未接到 token。
 
@@ -213,11 +306,9 @@ Executor 每 0.1 秒檢查取消與 timeout。每次 attempt 建立獨立 sessio
 
 同群組的 child／grandchild 已有清理測試；自行脫離群組的程序，以及直接 process 正常退出後留下的背景程序，不在目前保證內。詳見 [Process Lifecycle](docs/process_lifecycle.md)。Cancelled attempt 不做 attempt validation 或 retry，但 run 最後仍驗證所有 artifacts。
 
-從 v1.6.0 升級時，`SubprocessExecutor` 建構子需新增 `process_terminator`。從更舊版本升級時，Python 呼叫端也需調整 `SubprocessExecutor.execute(..., cancellation_token=...)`，以及手動建構 result dataclasses 時的新欄位。`run(config)` 仍可不傳 token。完整差異見 [Architecture](docs/architecture/architecture_v1.6.2.md)。
+### 設定整次執行逾時
 
-## Run-level timeout（v1.6.2）
-
-在既有 YAML 頂層加入：
+在 YAML 頂層設定：
 
 ```yaml
 run_timeout_seconds: 3600
@@ -229,7 +320,7 @@ Run timeout 透過 cancellation 停止一般工作，report 為 `TIMED_OUT`、`c
 
 Cleanup 使用新 token 與自己的 step timeout；final validation 不會被取消中斷。Watchdog 在上述工作結束後停止，因此不保證 CLI 在設定秒數內返回。`metadata.run_timed_out` 在取消原因為 RUN_TIMEOUT 時是 `true`，其他情況為 `false`。CLI 目前沒有 TIMED_OUT 專用非零 exit code，會回傳 0；自動化應檢查 `summary.status`，不能只依 exit code 判定成功。
 
-## 輸出檔案
+### 輸出檔案
 
 每次測試執行會建立獨立的 run directory。
 
@@ -270,7 +361,7 @@ artifacts/
 
 相對路徑的 artifact validation rule 會以該次 run directory 為基準解析。每一次 retry 都有獨立的 stdout／stderr log，避免後一次 attempt 覆蓋先前的診斷資訊。
 
-## 報告範例
+### 報告範例
 
 以下是單一步驟、無 artifact rules 的示意資料，並非 sample.yaml 的實際執行報告。
 
@@ -338,28 +429,7 @@ artifacts/
 }
 ```
 
-結果消費端應以 `summary.status` 判斷 run；`RunResult.passed` 在 v1.6.2 只於 status 為 PASSED 時回傳 true。`StepAttemptResult.passed` 已移除，請使用 `success` 與 failure flags。
-
-## 架構
-
-```text
-YAML Configuration
-        ↓
-Config Loader
-        ↓
-RunnerConfig
-        ↓
-DeviceTestRunner
-        ├── Lifecycle Orchestration
-        ├── CancellationToken
-        ├── RetryPolicy
-        ├── SubprocessExecutor
-        ├── ArtifactManager
-        ├── ArtifactValidator
-        └── JsonReporter
-                ↓
-       result.json / per-attempt logs / validation results
-```
+結果消費端應以 `summary.status` 判斷 run；Python API 的 `RunResult.passed` 只於 status 為 `PASSED` 時回傳 true。單次 attempt 請讀取 `success`、`failure_type`、`timed_out` 與 `cancelled`。
 
 ## 執行專案測試
 
@@ -393,9 +463,7 @@ poetry run pytest -m cancelled
 poetry run pytest -m artifact
 ```
 
-歷史驗證紀錄（2026-09-12，Python 3.14）：`.venv/bin/python -m pytest -q` → **153 passed in 39.39s**。150 個測試函式皆有 Given／When／Then 說明；參數化後共 153 個案例。
-
-本次 v1.6.2 驗證與測試案例的對照，見 [完成條件](docs/definition_of_done/definition_of_done_v1.6.2.md) 與 [測試矩陣](docs/test_matrix/test_matrix_v1.6.2.md)。
+測試工具與撰寫方式見 [測試指南](docs/test_guide.md)；覆蓋範圍與驗證紀錄見 [測試矩陣](docs/test_matrix/test_matrix_v1.6.2.md) 與 [完成條件](docs/definition_of_done/definition_of_done_v1.6.2.md)。
 
 ## 持續整合
 
@@ -408,31 +476,23 @@ poetry install
 poetry run pytest
 ```
 
-## 手動更新版本文件
+## 限制與後續規劃
 
-`.github/workflows/manual.yml` 的 `workflow_dispatch` 接受 `release_version`（如 `1.6.0`，不含 v）、`target_branch`（實際 checkout 與 push 的既有分支）及 `model`。GitHub Actions 的 Use workflow from 選項決定讀取哪個分支的 workflow 定義。
+目前以單機命令流程為主。Recorder 管理、批次與並行執行、controller／worker 遠端執行仍在規劃中；詳細範圍與進度見 [Roadmap](docs/roadmap.md)。
 
-流程先安裝專案、跑 baseline tests，再請 Codex 更新文件與測試說明；驗證 `pytest -q`、`git diff --check` 與 Given／When／Then 行數後，有變更才 commit 並直接 push 到目標分支。這個流程不建立 PR、tag 或 GitHub Release。
+程序清理與平台限制見 [Process Lifecycle](docs/process_lifecycle.md)。執行逾時後的 cleanup 與最終產物驗證可能延長返回時間；自動化整合請讀取報告狀態，`TIMED_OUT` 目前仍會回傳 exit code 0。
 
-Repository secret 名稱為 `OPENAI_API_KEY`，在 CLI invocation 映射成 `CODEX_API_KEY`；`--approve-for-me` 與 `--sandbox` 不同時使用。目標分支需允許這次 push，API 帳戶需有可用額度及模型存取權。
-
-## 開發與版本規劃
-
-目前先補齊單機執行與取消流程，再加入可重用設定與 recorder 管理：
-
-1. v1.6.1：已實作程序群組終止、輸出串流收尾與 SIGINT handler；平台驗證與發佈待完成。
-2. v1.6.2：已實作 run-level timeout 與取消原因；CLI timeout exit code 與發佈確認仍待完成。
-3. v1.6.3：取消後的清理範圍、時間限制與部分結果保存。
-4. v1.7.0～v1.7.2：YAML 靜態變數、環境變數與執行資訊。
-5. v1.8 之後：recorder、hooks、執行摘要、批次與並行執行。
-6. v2.0：controller／worker 遠端執行。
-
-詳細範圍與 keyword-driven 設計見 [Roadmap](docs/roadmap.md)。歷史變更見 [CHANGELOG](CHANGELOG.md)。提交與發佈前請使用 [提交檢查清單](CommitManual.md)。
+維護者提交、發佈與操作手動文件更新 workflow 時，請參閱 [提交與發佈檢查清單](CommitManual.md)。
 
 ## 文件
 
 | 文件 | 用途 |
 | --- | --- |
+| [使用手冊](#使用手冊user-manual) | 建立設定、執行流程與閱讀報告 |
+| [CHANGELOG](CHANGELOG.md) | 歷史變更與版本差異 |
+| [Roadmap](docs/roadmap.md) | 後續功能與版本規劃 |
+| [Process Lifecycle](docs/process_lifecycle.md) | 程序清理行為與限制 |
+| [提交檢查清單](CommitManual.md) | 提交、發佈與文件維護流程 |
 | [架構 v1.6.2](docs/architecture/architecture_v1.6.2.md) | 元件、取消路由、報告欄位與相容性 |
 | [測試指南](docs/test_guide.md) | Pytest 工具、fixture、Mock 與各版用法 |
 | [測試矩陣 v1.6.2](docs/test_matrix/test_matrix_v1.6.2.md) | 功能對應的測試與覆蓋限制 |

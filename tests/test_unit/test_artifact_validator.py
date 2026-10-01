@@ -102,9 +102,9 @@ def test_file_size_rule_fails_below_minimum(tmp_path: Path):
     assert result.type == "file_size"
     assert result.path == str(target)
     assert result.actual_size_bytes == 4
-    assert (
-        result.message
-        == f"File size {result.actual_size_bytes} bytes is smaller than the minimum required size of {rule.min_size_bytes} bytes."
+    assert result.message == (
+        f"File size {result.actual_size_bytes} bytes is smaller than the minimum "
+        f"required size of {rule.min_size_bytes} bytes."
     )
     assert result.failure_type == FailureType.ARTIFACT_INVALID
 
@@ -134,9 +134,9 @@ def test_file_size_rule_fails_above_maximum(tmp_path: Path):
     assert result.type == "file_size"
     assert result.path == str(target)
     assert result.actual_size_bytes == 30
-    assert (
-        result.message
-        == f"File size {result.actual_size_bytes} bytes exceeds the maximum allowed size of {rule.max_size_bytes} bytes."
+    assert result.message == (
+        f"File size {result.actual_size_bytes} bytes exceeds the maximum allowed "
+        f"size of {rule.max_size_bytes} bytes."
     )
     assert result.failure_type == FailureType.ARTIFACT_INVALID
 
@@ -239,9 +239,9 @@ def test_file_extension_rule_fails(tmp_path: Path):
     assert result.name == "test_file.pdf"
     assert result.type == "file_extension"
     assert result.path == str(target)
-    assert (
-        result.message
-        == f"File extension '{target.suffix}' is not allowed entensions {sorted(rule.allowed_extensions)}."
+    assert result.message == (
+        f"File extension '{target.suffix}' is not allowed entensions "
+        f"{sorted(rule.allowed_extensions)}."
     )
     assert result.failure_type == FailureType.ARTIFACT_INVALID
 
@@ -300,7 +300,7 @@ def test_directory_not_empty_fails_when_empty(tmp_path: Path):
 
     Given a directory contains no entries.
     When the artifact validator evaluates the rule.
-    Then the result is ARTIFACT_MISSING with an empty-directory diagnostic.
+    Then the result is ARTIFACT_INVALID with an empty-directory diagnostic.
     """
     directory = tmp_path / "test_directory"
     directory.mkdir()
@@ -316,7 +316,7 @@ def test_directory_not_empty_fails_when_empty(tmp_path: Path):
     assert result.type == "directory_not_empty"
     assert result.path == str(directory)
     assert result.message == "Directory is empty."
-    assert result.failure_type == FailureType.ARTIFACT_MISSING
+    assert result.failure_type == FailureType.ARTIFACT_INVALID
 
 
 def test_directory_not_empty_fails_for_file(tmp_path: Path):
@@ -739,9 +739,8 @@ def test_json_content_fails_when_value_mismatch(tmp_path: Path):
     result = ArtifactValidator().validate(rule=rule, base_dir=tmp_path)
 
     assert result.passed is False
-    assert (
-        result.message
-        == "JSON value validation failed: [\"status: expected 'PASSED', actual 'FAILED'\"]"
+    assert result.message == (
+        "JSON value validation failed: [\"status: expected 'PASSED', actual 'FAILED'\"]"
     )
     assert result.failure_type == FailureType.ARTIFACT_INVALID
 

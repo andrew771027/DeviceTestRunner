@@ -83,7 +83,6 @@ def test_executor_cancels_running_process(tmp_path: Path):
 
 
 def test_stdout_reader_thread_finishes_after_process_termination(tmp_path: Path):
-
     """Acceptance scenario.
 
     Given a real command prints start and waits.
@@ -143,7 +142,6 @@ def test_stdout_reader_thread_finishes_after_process_termination(tmp_path: Path)
 
 
 def test_stderr_is_drained_after_cancellation(tmp_path: Path):
-
     """Acceptance scenario.
 
     Given a real command prints an error to stderr and waits.
@@ -203,7 +201,6 @@ def test_stderr_is_drained_after_cancellation(tmp_path: Path):
 
 
 def test_process_group_termination_cleans_child_processes(tmp_path: Path):
-
     """Acceptance scenario.
 
     Given a shell has started a child whose PID is recorded.

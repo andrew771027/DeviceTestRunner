@@ -48,7 +48,8 @@ def test_real_artifact_aware_retry(tmp_path: Path):
 
     Given a real command initially produces an unacceptable artifact and retry is enabled.
     When the runner validates the artifact and performs the configured retry flow.
-    Then the invalid first artifact triggers one retry and the corrected artifact allows the run to pass.
+    Then the invalid first artifact triggers one retry and the corrected artifact allows the run
+    to pass.
     """
     output_dir = tmp_path / "artifacts"
 
@@ -64,6 +65,7 @@ def test_real_artifact_aware_retry(tmp_path: Path):
         serial: fake_serial,
         product: fake_pixel,
         build: fake_build,
+    run_timeout_seconds: 300
     retry:
         max_attempts: 3
         delay_seconds: 0

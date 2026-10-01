@@ -1,12 +1,38 @@
 # Changelog
 
-## [Unreleased]
+## [1.6.2]
+
+Version scope: Run-level Timeout. Distribution, runtime and report versions are synchronized to 1.6.2. This entry describes the working tree, not a verified release.
+
+### Added
+
+- Optional top-level `run_timeout_seconds`, validated as a finite positive number; omitted/null means unlimited run time.
+- Monotonic watchdog shared across normal steps and retries; cancellation reasons preserve the first request.
+- `TIMED_OUT` run status and metadata `cancel_reason`, `run_timeout_seconds`, `run_timed_out`.
+- Configuration, cancellation reason, watchdog, status, setup timeout, retry delay, serialized attempt history and orphan process regression tests.
+- v1.6.2 architecture, test matrix, acceptance criteria, completion checklist and testing-guide cases.
 
 ### Changed
 
-- Reorganized the README around setup, execution, configuration and reports.
-- Edited versioned documentation for clearer headings, shorter explanations and readable acceptance conditions.
-- Expanded the commit checklist with concrete documentation and release checks.
+- Consolidated README, lifecycle documentation, testing guidance and release checks for v1.6.2.
+
+- `RunResult.passed` follows summary status; `StepAttemptResult.passed` is removed in favor of `success`.
+- Run timeout interrupts normal work without retrying cancelled attempts; reachable cleanup uses fresh tokens and final validation still runs.
+
+### Fixed
+
+- Standardized run timeout report metadata on `run_timed_out`, with explicit JSON regression assertions.
+
+- Omitted timeout returns None; watchdog uses Event.wait instead of the misspelled method.
+- Terminator checks the original process group even after the direct child is reaped.
+- Missing existence-rule targets report ARTIFACT_MISSING; size diagnostics no longer contain indentation spaces.
+- Tests correct empty-directory classification, fixture paths, imports, report access and unordered status parameters.
+
+### Verification and limitations
+
+- Current commands and results: [v1.6.2 Definition of Done](docs/definition_of_done/definition_of_done_v1.6.2.md).
+- CLI TIMED_OUT currently returns 0; cleanup has no independent total deadline. Exception finalization, platform checks and detached-process handling remain open.
+- Package version is synchronized; tag and GitHub Release remain pending.
 
 ## [1.6.1]
 

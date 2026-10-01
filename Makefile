@@ -8,4 +8,4 @@ test:
 test_cov:
 	@pytest -v ./tests \
 			--cov=runner \
-			--cov-report=term-missing 
+			--cov-report=term-missing

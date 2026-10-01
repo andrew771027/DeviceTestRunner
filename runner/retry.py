@@ -1,4 +1,4 @@
-from runner.models import ArtifactValidationResult, FailureType, RetryConfig
+from runner.models import FailureType, RetryConfig
 
 
 class RetryPolicy:

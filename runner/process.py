@@ -26,26 +26,24 @@ class ProcessTerminator:
 
     def terminate_process_group(self, process: subprocess.Popen) -> ProcessTerminationResult:
 
-        #
-        # Process 已經結束
-        #
-        if process.poll() is not None:
-            return ProcessTerminationResult(
-                terminated=False,
-                killed=False,
-                return_code=process.returncode,
-            )
+        process.poll()
 
         try:
-
             process_group_id = os.getpgid(process.pid)
 
         except ProcessLookupError:
-            return ProcessTerminationResult(
-                terminated=False,
-                killed=False,
-                return_code=process.poll(),
-            )
+            # Executor 使用 start_new_session=True，group ID 就是 direct child PID。
+            # Direct child 已被 reap 時，仍需檢查留在原群組中的 descendants。
+            process_group_id = process.pid
+
+            try:
+                os.killpg(process_group_id, 0)
+            except ProcessLookupError:
+                return ProcessTerminationResult(
+                    terminated=False,
+                    killed=False,
+                    return_code=process.poll(),
+                )
 
         #
         # --------------------------------------------------

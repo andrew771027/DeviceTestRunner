@@ -33,6 +33,7 @@ def test_command_creates_and_validates_artifact(tmp_path: Path):
         serial: fake_device
         product: fake_product
         build: fake_build
+    run_timeout_seconds: 300
     lifecycle:
         global_setup:
             steps: []
@@ -135,6 +136,7 @@ def test_run_fails_when_command_does_not_create_artifact(tmp_path: Path):
         serial: fake_device
         product: fake_product
         build: fake_build
+    run_timeout_seconds: 300
     lifecycle:
         global_setup:
             steps: []
@@ -210,6 +212,7 @@ def test_command_runs_inside_run_directory(tmp_path: Path):
         serial: fake_device
         product: fake_product
         build: fake_build
+    run_timeout_seconds: 300
     lifecycle:
         global_setup:
             steps: []
@@ -279,6 +282,7 @@ def test_csv_and_json_content_validation(tmp_path: Path):
         serial: fake device
         product: fake_pixel
         build: fake_build
+    run_timeout_seconds: 300
     lifecycle:
         global_setup:
             steps: []
@@ -297,8 +301,9 @@ def test_csv_and_json_content_validation(tmp_path: Path):
               timeout_second: 5
             - name: create_json
               type: command
-              command: |
-                printf '{{"status":"PASSED","metrics":{{"average_power":110.0,"sample_count":2}}}}' > results/test_json_file.json
+              command: >
+                printf '{{"status":"PASSED","metrics":{{"average_power":110.0,"sample_count":2}}}}'
+                > results/test_json_file.json
               timeout_second: 5
         teardown:
             steps: []
@@ -361,7 +366,7 @@ def test_csv_and_json_content_validation(tmp_path: Path):
         (Path(result.artifact_dir) / "result.json").read_text(encoding="utf-8")
     )
 
-    assert saved_report["metadata"]["runner_version"] == "1.6.1"
+    assert saved_report["metadata"]["runner_version"] == "1.6.2"
     assert saved_report["summary"]["status"] == "PASSED"
 
 
@@ -385,6 +390,7 @@ def test_run_fails_when_csv_content_invalid(tmp_path: Path):
             serial: fake_device
             product: fake_pixel
             build: fake_build
+        run_timeout_seconds: 300
         lifecycle:
             global_setup:
                 steps: []
@@ -469,6 +475,7 @@ def test_run_fails_when_json_status_invalid(tmp_path: Path):
             serial: fake_device
             product: fake_pixel
             build: fake_build
+        run_timeout_seconds: 300
         lifecycle:
             global_setup:
                 steps: []

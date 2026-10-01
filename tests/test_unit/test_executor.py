@@ -74,7 +74,6 @@ def test_subprocess_executor_return_success(tmp_path, test_case_id, step, stage,
 
     assert result.attempt == attempt
     assert result.exit_code == 0
-    assert result.passed is True
     assert result.success is True
     assert result.cancelled is False
     assert result.timed_out is False
@@ -142,7 +141,6 @@ def test_subprocess_executor_failure(tmp_path, test_case_id, step, stage, attemp
     assert result.attempt == attempt
     assert result.exit_code == 1
     assert result.success is False
-    assert result.passed is False
 
     assert log_writer.stdout_path.read_text(encoding="utf-8") == result.stdout
     assert result.stdout == ""
@@ -336,7 +334,6 @@ def test_subprocess_executor_raised_timeout_error(
     assert result.attempt == 1
     assert result.success is False
     assert result.exit_code == -signal.SIGTERM
-    assert result.passed is False
 
     assert log_writer.stdout_path.read_text(encoding="utf-8") == result.stdout
     assert result.stdout == ""

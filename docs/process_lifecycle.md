@@ -1,10 +1,10 @@
 # Device Test Runner Process Lifecycle
 
-Version: v1.6.1
+Version: v1.6.2
 
 ## Purpose
 
-本文件說明一次 attempt 如何啟動、停止與收尾，以及清理和 retry 的關係。閱讀順序是「程序 → 群組 → 輸出 → 下一次 attempt」。類別介面與 UML 見 [Architecture](architecture/architecture_v1.6.1.md)，測試案例見 [Test Matrix](test_matrix/test_matrix_v1.6.1.md)。
+本文件說明一次 attempt 如何啟動、停止與收尾，以及清理和 retry 的關係。閱讀順序是「程序 → 群組 → 輸出 → 下一次 attempt」。類別介面與 UML 見 [Architecture](architecture/architecture_v1.6.2.md)，本版測試案例見 [Test Matrix](test_matrix/test_matrix_v1.6.2.md)。
 
 ## Process model
 
@@ -39,13 +39,25 @@ Executor 每輪依序檢查 process 完成、token 取消、step timeout。正�
 
 已觀察到完成的程序優先。如果程序仍執行中，取消與 timeout 同時可見，取消優先。以下流程描述清理成功的路徑；清理例外見後面的錯誤處理說明。
 
+## Run-level timeout
+
+YAML 的 `run_timeout_seconds` 控制整次 run 的 deadline，省略時不啟動 watchdog。Watchdog 在 global_setup 前開始，與 steps、retry delay 共用同一截止時間；逾時以 RUN_TIMEOUT 取消 token。第一個取消原因不會被覆寫。
+
+被中斷的 attempt 記錄 CANCELLED，run 記錄 TIMED_OUT，metadata.run_timed_out 為 true。Step timeout 仍記錄 TIMEOUT。Retry delay 期間逾時不新增 attempt，也不改寫前一次失敗。
+
+Cleanup 使用新 token 與自己的 step timeout。Watchdog 到 cleanup 與 final validation 後才停止；report 在停止後建立。這不保證整個程序於 deadline 內退出，非預期例外也不保證 cleanup 或 report 完成。
+
 ## Cleanup sequence
 
 ```mermaid
 flowchart TD
     A[觀察到 cancel 或 timeout] --> B{清理開始時直接 process 已退出?}
-    B -- Yes --> C[Terminator 直接返回，不送訊號]
-    B -- No --> D[取得 PGID，對群組送 SIGTERM]
+    B -- Yes --> P[以原 PID 探測 process group]
+    P --> Q{群組仍存在?}
+    Q -- No --> C[返回，無需終止]
+    Q -- Yes --> D[對群組送 SIGTERM]
+    B -- No --> O[取得 PGID]
+    O --> D
     D --> E[回收直接子程序並檢查群組]
     E --> F{寬限時間內群組消失?}
     F -- Yes --> G[Terminator 返回]
@@ -58,7 +70,7 @@ flowchart TD
     K --> L[返回 attempt 結果，Runner 判斷後續流程]
 ```
 
-取得 PGID 或送出 signal 時，如果程序／群組已不存在，程式會處理 `ProcessLookupError`；不要求每次檢查之間程序狀態都保持不變。
+getpgid 找不到 direct child 時，改用原 PID 探測 group；此回退依賴 start_new_session=True。群組不存在才直接返回。送出 signal 時也處理 ProcessLookupError；不要求每次檢查之間程序狀態保持不變。
 
 ### 為什麼不能只看 parent？
 
@@ -112,22 +124,22 @@ flowchart TD
 
 第一次 Ctrl+C／SIGINT 呼叫 token.cancel，讓 executor 與 runner 走受控取消流程。第二次 handler 呼叫拋出 KeyboardInterrupt，可能中斷正在進行的清理與報告寫入。
 
-`main.py` 在 run 的 try 區塊捕捉 KeyboardInterrupt 後回傳 130，並在 finally 還原原本 SIGINT handler。一般結果的 CLI exit code 為 PASSED → 0、FAILED → 1、CANCELLED → 130。
+`main.py` 在 run 的 try 區塊捕捉 KeyboardInterrupt 後回傳 130，並在 finally 還原原本 SIGINT handler。一般結果的 CLI exit code 為 PASSED → 0、FAILED → 1、CANCELLED → 130。TIMED_OUT 目前落入回傳 0 的分支，是待修正缺口。
 
 要區分兩個方向：Terminator 會送 SIGTERM 給 attempt 群組；但外部送 SIGTERM 給 runner 本身，目前沒有接成 token cancellation。
 
 ## Evidence and limits
 
-[Test Matrix](test_matrix/test_matrix_v1.6.1.md) 記錄 parent／child／grandchild、忽略 SIGTERM、reader 收尾、log 保存與 retry 前清理的證據。Fixture、monkeypatch 與模擬方式見 [Test Guide](test_guide.md#v1-6-1)。
+[v1.6.1 Test Matrix](test_matrix/test_matrix_v1.6.1.md) 保留 parent／child／grandchild、忽略 SIGTERM、reader 收尾、log 保存與 retry 前清理的證據。本版新增 run timeout 與 orphan process 證據見 [v1.6.2 Test Matrix](test_matrix/test_matrix_v1.6.2.md)。Fixture、monkeypatch 與模擬方式見 [Test Guide](test_guide.md#v1-6-2)。
 
 目前限制：
 
 - 使用 POSIX process-group API；已有本機 macOS 測試紀錄，不能推論 Windows 支援或 Linux CI 已通過。
 - 自行建立新 session／脫離群組的後代不在清理範圍。
-- Terminator 開始時直接 process 已退出，會直接返回；這不保證其後代也已退出。
+- Direct child 已退出時仍可清理原 group；但需要呼叫端實際進入 terminator，不代表所有正常完成路徑皆會清理。
 - 正常完成後留下背景後代的情境，沒有主動清理保證。
 - 已退出但尚未回收的 zombie 可能仍保有 PID；群組消失時間受 OS 回收行為影響。
 - SIGINT 測試直接呼叫 handler，尚未驗證真實終端訊號、handler 還原與 CLI exit code 的完整流程。
 - 第二次 Ctrl+C、未處理例外與重複清理失敗，不保證完成 teardown 或保存完整報告。
 
-本文件描述實作與既有測試證據，不新增測試執行紀錄；實際命令與結果見 [Definition of Done](definition_of_done/definition_of_done_v1.6.1.md)。
+本文件描述實作與既有測試證據，不新增測試執行紀錄；實際命令與結果見 [Definition of Done](definition_of_done/definition_of_done_v1.6.2.md)。

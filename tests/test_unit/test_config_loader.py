@@ -33,7 +33,7 @@ def test_config_loader_loads_device_test_config(tmp_path: Path):
         serial: xxx001
         product: pixel
         build: 2026.xx.001
-
+    run_timeout_seconds: 300
     lifecycle:
         global_setup:
             steps:
@@ -89,6 +89,8 @@ def test_config_loader_loads_device_test_config(tmp_path: Path):
     assert config.device.serial == "xxx001"
     assert config.device.product == "pixel"
     assert config.device.build == "2026.xx.001"
+
+    assert config.run_timeout_seconds == 300
 
     assert isinstance(config.lifecycle, LifecycleConfig)
 
@@ -149,7 +151,7 @@ def test_load_artifact_validation_config(tmp_path: Path):
         serial: xxx001
         product: pixel
         build: 2026.xx.001
-
+    run_timeout_seconds: 300
     lifecycle:
         global_setup:
             steps: []
@@ -222,7 +224,7 @@ def test_artifact_validation_is_optional(tmp_path: Path):
         serial: xxx001
         product: pixel
         build: 2026.xx.001
-
+    run_timeout_seconds: 300
     lifecycle:
         global_setup:
             steps:
@@ -288,6 +290,7 @@ def test_artifact_retry_defaults_to_false(tmp_path: Path):
         serial: fake_serial
         product: fake_pixel
         build: fake_build
+    run_timeout_seconds: 300
     retry:
         max_attempts: 3
         delay_seconds: 1
@@ -347,6 +350,7 @@ def test_load_csv_and_json_validation_rules(tmp_path: Path):
     serial: fake
     product: pixel
     build: build_001
+   run_timeout_seconds: 300
    lifecycle:
     global_setup:
         steps: []
@@ -361,8 +365,9 @@ def test_load_csv_and_json_validation_rules(tmp_path: Path):
           timeout_second: 5
         - name: create_json
           type: command
-          command: |
-            printf '{{"status":"PASSED","metrics":{{"average_power":110.0,"sample_count":2}}}}' > test_json_file.json
+          command: >
+            printf '{{"status":"PASSED","metrics":{{"average_power":110.0,"sample_count":2}}}}'
+            > test_json_file.json
           timeout_second: 5
     teardown:
         steps: []
@@ -426,6 +431,7 @@ def test_load_retry_config(tmp_path: Path):
         serial: fake_serial
         product: fake_pixel
         build: fake_build
+    run_timeout_seconds: 300
     retry:
         max_attempts: 3
         delay_seconds: 3
@@ -471,6 +477,7 @@ def test_load_artifact_aware_retry_rule(tmp_path: Path):
         serial: fake_serial
         product: fake_pixel
         build: fake_build
+    run_timeout_seconds: 300
     retry:
         max_attempts: 3
         delay_seconds: 1
@@ -533,6 +540,7 @@ def test_retry_config_uses_default_values(tmp_path: Path):
            serial: fake_serial
            product: fake_pixel
            build: fake_build
+       run_timeout_seconds: 300
        lifecycle:
            global_setup:
                steps: []
@@ -574,6 +582,7 @@ def test_retry_max_attempts_must_be_positive(tmp_path: Path):
            serial: fake_serial
            product: fake_pixel
            build: fake_build
+       run_timeout_seconds: 300
        retry:
            max_attempts: -10
        lifecycle:
@@ -615,6 +624,7 @@ def test_retry_delay_seconds_must_be_positive(tmp_path: Path):
            serial: fake_serial
            product: fake_pixel
            build: fake_build
+       run_timeout_seconds: 300
        retry:
            delay_seconds: -10
        lifecycle:
@@ -785,3 +795,82 @@ def test_retry_on_cancelled_is_invalid():
 
     with pytest.raises(ValueError, match=r"retry\.retry_on cannot contain 'cancelled'"):
         ConfigLoader()._load_retry(raw=raw)
+
+
+def test_missing_run_timeout_defaults_to_unlimited(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given YAML omits run_timeout_seconds.
+    When ConfigLoader loads the file.
+    Then the run timeout is None, allowing unlimited execution time.
+    """
+    config_file = tmp_path / "sample.yaml"
+    config_file.write_text(
+        """
+    test_case:
+        id: timeout_001
+        name: timeout
+        description: Run without a deadline.
+    device:
+        serial: device_001
+        product: pixel
+        build: build_001
+    lifecycle:
+        global_setup:
+            steps: []
+        setup:
+            steps: []
+        scenario:
+            steps: []
+        teardown:
+            steps: []
+        global_teardown:
+            steps: []
+    artifact:
+        output_dir: results
+    """,
+        encoding="utf-8",
+    )
+
+    config = ConfigLoader().load(config_file)
+
+    assert config.run_timeout_seconds is None
+
+
+@pytest.mark.parametrize(
+    "timeout_seconds",
+    [0, -1, -0.1, float("nan"), float("inf"), float("-inf")],
+)
+def test_run_timeout_must_be_finite_and_positive(timeout_seconds):
+    """Acceptance scenario.
+
+    Given the run timeout is zero, negative or non-finite.
+    When the run timeout configuration is loaded.
+    Then ValueError rejects the invalid timeout.
+    """
+    raw = {"run_timeout_seconds": timeout_seconds}
+
+    with pytest.raises(ValueError, match="run_timeout_seconds must be finite and > 0"):
+        ConfigLoader._load_run_timeout_seconds(raw)
+
+
+@pytest.mark.parametrize(
+    "timeout_seconds",
+    [
+        True,
+        False,
+    ],
+)
+def test_run_timeout_rejects_boolean(
+    timeout_seconds,
+):
+    """Acceptance scenario.
+
+    Given run_timeout_seconds is a boolean.
+    When the configuration timeout is parsed.
+    Then ValueError rejects a boolean as a numeric timeout.
+    """
+    raw = {"run_timeout_seconds": (timeout_seconds)}
+
+    with pytest.raises(ValueError, match=("run_timeout_seconds " "must be a number")):
+        ConfigLoader._load_run_timeout_seconds(raw)

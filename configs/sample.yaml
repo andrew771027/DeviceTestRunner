@@ -8,6 +8,8 @@ device:
   product: pixel
   build: test_build
 
+run_timeout_seconds: 3600
+
 retry:
   max_attempts: 3
   delay_seconds: 1

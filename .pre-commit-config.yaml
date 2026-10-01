@@ -22,6 +22,7 @@ repos:
       - id: isort
         exclude: migrations/
         args:
+          - --profile=black
           - --line-length=100
 
   - repo: https://github.com/psf/black

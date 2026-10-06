@@ -4,6 +4,7 @@ from runner.cancellation import CancellationReason
 def calculate_run_status(
     *,
     cancellation_reason: CancellationReason | None,
+    cleanup_failed: bool,
     failed_steps: int,
     cancelled_steps: int,
     skipped_steps: int,
@@ -15,6 +16,9 @@ def calculate_run_status(
 
     if cancellation_reason == CancellationReason.USER_REQUEST:
         return "CANCELLED"
+
+    if cleanup_failed:
+        return "FAILED"
 
     if cancelled_steps > 0:
         return "CANCELLED"

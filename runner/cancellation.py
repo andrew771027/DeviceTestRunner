@@ -5,6 +5,7 @@ from enum import Enum
 class CancellationReason(str, Enum):
     USER_REQUEST = "user_request"
     RUN_TIMEOUT = "run_timeout"
+    CLEANUP_TIMEOUT = "cleanup_timeout"
 
 
 class CancellationToken:
@@ -13,7 +14,10 @@ class CancellationToken:
         self._event = threading.Event()
         self._reason: CancellationReason | None = None
 
-    def cancel(self, reason: CancellationReason = CancellationReason.USER_REQUEST) -> None:
+    def cancel(
+        self,
+        reason: CancellationReason = CancellationReason.USER_REQUEST,
+    ) -> None:
         """
         Request cancellation.
 

@@ -110,7 +110,9 @@ class ArtifactValidationConfig:
 @dataclass(frozen=True)
 class ArtifactConfig:
     output_dir: str
-    validation: ArtifactValidationConfig = field(default_factory=ArtifactValidationConfig)
+    validation: ArtifactValidationConfig = field(
+        default_factory=ArtifactValidationConfig,
+    )
 
 
 @dataclass(frozen=True)
@@ -122,6 +124,7 @@ class RunnerConfig:
     retry: RetryConfig
     artifact: ArtifactConfig
     run_timeout_seconds: float | None = None
+    cleanup_timeout_seconds: float | None = None
 
 
 @dataclass(frozen=True)
@@ -163,7 +166,9 @@ class StepAttemptResult:
     error: str = ""
 
     # v1.5.1
-    artifact_validation_results: list[ArtifactValidationResult] = field(default_factory=list)
+    artifact_validation_results: list[ArtifactValidationResult] = field(
+        default_factory=list,
+    )
 
 
 @dataclass(frozen=True)
@@ -214,10 +219,19 @@ class ExecutionSummary:
 
 
 @dataclass(frozen=True)
+class CleanupSummary:
+    attempted: bool
+    timed_out: bool
+    failed: bool
+    cancellation_reason: str | None
+
+
+@dataclass(frozen=True)
 class RunResult:
 
     metadata: RunMetadata
     summary: ExecutionSummary
+    cleanup_summary: CleanupSummary
     step_results: List[StepResult]
     artifact_dir: str | None = None
     artifact_validation_results: List[ArtifactValidationResult] = field(default_factory=list)

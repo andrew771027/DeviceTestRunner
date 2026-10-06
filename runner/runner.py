@@ -6,11 +6,13 @@ from typing import List
 from runner.artifact import ArtifactManager
 from runner.artifact_validator import ArtifactValidator
 from runner.cancellation import CancellationReason, CancellationToken
+from runner.cleanup import CleanupScope
 from runner.executor import SubprocessExecutor
 from runner.failure import FailureClassifier
 from runner.models import (
     ArtifactValidationResult,
     ArtifactValidationRule,
+    CleanupSummary,
     ExecutionSummary,
     FailureType,
     LifecycleStepContent,
@@ -48,7 +50,9 @@ class DeviceTestRunner:
         self.show_console_output = show_console_output
 
     def run(
-        self, config: RunnerConfig, cancellation_token: CancellationToken | None = None
+        self,
+        config: RunnerConfig,
+        cancellation_token: CancellationToken | None = None,
     ) -> RunResult:
 
         if cancellation_token is None:
@@ -58,26 +62,28 @@ class DeviceTestRunner:
 
         started_counter = time.perf_counter()
 
-        artifact_results: List[ArtifactValidationResult] = []
-
-        run_dir = self.artifact_manager.create_run_directory(test_case_id=config.test_case.id)
+        run_dir = self.artifact_manager.create_run_directory(
+            test_case_id=config.test_case.id,
+        )
 
         step_results: List[StepResult] = []
 
-        global_setup_success = False
+        artifact_results: List[ArtifactValidationResult] = []
 
-        setup_success = False
-
-        watchdog: RunTimeoutWatchdog | None = None
+        run_watchdog = None
 
         if config.run_timeout_seconds is not None:
 
-            watchdog = RunTimeoutWatchdog(
+            run_watchdog = RunTimeoutWatchdog(
                 timeout_seconds=config.run_timeout_seconds,
                 cancellation_token=cancellation_token,
             )
 
-            watchdog.start()
+            run_watchdog.start()
+
+        global_setup_success = False
+
+        setup_success = False
 
         try:
 
@@ -94,7 +100,6 @@ class DeviceTestRunner:
                     step_results=step_results,
                     stop_on_failure=True,
                     cancellation_token=cancellation_token,
-                    ignore_cancellation=False,
                 )
 
             if global_setup_success and not cancellation_token.is_cancelled:
@@ -107,7 +112,6 @@ class DeviceTestRunner:
                     step_results=step_results,
                     stop_on_failure=True,
                     cancellation_token=cancellation_token,
-                    ignore_cancellation=False,
                 )
 
                 if setup_success and not cancellation_token.is_cancelled:
@@ -120,53 +124,34 @@ class DeviceTestRunner:
                         step_results=step_results,
                         stop_on_failure=True,
                         cancellation_token=cancellation_token,
-                        ignore_cancellation=False,
                     )
-
-            #
-            # CLEANUP LIFECYCLE
-            #
-            # 即使 cancellation token 已經是 cancelled，
-            # teardown 還是要執行。
-            #
-            if global_setup_success:
-
-                self._run_stage(
-                    stage="teardown",
-                    steps=config.lifecycle.teardown.steps,
-                    config=config,
-                    run_dir=run_dir,
-                    step_results=step_results,
-                    stop_on_failure=False,
-                    cancellation_token=cancellation_token,
-                    ignore_cancellation=True,
-                )
-
-            #
-            # global teardown 永遠 best effort。
-            #
-            self._run_stage(
-                stage="global_teardown",
-                steps=config.lifecycle.global_teardown.steps,
-                config=config,
-                run_dir=run_dir,
-                step_results=step_results,
-                stop_on_failure=False,
-                cancellation_token=cancellation_token,
-                ignore_cancellation=True,
-            )
-
-            #
-            # FINAL ARTIFACT VALIDATION
-            #
-            artifact_results = self.artifact_validator.validate_all(
-                rules=config.artifact.validation.rules, base_dir=run_dir
-            )
 
         finally:
 
-            if watchdog is not None:
-                watchdog.stop()
+            if run_watchdog is not None:
+
+                run_watchdog.stop()
+
+        #
+        # CLEANUP SCOPE
+        #
+
+        cleanup_summary = self._run_cleanup(
+            config=config,
+            run_dir=run_dir,
+            step_reuslts=step_results,
+            run_setup_completed=global_setup_success,
+        )
+
+        #
+        # PARTIAL ARTIFACT VALIDATION
+        #
+        artifact_results = (
+            self.artifact_validator.validate_all(
+                rules=config.artifact.validation.rules,
+                base_dir=run_dir,
+            ),
+        )
 
         finished_at = datetime.now(timezone.utc)
 
@@ -177,13 +162,17 @@ class DeviceTestRunner:
             run_dir=run_dir,
             step_results=step_results,
             artifact_results=artifact_results,
+            cleanup_summary=cleanup_summary,
             started_at=started_at,
             finished_at=finished_at,
             duration_seconds=duration_deconds,
             cancellation_token=cancellation_token,
         )
 
-        self.reporter.save(result=run_result, output_dir=str(run_dir))
+        self.reporter.save(
+            result=run_result,
+            output_dir=str(run_dir),
+        )
 
         return run_result
 
@@ -196,7 +185,6 @@ class DeviceTestRunner:
         step_results: List[StepResult],
         stop_on_failure: bool,
         cancellation_token: CancellationToken,
-        ignore_cancellation: bool,
     ) -> bool:
 
         stage_success = True
@@ -204,7 +192,7 @@ class DeviceTestRunner:
 
         for step in steps:
 
-            if cancellation_token.is_cancelled and not ignore_cancellation:
+            if cancellation_token.is_cancelled:
                 return False
 
             step_result = self._run_step_with_retry(
@@ -214,7 +202,6 @@ class DeviceTestRunner:
                 retry_policy=retry_policy,
                 run_dir=run_dir,
                 cancellation_token=cancellation_token,
-                ignore_cancellation=ignore_cancellation,
             )
 
             step_results.append(step_result)
@@ -239,7 +226,6 @@ class DeviceTestRunner:
         retry_policy: RetryPolicy,
         run_dir: Path,
         cancellation_token: CancellationToken,
-        ignore_cancellation: bool,
     ) -> StepResult:
 
         attempt_results: List[StepAttemptResult] = []
@@ -274,20 +260,9 @@ class DeviceTestRunner:
             #   teardown/global_teardown
             #   可以 ignore cancellation
             #
-            if cancellation_token.is_cancelled and not ignore_cancellation:
+            if cancellation_token.is_cancelled:
                 step_cancelled = True
                 break
-
-            #
-            # Cleanup stage 不應該使用已經 cancelled 的 token。
-            #
-            # 不然 teardown 一開始：
-            #
-            # cancellation_token.is_cancelled == True
-            #
-            # Executor 又會立刻把 cleanup process cancel。
-            #
-            execution_token = CancellationToken() if ignore_cancellation else cancellation_token
 
             #
             # ---------------------------------------------------------
@@ -300,6 +275,7 @@ class DeviceTestRunner:
                 step_name=step.name,
                 attempt=attempt,
                 show_console=self.show_console_output,
+                cancellation_token=cancellation_token,
             )
 
             #
@@ -325,7 +301,7 @@ class DeviceTestRunner:
                     attempt=attempt,
                     log_writer=log_writer,
                     working_directory=run_dir,
-                    cancellation_token=execution_token,
+                    cancellation_token=cancellation_token,
                 )
 
             artifact_results: List[ArtifactValidationResult] = []
@@ -369,7 +345,9 @@ class DeviceTestRunner:
             # → report 留著
             # → 但不影響 step success
             #
-            required_artifact_results = self._get_required_artifact_results(artifact_results)
+            required_artifact_results = self._get_required_artifact_results(
+                artifact_results,
+            )
 
             #
             # ---------------------------------------------------------
@@ -448,7 +426,7 @@ class DeviceTestRunner:
             # 但使用者這時候按下 cancel。
             #
 
-            if cancellation_token.is_cancelled and not ignore_cancellation:
+            if cancellation_token.is_cancelled:
                 step_cancelled = True
                 break
 
@@ -503,7 +481,7 @@ class DeviceTestRunner:
                     cancellation_token=cancellation_token,
                 )
 
-                if cancelled_during_delay and not ignore_cancellation:
+                if cancelled_during_delay:
                     step_cancelled = True
                     break
 
@@ -547,12 +525,93 @@ class DeviceTestRunner:
 
             time.sleep(min(0.1, remaining))
 
+    def _run_cleanup(
+        self,
+        *,
+        config: RunnerConfig,
+        run_dir: Path,
+        step_results: list[StepResult],
+        run_setup_completed: bool,
+    ) -> CleanupSummary:
+
+        cleanup_scope = CleanupScope.create(
+            timeout_seconds=config.cleanup_timeout_seconds,
+        )
+
+        cleanup_scope.start()
+
+        attempted = False
+
+        failed = False
+
+        try:
+
+            #
+            # teardown only makes sense after
+            # setup context was established.
+            #
+            if run_setup_completed:
+
+                attempted = True
+
+                teardown_success = self._run_stage(
+                    stage="teardown",
+                    steps=config.lifecycle.teardown.steps,
+                    config=config,
+                    run_dir=run_dir,
+                    step_results=step_results,
+                    stop_on_failure=False,
+                    cancellation_token=cleanup_scope.cancellation_token,
+                )
+
+                if not teardown_success:
+                    failed = True
+
+                #
+                # global teardown 永遠 best effort。
+                #
+
+                if not cleanup_scope.cancellation_token.is_cancelled:
+
+                    attempted = True
+
+                    global_teardown_success = self._run_stage(
+                        stage="global_teardown",
+                        steps=config.lifecycle.global_teardown.steps,
+                        config=config,
+                        run_dir=run_dir,
+                        step_results=step_results,
+                        stop_on_failure=False,
+                        cancellation_token=cleanup_scope.cancellation_token,
+                    )
+
+                if not global_teardown_success:
+
+                    failed = True
+        finally:
+
+            cleanup_scope.stop()
+
+        cleanup_token = cleanup_scope.cancellation_token
+
+        timed_out = cleanup_token.reason == CancellationReason.CLEANUP_TIMEOUT
+
+        return CleanupSummary(
+            attempted=attempted,
+            timed_out=timed_out,
+            failed=failed or timed_out,
+            cancellation_reason=(
+                cleanup_token.reason.value if cleanup_token.reason is not None else None
+            ),
+        )
+
     def _build_run_result(
         self,
         config: RunnerConfig,
         run_dir: Path,
         step_results: List[StepResult],
         artifact_results: List[ArtifactValidationResult],
+        cleanup_summary: CleanupSummary,
         started_at: datetime,
         finished_at: datetime,
         duration_seconds: float,
@@ -585,6 +644,7 @@ class DeviceTestRunner:
 
         status = calculate_run_status(
             cancellation_reason=cancellation_token.reason,
+            cleanup_failed=cleanup_summary.failed,
             failed_steps=failed_steps,
             cancelled_steps=cancelled_steps,
             skipped_steps=skipped_steps,

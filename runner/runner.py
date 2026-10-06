@@ -139,18 +139,16 @@ class DeviceTestRunner:
         cleanup_summary = self._run_cleanup(
             config=config,
             run_dir=run_dir,
-            step_reuslts=step_results,
+            step_results=step_results,
             run_setup_completed=global_setup_success,
         )
 
         #
         # PARTIAL ARTIFACT VALIDATION
         #
-        artifact_results = (
-            self.artifact_validator.validate_all(
-                rules=config.artifact.validation.rules,
-                base_dir=run_dir,
-            ),
+        artifact_results = self.artifact_validator.validate_all(
+            rules=config.artifact.validation.rules,
+            base_dir=run_dir,
         )
 
         finished_at = datetime.now(timezone.utc)
@@ -275,7 +273,6 @@ class DeviceTestRunner:
                 step_name=step.name,
                 attempt=attempt,
                 show_console=self.show_console_output,
-                cancellation_token=cancellation_token,
             )
 
             #
@@ -687,6 +684,7 @@ class DeviceTestRunner:
         run_reuslt = RunResult(
             metadata=metadata,
             summary=summary,
+            cleanup_summary=cleanup_summary,
             step_results=step_results,
             artifact_validation_results=(artifact_results),
             artifact_dir=str(run_dir),

@@ -178,6 +178,7 @@ class ConfigLoader:
 
         return retry_on
 
+    @staticmethod
     def _load_optional_positivbe_timeout(raw: dict[str, Any], key: str) -> float | None:
         raw_value = raw.get(key)
 

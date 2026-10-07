@@ -153,7 +153,7 @@ class DeviceTestRunner:
 
         finished_at = datetime.now(timezone.utc)
 
-        duration_deconds = time.perf_counter() - started_counter
+        duration_seconds = time.perf_counter() - started_counter
 
         run_result = self._build_run_result(
             config=config,
@@ -163,7 +163,7 @@ class DeviceTestRunner:
             cleanup_summary=cleanup_summary,
             started_at=started_at,
             finished_at=finished_at,
-            duration_seconds=duration_deconds,
+            duration_seconds=duration_seconds,
             cancellation_token=cancellation_token,
         )
 
@@ -256,7 +256,6 @@ class DeviceTestRunner:
             # Cleanup lifecycle:
             #
             #   teardown/global_teardown
-            #   可以 ignore cancellation
             #
             if cancellation_token.is_cancelled:
                 step_cancelled = True

@@ -414,6 +414,60 @@ class MockCancelAfterFirstStepExecutor:
 
         return result
 
+class MockTokenRecordingExecutor:
+    def __init__(
+        self,
+        run_token: CancellationToken
+    ):
+        self.run_token = run_token
+        self.tokens = {}
+    
+    def execute(
+        self,
+        step,
+        stage,
+        attempt,
+        log_writer,
+        working_directory,
+        cancellation_token,
+    ):
+
+        self.tokens[stage] = cancellation_token
+
+        if stage == "scenario":
+            self.run_token.cancel(CancellationReason.USER_REQUEST)
+
+            return StepAttemptResult(
+                attempt=attempt,
+                success=False,
+                failure_type=FailureType.CANCELLED,
+                timed_out=False,
+                cancelled=True,
+                exit_code=None,
+                duration_seconds=0.01,
+                stdout="",
+                stderr="",
+                stdout_log_path=str(log_writer.stdout_path),
+                stderr_log_path=str(log_writer.stderr_path),
+                error="cancelled",
+                artifact_validation_results=[],
+            )
+
+        return StepAttemptResult(
+            attempt=attempt,
+            success=True,
+            failure_type=FailureType.NONE,
+            timed_out=False,
+            cancelled=False,
+            exit_code=0,
+            duration_seconds=0.01,
+            stdout="",
+            stderr="",
+            stdout_log_path=str(log_writer.stdout_path),
+            stderr_log_path=str(log_writer.stderr_path),
+            error="",
+            artifact_validation_results=[],
+        )
 
 class MockRecordingArtifactValidator:
     def __init__(self):
@@ -2663,3 +2717,59 @@ def test_run_timeout_between_steps_stops_next_step(
         step_result.name == "step_2" and step_result.attempts > 0
         for step_result in result.step_results
     )
+
+def test_teardown_uses_independent_cancellation_scope(tmp_path: Path):
+
+    config = RunnerConfig(
+        test_case=DeviceTestCase(
+            id="power_001",
+            name="power_001",
+            description="Description",
+        ),
+        device=DeviceInfo(
+            serial="device_001",
+            product="pixel",
+            build="build_001",
+        ),
+        retry=RetryConfig(
+            max_attempts=3,
+            delay_seconds=1,
+        ),
+        lifecycle=LifecycleConfig(
+            global_setup=LifecycleSteps(steps=[mock_step("global_setup")]),
+            setup=LifecycleSteps(steps=[mock_step("setup")]),
+            scenario=LifecycleSteps(
+                steps=[
+                    mock_step("scenario"),
+                ]
+            ),
+            teardown=LifecycleSteps(steps=[mock_step("teardown")]),
+            global_teardown=LifecycleSteps(steps=[mock_step("global_teardown")]),
+        ),
+        artifact=ArtifactConfig(
+            output_dir=str(tmp_path),
+        ),
+    )
+
+    run_token = CancellationToken()
+
+    executor = MockTokenRecordingExecutor(run_token=run_token)
+
+    runner = DeviceTestRunner(
+        executor=executor,
+        artifact_manager=ArtifactManager(tmp_path),
+        artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
+        reporter=JsonReporter(),
+        show_console_output=False,
+    )
+
+    runner.run(config=config, cancellation_token=run_token)
+
+    assert executor.tokens["scenario"] is run_token
+
+    assert executor.tokens["teardown"] is not run_token
+
+    assert executor.tokens["global_teardown"] is executor.tokens["teardown"]
+
+

@@ -30,6 +30,7 @@ def test_run_status_from_cancellation_reason(reason, expected):
     """
     status = calculate_run_status(
         cancellation_reason=reason,
+        cleanup_failed=False,
         failed_steps=0,
         cancelled_steps=0,
         skipped_steps=0,
@@ -48,6 +49,7 @@ def test_run_timeout_takes_priority_over_step_failure():
     """
     status = calculate_run_status(
         cancellation_reason=CancellationReason.RUN_TIMEOUT,
+        cleanup_failed=False,
         failed_steps=1,
         cancelled_steps=1,
         skipped_steps=2,
@@ -66,6 +68,7 @@ def test_user_cancellation_takes_priority_over_failure():
     """
     status = calculate_run_status(
         cancellation_reason=CancellationReason.USER_REQUEST,
+        cleanup_failed=False,
         failed_steps=1,
         cancelled_steps=1,
         skipped_steps=2,
@@ -136,6 +139,7 @@ def test_run_status_matrix(
     """
     status = calculate_run_status(
         cancellation_reason=None,
+        cleanup_failed=False,
         failed_steps=failed_steps,
         cancelled_steps=cancelled_steps,
         skipped_steps=skipped_steps,

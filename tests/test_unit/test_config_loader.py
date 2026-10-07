@@ -851,7 +851,7 @@ def test_run_timeout_must_be_finite_and_positive(timeout_seconds):
     raw = {"run_timeout_seconds": timeout_seconds}
 
     with pytest.raises(ValueError, match="run_timeout_seconds must be finite and > 0"):
-        ConfigLoader._load_run_timeout_seconds(raw)
+        ConfigLoader._load_optional_positivbe_timeout(raw, "run_timeout_seconds",)
 
 
 @pytest.mark.parametrize(
@@ -873,4 +873,4 @@ def test_run_timeout_rejects_boolean(
     raw = {"run_timeout_seconds": (timeout_seconds)}
 
     with pytest.raises(ValueError, match=("run_timeout_seconds " "must be a number")):
-        ConfigLoader._load_run_timeout_seconds(raw)
+        ConfigLoader._load_optional_positivbe_timeout(raw, "run_timeout_seconds",)

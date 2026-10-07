@@ -7,8 +7,8 @@ import pytest
 
 from runner.models import (
     ArtifactValidationResult,
-    ExecutionSummary,
     CleanupSummary,
+    ExecutionSummary,
     FailureType,
     RunMetadata,
     RunResult,

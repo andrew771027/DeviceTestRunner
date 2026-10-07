@@ -809,13 +809,97 @@ First Failure:
 
 Planned
 
-### v1.11 — Job Model
+### v1.11 — Job Definition and Job Instance
+
+#### 目標
+
+區分「可重複使用的工作定義」與「某一次提交的執行工作」，讓 batch、matrix 與後續遠端 dispatch 共用同一個 job 契約。
+
+| 概念 | 責任 | 範例 |
+| --- | --- | --- |
+| Job Definition | 描述要執行的測試設定、參數與產物規則；可重複使用 | `power_idle` 測試定義 |
+| Job Instance | 某次提交產生的具體工作；具有唯一 job ID、解析後的參數與執行狀態 | 在 ABC123 執行 power_idle，duration=60 |
+| Run | Instance 呼叫 runner 後產生的實際執行與報告 | lifecycle、step attempts、result.json |
+
+Definition 本身沒有執行狀態。同一 Definition 可產生多個 Instances；初期一個 Instance 對應一次 Run，step retry 仍屬於該 Run，不建立新的 Instance。整個 job 的重新執行另建立 Instance，並保留來源關聯。
+
+#### 功能範圍
+
+* 定義 JobDefinition、JobInstance 與唯一 job ID。
+* Instance 保存 definition 識別／設定快照、解析後參數與 run artifact directory，避免 definition 修改後無法還原執行條件。
+* 定義 queued、running、completed 等 job 狀態，與 Run 的 PASSED／FAILED／CANCELLED／TIMED_OUT 結果分開；未開始即取消的 Instance 不必產生 Run。
+* 先以單一 Instance 呼叫現有 DeviceTestRunner，不加入 matrix、並行或遠端執行。
+* 沿用 v1.7.x 的參數解析基礎；Instance 開始前完成設定解析與驗證。
+
+#### 驗收條件
+
+* 相同 Definition 提交兩次會得到不同 job IDs，且能分別查詢狀態與結果。
+* 修改 Definition 不會改變已建立 Instance 的設定快照。
+* 可區分 job 尚未執行、執行完成與測試結果失敗；step retry 不增加 Instance 數量。
 
 #### 狀態
 
 Planned
 
-### v1.12 — Batch Runner
+### v1.12 — Batch Runner and Matrix Expansion
+
+#### 目標
+
+將一份 Job Definition 依參數組合展開成多個 Job Instances，再以 batch 統一執行與彙整結果。參考 GitHub Actions `strategy.matrix` 的使用方式，但不承諾完整相容其語法。
+
+目前 [CI workflow](../.github/workflows/ci.yml) 的 unit-tests 使用 python-version matrix，分別執行 Python 3.11、3.12 與 3.13。Runner 的規劃則把這個展開概念用於 device、scenario 參數等測試維度；CI matrix 與 Runner matrix 是不同層的工作。
+
+```text
+Job Definition + Matrix
+        ↓ 展開並驗證
+Job Instance A
+Job Instance B
+Job Instance C
+        ↓ 預設逐一執行
+各自的 Run / Artifacts
+        ↓
+Batch Summary
+```
+
+#### 規劃語法範例
+
+以下是尚未實作的示意設定，不能直接交給目前的 ConfigLoader。正式 schema 與參數綁定方式需在實作前確認。
+
+```yaml
+job:
+  definition: power_idle
+  config: configs/power_idle.yaml
+  strategy:
+    matrix:
+      device_serial: [ABC123, XYZ789]
+      duration_seconds: [60, 300]
+```
+
+兩個 device_serial × 兩個 duration_seconds 產生四個 Instances：
+
+| Instance | device_serial | duration_seconds |
+| --- | --- | --- |
+| A | ABC123 | 60 |
+| B | ABC123 | 300 |
+| C | XYZ789 | 60 |
+| D | XYZ789 | 300 |
+
+每個 Instance 保存一組參數與獨立輸出目錄。device_serial 的綁定必須同時更新裝置 metadata 與實際命令參數，不能只改報告欄位。
+
+#### 實作與學習順序
+
+1. 先支援明確列出的 Instance 清單，以單程序逐一執行並輸出 Batch Summary。
+2. 再支援 matrix 各維度的笛卡兒積，定義穩定的展開順序、組合上限、參數型別與唯一 Instance 身分。
+3. 接著加入 exclude（移除匹配組合）與 include（加入完整且通過驗證的參數組合）。初期 include 不做隱含合併，並明確決定重複組合的處理方式。
+4. 定義 batch cancellation 與 fail-fast：預設一個 Instance 失敗仍執行其他工作；選擇 fail-fast 時先停止啟動待執行工作，保留各 Instance 結果。
+
+Matrix 只決定「有哪些工作」，不代表同時執行。並行度由 v1.13～v1.15 的 executor、limit 與 resource ownership 控制。
+
+#### 驗收條件
+
+* 上述 2 × 2 matrix 產生四個參數快照與不同 job IDs，並按序執行。
+* 每個 Instance 的 status、result.json 與 artifacts 能獨立追蹤；單一失敗不會覆蓋其他結果。
+* 無效參數在啟動程序前被拒絕；取消 batch 後不啟動剩餘工作，已執行的結果仍保留。
 
 #### 狀態
 
@@ -823,17 +907,39 @@ Planned
 
 ### v1.13 — Multi-Process Execution
 
+#### 目標與範圍
+
+在已驗證的 Instance／batch 契約上，讓獨立工作可由不同本機程序執行。先驗證兩個不使用裝置或使用不同資源的 Instances，隔離輸出、結果回傳與取消 token。正常 batch 預設仍為逐一執行，直到 concurrency limit 與 device ownership 完成。
+
+驗收需確認不同程序的 artifacts 不互相覆蓋，子工作失敗可被 batch 收集，取消可到達正確 Instance。多程序不允許略過裝置互斥；同裝置並行須等 v1.15 的資源管理。
+
 #### 狀態
 
 Planned
 
 ### v1.14 — Concurrency Limit
 
+#### 目標與範圍
+
+限制 batch／matrix 同時執行的 Instance 數量，預設為 1。可借用 `strategy.max-parallel` 的概念；正式欄位名稱待 schema 確認。執行中的工作完成後才啟動下一個，避免一次展開大量組合就啟動大量程序。
+
+定義並行時的 fail-fast 與取消傳遞：停止新增工作後，如何讓正在執行的 Instances 受控收尾。驗收需證明執行數不超過上限、待執行工作可取消、不同 job 的狀態與結果仍可區分。
+
+Concurrency limit 只限制數量，不保證兩個工作不使用同一裝置；正式啟用裝置並行需搭配下一階段的 lock。
+
 #### 狀態
 
 Planned
 
 ### v1.15 — Resource / Device Lock
+
+#### 目標與範圍
+
+以 resource key（例如 device serial）管理 Instance 的資源取得、持有與釋放，避免 matrix 中不同參數的工作同時操作同一裝置。先支援單機 lock，再於 v2.x 擴充遠端 ownership。
+
+驗收需確認同裝置工作依序執行、不同裝置可在 concurrency limit 內並行。取消或失敗後須在 cleanup 與程序收尾完成後才釋放資源；程序狀態不明時不直接將裝置標記為可用。
+
+這些能力完成後，再讓 v2.x Controller／Worker 沿用 Job Definition、Job Instance、Batch Summary 與資源契約，增加 transport 與 scheduler。
 
 #### 狀態
 
@@ -1285,7 +1391,7 @@ Done
 5. v1.8 Recorder Lifecycle
 6. v1.9 Hook and Teardown Guarantees
 7. v1.10 Execution Summary
-8. v1.11～v1.15 Job、batch、multi-process、concurrency 與 device lock
+8. v1.11～v1.15 Job Definition／Instance、batch／matrix、multi-process、concurrency 與 device lock
 9. 單機 execution model 穩定後進入 v2.0 Controller／Worker
 ```
 

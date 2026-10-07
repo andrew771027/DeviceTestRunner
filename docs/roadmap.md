@@ -899,38 +899,89 @@ Device + Recorder + Test Scripts
 * basic scheduling policy
 * retry on worker failure
 
-#### Possible Implementation Stages
+#### v2.x 實作順序
 
-##### v2.0.0
+將 SSH、Worker script、Worker Agent 與 Scheduler 納入同一條版本路徑。先以一台 Linux Controller 與一台 Mac 驗證 remote execution，確認工作與結果契約後才加入網路服務；先掌握單一遠端 job 的狀態，再擴充多 worker、排程與故障復原。
 
-* Single controller
-* Single worker
-* HTTP-based dispatch
-* synchronous execution
+前面的 High-Level Architecture 是 v2.x 最終方向，不是 v2.0 的全部範圍。以下版本均為規劃，尚未實作。各版以驗收條件作為進入下一階段的依據。
 
-##### v2.1.0
+| 版本 | 執行路徑／主要能力 | 學習重點 | 依賴 |
+| --- | --- | --- | --- |
+| v2.0.0 | Linux Controller → SSH → Mac → command | SSH、遠端程序、exit code、輸出串流 | 穩定的單機 runner |
+| v2.1.0 | Linux Controller → SSH → Mac Worker script → command | Job 契約、狀態檔、結果收集 | v2.0 連線與命令執行 |
+| v2.2.0 | Linux Controller → REST → Mac Worker Agent → command | HTTP API、常駐服務、非同步狀態與取消 | v2.1 Job 與結果契約 |
+| v2.3.0 | Controller → 多個 Worker Agents | Registration、capability、heartbeat、offline detection | v2.2 單 worker API |
+| v2.4.0 | Controller → Scheduler → Worker Agent → Device | Queue、資源分配、device lock、並行限制 | v2.3 Worker inventory |
+| v2.5.0 | 遠端工作復原與安全重送 | 持久化狀態、冪等、故障處理 | v2.4 Dispatch 與資源 ownership |
+| v2.6.0 | 集中 artifacts 與 execution history | 儲存、索引、上傳復原與查詢 | 穩定的 job ID 與狀態模型 |
 
-* Multiple workers
-* worker capability registration
-* basic worker selection
+##### v2.0.0 — SSH 直接執行
 
-##### v2.2.0
+```text
+Linux Controller → SSH → Mac → command
+```
 
-* job queue
-* asynchronous execution
-* run status polling
+**範圍：** 一個 controller、一台固定 Mac、一次一個同步工作。先執行 echo 等簡單命令，再透過 SSH 呼叫既有 Device Test Runner。使用 SSH key，明確指定遠端工作目錄與命令環境；保存 stdout、stderr、exit code 與連線錯誤。
 
-##### v2.3.0
+**驗收：** Linux 可在 Mac 執行成功與失敗命令並取得結果；能區分連線失敗與命令非零退出。執行真實裝置命令前，先通過不需要裝置的範例。
 
-* heartbeat
-* worker offline detection
-* worker recovery
+**階段限制：** SSH 斷線不代表遠端程序已停止。先記錄此限制，不承諾斷線復原或自動重試，也不在此階段加入 agent、queue 或 scheduler。
 
-##### v2.4.0
+##### v2.1.0 — SSH Worker script 與工作契約
 
-* artifact upload
-* centralized report storage
-* execution history
+```text
+Linux Controller → SSH → Mac Worker script → command
+```
+
+**範圍：** Worker script 接收 job ID 與 configuration，建立獨立 job 目錄並呼叫本機 runner。定義 ExecutionRequest、RunState、result schema 與執行紀錄；以 SSH／SCP 收集 result.json 和必要 artifacts。保留同步 dispatch，另提供依 job ID 查詢狀態與提出取消的 script 入口。
+
+**驗收：** 同一請求不會因重複啟動而產生兩個並行工作；controller 能取得報告、log 與明確的 job 狀態。連線中斷後可重新查詢 job，無法確認結果時標記 unknown，不能直接判定失敗並重跑。取消入口須能識別指定 job，透過 runner 的取消流程收尾。
+
+**學習順序：** 先固定 request／result 契約，再處理 job 身分、狀態與取消。下一版沿用契約，將 SSH script 入口改為服務 API。
+
+##### v2.2.0 — 單一 Worker Agent 與 REST API
+
+```text
+Linux Controller → REST → Mac Worker Agent → command
+```
+
+**範圍：** Mac 常駐 Worker Agent 提供 submit、status、cancel、result API。提交後回傳 job ID，controller 透過 polling 查詢，避免 HTTP request 綁住整次測試。初期一次執行一個 job，忙碌時明確拒絕新工作；先驗證呼叫端身分並限制可提交的工作範圍。
+
+**驗收：** API timeout 不會被當成 job 失敗；可查詢執行中的 job、取消並取得最後結果。重複 submit 不會重複執行；agent 重啟後至少能辨識遺留工作並標記待確認狀態。
+
+**通訊選擇：** 先使用 REST／JSON，方便沿用現有 Python 與 JSON 報告並透過一般 HTTP 工具除錯。若後續出現明確的串流、型別契約或效能需求，再評估 gRPC；先不維護兩套 dispatch 協定。
+
+##### v2.3.0 — 多 Worker、註冊與健康狀態
+
+**範圍：** 加入 worker ID、registration、WorkerState、capability、device inventory 與 heartbeat。Controller 可指定 worker，或依 capability 選擇一個可用 worker；保持每個 worker 一次一個 job，不先加入複雜排程。
+
+**驗收：** 至少兩個 workers 可註冊、回報能力並接收各自的工作。Heartbeat 逾期的 worker 不再接收新工作；失聯時既有 job 標記 unknown／待確認，恢復連線後能查詢，而非自動重跑。
+
+**學習順序：** 先建立可信的可用資源資訊，再讓 scheduler 據此分派。
+
+##### v2.4.0 — Scheduler、Queue 與 Device 分配
+
+```text
+Controller → Scheduler → Worker Agent → Device
+```
+
+**範圍：** 引入 job queue、FIFO 基本排程、capability matching 與可用 worker 選擇。沿用 v1.x 的 concurrency limit／device lock 基礎，定義遠端裝置預約與 ownership；初期每台 worker 維持單 job，再逐步增加並行度。
+
+**驗收：** 無可用資源時工作留在 queue；資源釋放後才 dispatch。同一裝置不會被兩個 job 同時使用；排隊工作可取消。Worker 失聯時不立即釋放可能仍被遠端程序使用的資源，須先確認 ownership 與執行狀態。
+
+**學習順序：** 先完成可預測的 FIFO 和互斥，再考慮 priority、負載平衡或更進階 scheduling policy。
+
+##### v2.5.0 — 故障復原與重送規則
+
+**範圍：** 持久化 job state，處理 controller／agent 重啟、網路中斷、dispatch acknowledgement 遺失與結果回傳失敗。定義 reconciliation、冪等 job ID、資源回收與 retry on worker failure 的條件。
+
+**驗收：** 重啟後能恢復查詢與排程；已完成或仍執行的 job 不因重送而重複執行。只有確認原工作已停止、且任務允許重試時才重新分派。裝置操作可能有副作用，不能把失聯一律當成可安全重試。
+
+##### v2.6.0 — 集中 Artifacts 與 Execution History
+
+**範圍：** 在 v2.1 已可取得報告與檔案的基礎上，加入集中 report storage、artifact upload 狀態、上傳重試、execution history 與查詢索引。以 job ID 關聯 run、worker、device 與 artifacts。
+
+**驗收：** Controller 可查詢歷史結果與下載產物；工作結果與 artifact 傳輸狀態分開呈現。上傳失敗可單獨重試，不重跑裝置測試；缺少或部分 artifacts 保留診斷資訊。
 
 相關技術：Distributed systems、controller／worker architecture、dispatch、remote execution、state machines、failure recovery、resource scheduling。
 

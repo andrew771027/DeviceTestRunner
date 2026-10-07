@@ -1,6 +1,6 @@
 # Device Test Runner Roadmap
 
-目前已實作 v1.6.2 run-level timeout、程序群組終止、reader 收尾與 SIGINT handler，並通過本機測試。套件、runtime 與報告版本已同步為 1.6.2；平台驗證與發佈仍待完成。接下來處理取消後的清理，再加入 YAML 變數與 recorder 管理。
+目前已實作 v1.6.3 獨立 cleanup scope、共享清理時間預算與 cleanup_summary；套件、runtime 與報告版本同步為 1.6.3。本機驗證與待辦見 v1.6.3 完成條件，平台驗證與發佈仍待完成。接下來補齊清理邊界驗證，再加入 YAML 變數與 recorder 管理。
 
 本文件保留各版本的功能規劃。`Completed` 表示該節記錄的功能已完成；`Planned` 與 `Future` 表示尚未實作。實際發佈條件與驗證結果請見各版本的完成條件文件。
 
@@ -476,6 +476,8 @@ Watchdog 在 global_setup 前啟動，到 cleanup 與 final validation 後才停
 
 ### v1.6.3 — Cancellation-aware Cleanup
 
+設定、cleanup scope、逾時、partial artifacts 與報告行為見 [Cancellation-Aware Cleanup](cancellation_aware_cleanup.md)。本節保留版本規劃與驗收範圍。
+
 #### 目標
 
 將 cancellation 後的 cleanup 從現有 best effort 路由提升為明確的 scope、時間限制與 partial artifact／report policy。
@@ -492,7 +494,7 @@ Watchdog 在 global_setup 前啟動，到 cleanup 與 final validation 後才停
 
 v1.6.0 已在進入 setup 後的取消路徑執行 teardown，並對每個 cleanup attempt 建立新 token；cleanup command 也已有一般 step timeout。這些是本版本的基礎，不是全新功能。
 
-尚未具備 cleanup scope 的整體 deadline 與管理方式。Retry delay 仍讀取原始已取消 token，可能略過 cleanup delay；global_setup 成功後、進入 setup 前的取消也可能跳過 teardown。需要明確定義這些邊界，並處理未預期例外時的 finalization。
+目前實作由 CleanupScope 管理獨立 token 與整體 deadline；cleanup attempts 與 retry delay 共用此 token。global_setup 成功即具備 teardown 條件，global_teardown 在 cleanup token 尚未取消時嘗試執行。未預期例外時的 finalization 仍待處理。
 
 目前 run 結束後仍驗證所有 artifact rules，missing required artifacts 可與 CANCELLED 並存。新的 partial policy 應保留診斷證據，明確決定哪些規則執行或標記未完成，不默默將缺失 artifact 改為通過。
 
@@ -505,7 +507,7 @@ v1.6.0 已在進入 setup 後的取消路徑執行 teardown，並對每個 clean
 
 #### 狀態
 
-Planned
+Implemented；本機驗證與未完成項目見 [完成條件](definition_of_done/definition_of_done_v1.6.3.md)，尚未確認發佈。
 
 #### v1.6.x Scope Alignment
 
@@ -1222,12 +1224,12 @@ Done
 
 ## 開發優先順序
 
-目前已實作 v1.6.2 run-level timeout 與 process-group cleanup；完整取消保證與發佈仍待完成。接下來的開發優先順序：
+目前已實作 v1.6.3 cleanup scope；例外收尾、平台驗證與發佈仍待完成。接下來的開發優先順序：
 
 ```text
 1. 程序清理的平台驗證與發佈確認
 2. v1.6.2 CLI timeout exit code、平台驗證與發佈
-3. v1.6.3 Cancellation-aware Cleanup
+3. v1.6.3 cleanup 邊界測試與例外收尾
 4. v1.7.x YAML Variables, Environment and Runtime Context
 5. v1.8 Recorder Lifecycle
 6. v1.9 Hook and Teardown Guarantees

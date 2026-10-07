@@ -6,7 +6,7 @@
 
 Device Test Runner 使用 YAML 定義裝置測試流程，執行既有的 Bash、Python、ADB 等命令，並保存每次執行的輸出與 JSON 報告。它負責安排測試步驟、驗證輸出檔案，以及依設定重試失敗步驟；裝置操作仍由你的腳本處理。
 
-目前版本為 **v1.6.2**。支援五階段測試流程、整次執行與步驟逾時、選擇性重試、輸出檔案驗證、程序群組清理與 Ctrl+C 取消。
+目前版本為 **v1.6.3**。支援五階段測試流程、整次執行、清理範圍與步驟逾時、選擇性重試、輸出檔案驗證、程序群組清理與 Ctrl+C 取消。
 
 ## 解決的痛點
 
@@ -27,6 +27,7 @@ RunnerConfig
         ↓
 DeviceTestRunner
         ├── Lifecycle Orchestration
+        ├── CleanupScope / scope watchdogs
         ├── CancellationToken
         ├── RetryPolicy
         ├── SubprocessExecutor
@@ -46,6 +47,8 @@ DeviceTestRunner
 | `tests/` | 專案自動化測試 |
 | `docs/` | 架構、測試、驗收與版本文件 |
 
+詳細介面與執行流程見 [v1.6.3 架構](docs/architecture/architecture_v1.6.3.md)。
+
 ## 安裝
 
 需要 Python 3.10+ 與 Poetry 2.x。程序群組清理使用 POSIX signal API；目前本機驗證為 macOS，沒有 Windows 支援驗證。在專案目錄執行：
@@ -58,45 +61,25 @@ poetry install
 
 Poetry 會建立虛擬環境，依 `poetry.lock` 安裝專案與開發依賴。後續指令都透過 `poetry run` 執行。
 
-## 使用手冊（User Manual）
+## 快速開始
 
-### 建立並執行第一個流程
-
-將以下內容存為 `configs/hello.yaml`。此範例不需要連接裝置，會產生一份 CSV 並檢查內容。五個 lifecycle 階段都需提供 `steps`；不使用的階段填入 `[]`。
+將以下內容存為 `configs/hello.yaml`。此範例使用 POSIX shell 的 echo，不需要裝置。
 
 ```yaml
-test_case:
-  id: hello
-  name: Hello Runner
-  description: Create and validate a CSV file.
-device:
-  serial: demo
-  product: demo
-  build: demo
+test_case: {id: hello, name: Hello Runner, description: Print one line.}
+device: {serial: demo, product: demo, build: demo}
 lifecycle:
-  global_setup:
-    steps: []
-  setup:
-    steps: []
+  global_setup: {steps: []}
+  setup: {steps: []}
   scenario:
     steps:
-      - name: write_csv
+      - name: hello
         type: command
-        command: 'printf "timestamp,power\n1,110\n" > result.csv'
-        timeout_second: 10
-  teardown:
-    steps: []
-  global_teardown:
-    steps: []
+        command: echo hello
+  teardown: {steps: []}
+  global_teardown: {steps: []}
 artifact:
   output_dir: artifacts
-  validation:
-    rules:
-      - name: check_csv
-        type: csv_content
-        path: result.csv
-        required_columns: [timestamp, power]
-        min_rows: 1
 ```
 
 在專案根目錄執行：
@@ -105,331 +88,9 @@ artifact:
 poetry run python main.py --config configs/hello.yaml
 ```
 
-CLI 會顯示最終狀態。到 `artifacts/` 下該次執行目錄查看 `result.json`、`result.csv` 與步驟的 stdout／stderr log。以報告的 `summary.status` 判斷結果：`PASSED`、`FAILED`、`CANCELLED` 或 `TIMED_OUT`。
+到 `artifacts/` 下當次 run directory 查看 `result.json` 與 stdout／stderr logs。以 `summary.status` 判斷結果：PASSED、FAILED、CANCELLED 或 TIMED_OUT。TIMED_OUT 目前仍回傳 exit code 0，自動化需讀取報告。
 
-接著可將 `command` 替換成自己的腳本或裝置命令。命令的工作目錄是該次 run directory；引用專案內腳本時使用 `$DEVICE_TEST_RUNNER_ROOT`，取得輸出目錄則使用 `$RUN_ARTIFACT_DIR`。例如：
-
-```yaml
-command: bash "$DEVICE_TEST_RUNNER_ROOT/scripts/run_scenario.sh"
-```
-
-使用 ADB 等外部命令前，需自行安裝工具並確認裝置連線。`device` 欄位用於報告資料，裝置選擇仍需在命令中指定。
-
-專案另提供 [sample.yaml](configs/sample.yaml)，展示多個階段、重試與驗證規則：
-
-```bash
-poetry run python main.py --config configs/sample.yaml
-```
-
-此設定包含失敗命令與缺少產物的情境，適合觀察失敗處理，不應以全部通過作為安裝成功的條件。
-
-### 常用詞彙
-
-| 詞彙 | 意義 |
-| --- | --- |
-| Run | 一次完整的測試流程 |
-| Stage | 流程中的階段，例如 `setup` 或 `scenario` |
-| Step | 階段中設定的一個命令步驟 |
-| Attempt | 步驟的一次執行；重試會建立新的 attempt |
-| Artifact | 測試產生的檔案，例如 log、CSV 或 JSON |
-| Cleanup | 清理作業，包括 `teardown` 與 `global_teardown` |
-
-### 測試生命週期
-
-測試依序執行五個階段：
-
-```text
-global_setup
-    ↓
-setup
-    ↓
-scenario
-    ↓
-teardown
-    ↓
-global_teardown
-```
-
-各階段用途：
-
-| Stage             | Responsibility        |
-| ----------------- | --------------------- |
-| `global_setup`    | 整次測試執行前的一次性環境準備       |
-| `setup`           | Test case 執行前的裝置與環境設定 |
-| `scenario`        | 執行主要測試內容              |
-| `teardown`        | 清理單一 test case 產生的狀態  |
-| `global_teardown` | 整次測試執行完成後的最終清理        |
-
-階段失敗時，Runner 依下列規則路由：
-
-| 失敗位置 | 後續行為 |
-| --- | --- |
-| `global_setup` | 停止當前 stage，跳過 `setup`、`scenario` 與 `teardown`，仍執行 `global_teardown` |
-| `setup` | 停止當前 stage，跳過 `scenario`，仍執行 `teardown` 與 `global_teardown` |
-| `scenario` | 停止當前 stage 的剩餘 steps，仍執行 `teardown` 與 `global_teardown` |
-| `teardown` | 記錄失敗但繼續執行該 stage 的剩餘 steps，之後執行 `global_teardown` |
-| `global_teardown` | 記錄失敗但繼續執行該 stage 的剩餘 steps |
-
-上述為一般失敗路由。進入 setup 區塊後，即使 setup／scenario 取消，仍執行兩個 cleanup stages；run 開始前或 global_setup 取消時只執行 global_teardown。如果 global_setup 成功後、進入 setup 區塊前已觀察到取消，也會跳過 teardown。Cleanup attempt 使用新的 token；這些是受控流程的 best effort，不涵蓋未處理 Python exception 或 KeyboardInterrupt。
-
-最終 `summary.status` 先依取消原因判定：RUN_TIMEOUT 為 `TIMED_OUT`，USER_REQUEST 為 `CANCELLED`；沒有取消原因但有 cancelled step 也為 `CANCELLED`。沒有取消時，failed step、skipped step 或 required artifact failure 任一存在即為 `FAILED`，其餘為 `PASSED`。
-
-### 設定測試流程
-
-以下設定示範裝置命令、整次執行逾時、重試與 CSV 驗證。可另存為 YAML 後透過 `--config` 指定；請先將裝置序號 `ABC123` 換成自己的序號：
-
-```yaml
-test_case:
-  id: power_idle_test
-  name: Power Idle Test
-  description: Measure device power consumption during idle state.
-
-device:
-  serial: ABC123
-  product: pixel
-  build: build_12345
-
-run_timeout_seconds: 3600
-
-retry:
-  max_attempts: 3
-  delay_seconds: 1
-  retry_on:
-    - timeout
-    - device_offline
-    - artifact_missing
-
-lifecycle:
-  global_setup:
-    steps:
-      - name: check_environment
-        type: command
-        command: echo "Check environment"
-        timeout_second: 30
-
-  setup:
-    steps:
-      - name: check_device
-        type: command
-        command: adb -s ABC123 get-state
-        timeout_second: 30
-
-  scenario:
-    steps:
-      - name: run_idle_scenario
-        type: command
-        command: |
-          printf "timestamp,power\n1,110\n" > result.csv
-        timeout_second: 300
-
-  teardown:
-    steps:
-      - name: restore_device
-        type: command
-        command: adb -s ABC123 shell input keyevent HOME
-        timeout_second: 30
-
-  global_teardown:
-    steps:
-      - name: finalize
-        type: command
-        command: echo "Finalize test run"
-        timeout_second: 30
-
-artifact:
-  output_dir: artifacts
-  validation:
-    rules:
-      - name: check_result_exists
-        type: exists
-        path: result.csv
-
-      - name: check_result_content
-        type: csv_content
-        path: result.csv
-        after_step: run_idle_scenario
-        required: true
-        required_columns:
-          - timestamp
-          - power
-        min_rows: 1
-```
-
-`after_step` 將 validation rule 綁定到指定 step，runner 會在該 step 每次 command 成功後立即驗證。`required` 預設為 `true`：required rule 失敗會使 attempt 失敗，且只有 failure type 出現在 `retry.retry_on`、尚未達 `max_attempts` 時才重試；`required: false` 的失敗仍寫入 report，但不影響 step 或 run 狀態。Lifecycle 結束後會再次對所有規則執行 final validation，包括有 `after_step` 的規則。YAML 未設定 `retry_on` 時預設為空清單，因此不重試；`none`、`cancelled` 與未知值會被拒絕。直接使用 Python `RetryConfig()` 的預設清單不同，使用 Python API 時請明確指定重試條件。
-
-### 透過 Python API 取消
-
-CLI 第一次 Ctrl+C／SIGINT 會呼叫 `token.cancel()`；第二次會拋出 `KeyboardInterrupt`，可能中斷 cleanup 與報告寫入。CLI 正常完成回傳 0、FAILED 回傳 1、CANCELLED 或 run 期間的 KeyboardInterrupt 回傳 130。SIGTERM 尚未接到 token。
-
-Python API 由呼叫端持有 token 並呼叫 `cancel()`。以下示範沿用載入的 configuration，在兩秒後提出取消請求：
-
-```python
-from pathlib import Path
-from threading import Timer
-
-from runner.artifact import ArtifactManager
-from runner.artifact_validator import ArtifactValidator
-from runner.cancellation import CancellationToken
-from runner.config import ConfigLoader
-from runner.executor import SubprocessExecutor
-from runner.failure import FailureClassifier
-from runner.process import ProcessTerminator
-from runner.reporter import JsonReporter
-from runner.runner import DeviceTestRunner
-
-config = ConfigLoader().load("configs/sample.yaml")
-classifier = FailureClassifier()
-runner = DeviceTestRunner(
-    executor=SubprocessExecutor(
-        project_directory=Path.cwd(),
-        failure_classifier=classifier,
-        process_terminator=ProcessTerminator(),
-    ),
-    artifact_manager=ArtifactManager(config.artifact.output_dir),
-    artifact_validator=ArtifactValidator(),
-    failure_classifier=classifier,
-    reporter=JsonReporter(),
-    show_console_output=False,
-)
-token = CancellationToken()
-timer = Timer(2.0, token.cancel)
-timer.start()
-try:
-    result = runner.run(config, cancellation_token=token)
-    print(result.summary.status)
-finally:
-    timer.cancel()
-    timer.join()
-```
-
-Executor 每 0.1 秒檢查取消與 timeout。每次 attempt 建立獨立 session，清理時對 process group 送 SIGTERM，預設等待 2 秒；仍有程序則送 SIGKILL，再等最多 2 秒。stdout／stderr reader 各有 2 秒 join 上限。上述 timer 不是兩秒內返回的保證。
-
-同群組的 child／grandchild 已有清理測試；自行脫離群組的程序，以及直接 process 正常退出後留下的背景程序，不在目前保證內。詳見 [Process Lifecycle](docs/process_lifecycle.md)。Cancelled attempt 不做 attempt validation 或 retry，但 run 最後仍驗證所有 artifacts。
-
-### 設定整次執行逾時
-
-在 YAML 頂層設定：
-
-```yaml
-run_timeout_seconds: 3600
-```
-
-省略或 null 代表不設 run deadline；step 的 `timeout_second` 仍有效。只接受有限正數，拒絕 bool、字串、零、負數、NaN 與 Infinity。Deadline 在 global_setup 前啟動，不隨 retry 重設。
-
-Run timeout 透過 cancellation 停止一般工作，report 為 `TIMED_OUT`、`cancel_reason: run_timeout`。被中斷的 attempt 仍是 CANCELLED，`timed_out` 專指 step timeout。Retry delay 中逾時會保留前一次失敗，不新增 attempt。第一個取消原因不會被後續請求覆寫。
-
-Cleanup 使用新 token 與自己的 step timeout；final validation 不會被取消中斷。Watchdog 在上述工作結束後停止，因此不保證 CLI 在設定秒數內返回。`metadata.run_timed_out` 在取消原因為 RUN_TIMEOUT 時是 `true`，其他情況為 `false`。CLI 目前沒有 TIMED_OUT 專用非零 exit code，會回傳 0；自動化應檢查 `summary.status`，不能只依 exit code 判定成功。
-
-### 輸出檔案
-
-每次測試執行會建立獨立的 run directory。
-
-範例：
-
-```text
-artifacts/
-└── power_idle_test_20260722_223000/
-    ├── result.json
-    ├── global_setup/
-    │   └── check_environment/
-    │       ├── attempt_1.stdout.log
-    │       └── attempt_1.stderr.log
-    ├── scenario/
-    │   └── run_idle_scenario/
-    │       ├── attempt_1.stdout.log
-    │       ├── attempt_1.stderr.log
-    │       ├── attempt_2.stdout.log
-    │       └── attempt_2.stderr.log
-    └── result.csv
-```
-
-`result.json` 包含：
-
-* Test case metadata
-* Device metadata
-* Start time
-* End time
-* Total duration
-* Final status
-* Lifecycle stage results
-* Step results
-* stdout and stderr artifact paths
-* Validation results
-* Retry information
-* Per-attempt failure type, `timed_out` and `cancelled`
-* Metadata `cancel_requested` and summary `cancelled_steps`
-
-相對路徑的 artifact validation rule 會以該次 run directory 為基準解析。每一次 retry 都有獨立的 stdout／stderr log，避免後一次 attempt 覆蓋先前的診斷資訊。
-
-### 報告範例
-
-以下是單一步驟、無 artifact rules 的示意資料，並非 sample.yaml 的實際執行報告。
-
-```json
-{
-  "metadata": {
-    "test_case_id": "example_001",
-    "test_case_name": "Example",
-    "test_case_description": "Print one line.",
-    "device_serial": "demo",
-    "device_product": "demo",
-    "device_build": "demo",
-    "runner_version": "1.6.2",
-    "started_at": "2026-09-12T00:00:00+00:00",
-    "finished_at": "2026-09-12T00:00:01+00:00",
-    "cancel_requested": false,
-    "cancel_reason": null,
-    "run_timeout_seconds": null,
-    "run_timed_out": false
-  },
-  "summary": {
-    "status": "PASSED",
-    "configured_steps": 1,
-    "executed_steps": 1,
-    "passed_steps": 1,
-    "failed_steps": 0,
-    "cancelled_steps": 0,
-    "skipped_steps": 0,
-    "configured_artifact_rules": 0,
-    "passed_artifact_rules": 0,
-    "failed_artifact_rules": 0,
-    "failed_required_artifact_rules": 0,
-    "duration_seconds": 1.0
-  },
-  "step_results": [
-    {
-      "stage": "scenario",
-      "name": "hello",
-      "command": "echo hello",
-      "attempts": 1,
-      "success": true,
-      "cancelled": false,
-      "attempt_results": [
-        {
-          "attempt": 1,
-          "success": true,
-          "failure_type": "none",
-          "timed_out": false,
-          "cancelled": false,
-          "exit_code": 0,
-          "duration_seconds": 0.1,
-          "stdout": "hello\n",
-          "stderr": "",
-          "stdout_log_path": "artifacts/example/scenario/hello/attempt_1.stdout.log",
-          "stderr_log_path": "artifacts/example/scenario/hello/attempt_1.stderr.log",
-          "error": null,
-          "artifact_validation_results": []
-        }
-      ],
-      "duration_seconds": 0.2
-    }
-  ],
-  "artifact_dir": "artifacts/example",
-  "artifact_validation_results": []
-}
-```
-
-結果消費端應以 `summary.status` 判斷 run；Python API 的 `RunResult.passed` 只於 status 為 `PASSED` 時回傳 true。單次 attempt 請讀取 `success`、`failure_type`、`timed_out` 與 `cancelled`。
+完整操作、所有設定欄位的必填／選填、預設值、用途與範例，請閱讀 [使用手冊](docs/user_manual.md)。命令在 run directory 執行；引用專案腳本使用 `$DEVICE_TEST_RUNNER_ROOT`。ADB 等外部工具與裝置需自行準備，`device` 欄位只提供報告資訊。
 
 ## 執行專案測試
 
@@ -463,7 +124,7 @@ poetry run pytest -m cancelled
 poetry run pytest -m artifact
 ```
 
-測試工具與撰寫方式見 [測試指南](docs/test_guide.md)；覆蓋範圍與驗證紀錄見 [測試矩陣](docs/test_matrix/test_matrix_v1.6.2.md) 與 [完成條件](docs/definition_of_done/definition_of_done_v1.6.2.md)。
+測試工具與撰寫方式見 [測試指南](docs/test_guide.md)；覆蓋範圍與驗證紀錄見 [測試矩陣](docs/test_matrix/test_matrix_v1.6.3.md) 與 [完成條件](docs/definition_of_done/definition_of_done_v1.6.3.md)。
 
 ## 持續整合
 
@@ -488,15 +149,17 @@ poetry run pytest
 
 | 文件 | 用途 |
 | --- | --- |
-| [使用手冊](#使用手冊user-manual) | 建立設定、執行流程與閱讀報告 |
+| [快速開始](#快速開始) | 建立第一個設定並查看結果 |
 | [CHANGELOG](CHANGELOG.md) | 歷史變更與版本差異 |
+| [使用手冊](docs/user_manual.md) | 操作步驟、設定欄位、範例與結果判讀 |
 | [Roadmap](docs/roadmap.md) | 後續功能與版本規劃 |
 | [Process Lifecycle](docs/process_lifecycle.md) | 程序清理行為與限制 |
+| [Cancellation-Aware Cleanup](docs/cancellation_aware_cleanup.md) | v1.6.3 cleanup scope、逾時、partial artifacts 與報告優先順序 |
 | [提交檢查清單](CommitManual.md) | 提交、發佈與文件維護流程 |
-| [架構 v1.6.2](docs/architecture/architecture_v1.6.2.md) | 元件、取消路由、報告欄位與相容性 |
+| [架構 v1.6.3](docs/architecture/architecture_v1.6.3.md) | 元件、取消路由、報告欄位與相容性 |
 | [測試指南](docs/test_guide.md) | Pytest 工具、fixture、Mock 與各版用法 |
-| [測試矩陣 v1.6.2](docs/test_matrix/test_matrix_v1.6.2.md) | 功能對應的測試與覆蓋限制 |
-| [驗收條件 v1.6.2](docs/acceptance_criteria/acceptance_criteria_v1.6.2.md) | 可觀察的預期行為 |
-| [完成條件 v1.6.2](docs/definition_of_done/definition_of_done_v1.6.2.md) | 驗證紀錄與待完成的發佈項目 |
+| [測試矩陣 v1.6.3](docs/test_matrix/test_matrix_v1.6.3.md) | 功能對應的測試與覆蓋限制 |
+| [驗收條件 v1.6.3](docs/acceptance_criteria/acceptance_criteria_v1.6.3.md) | 可觀察的預期行為 |
+| [完成條件 v1.6.3](docs/definition_of_done/definition_of_done_v1.6.3.md) | 驗證紀錄與待完成的發佈項目 |
 
 `docs/` 內的舊版文件保留當時的設計與介面，使用時請確認版本。

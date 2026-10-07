@@ -1,5 +1,42 @@
 # Changelog
 
+## [1.6.3]
+
+Version scope: Cancellation-Aware Cleanup. Distribution, runtime and report versions are synchronized to 1.6.3. This entry describes the inspected working tree, not a verified release.
+
+### Added
+
+- Optional finite positive `cleanup_timeout_seconds`; missing/null leaves cleanup without an overall deadline.
+- CleanupScope with a separate token shared by teardown, global_teardown, attempts and retry delays.
+- CleanupTimeoutWatchdog and a shared CancellationWatchdog base for run and cleanup deadlines.
+- Required `RunResult.cleanup_summary` with attempted, timed_out, failed and cancellation_reason; JSON reports preserve it alongside the original run reason.
+- Cleanup parser, watchdog, token identity, real subprocess timeout, partial CSV and missing artifact regression cases.
+- v1.6.3 architecture with Mermaid UML, test matrix, acceptance criteria, completion checklist and testing-guide cases.
+
+### Changed
+
+- Run watchdog stops before cleanup; final artifact validation runs after the cleanup scope.
+- Cleanup failure produces FAILED unless original run cancellation selects TIMED_OUT or CANCELLED.
+- Successful global_setup establishes teardown eligibility even if cancellation prevents setup from starting.
+- README and roadmap describe the current cleanup configuration and reporting behavior.
+- Full usage instructions live in docs/user_manual.md with source-based field tables, validation types, paths, CLI and report guidance; README keeps a short quick start.
+- CommitManual defines the manual structure and field-reference checks for future versions.
+
+### Fixed
+
+- Corrected pytest.ini testpaths to INI syntax (`testpaths = tests`), avoiding the missing-testpaths warning and recursive-discovery fallback.
+- Global teardown no longer depends on successful global setup; pre-cancelled runs and failed global setup still attempt final cleanup.
+- Cleanup deadline skip path no longer reads an unassigned global_teardown_success variable.
+- Four report-version assertions now expect 1.6.3, matching runtime metadata.
+- Cleanup timeout test uses `bash -c 'sleep 60'` so it waits for cancellation rather than immediately failing to find a script.
+
+### Verification and limitations
+
+- Local commands, results and release gaps: [v1.6.3 Definition of Done](docs/definition_of_done/definition_of_done_v1.6.3.md).
+- Two fixture weaknesses limit deadline/skip evidence; see the test matrix. Exception-safe finalization, Linux checks and CLI TIMED_OUT exit code remain open.
+- cleanup_timeout_seconds is not serialized in metadata. RunResult construction requires cleanup_summary.
+- No v1.6.3 tag was found locally; GitHub Release, issues and milestones were not verified.
+
 ## [1.6.2]
 
 Version scope: Run-level Timeout. Distribution, runtime and report versions are synchronized to 1.6.2. This entry describes the working tree, not a verified release.

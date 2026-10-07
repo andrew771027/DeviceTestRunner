@@ -30,7 +30,7 @@ from runner.run_timeout import RunTimeoutWatchdog
 
 
 class DeviceTestRunner:
-    VERSION = "1.6.2"
+    VERSION = "1.6.3"
 
     def __init__(
         self,
@@ -563,23 +563,23 @@ class DeviceTestRunner:
                 if not teardown_success:
                     failed = True
 
-                #
-                # global teardown 永遠 best effort。
-                #
+            #
+            # global teardown 永遠 best effort。
+            #
 
-                if not cleanup_scope.cancellation_token.is_cancelled:
+            if not cleanup_scope.cancellation_token.is_cancelled:
 
-                    attempted = True
+                attempted = True
 
-                    global_teardown_success = self._run_stage(
-                        stage="global_teardown",
-                        steps=config.lifecycle.global_teardown.steps,
-                        config=config,
-                        run_dir=run_dir,
-                        step_results=step_results,
-                        stop_on_failure=False,
-                        cancellation_token=cleanup_scope.cancellation_token,
-                    )
+                global_teardown_success = self._run_stage(
+                    stage="global_teardown",
+                    steps=config.lifecycle.global_teardown.steps,
+                    config=config,
+                    run_dir=run_dir,
+                    step_results=step_results,
+                    stop_on_failure=False,
+                    cancellation_token=cleanup_scope.cancellation_token,
+                )
 
                 if not global_teardown_success:
 

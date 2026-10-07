@@ -366,7 +366,7 @@ def test_csv_and_json_content_validation(tmp_path: Path):
         (Path(result.artifact_dir) / "result.json").read_text(encoding="utf-8")
     )
 
-    assert saved_report["metadata"]["runner_version"] == "1.6.2"
+    assert saved_report["metadata"]["runner_version"] == "1.6.3"
     assert saved_report["summary"]["status"] == "PASSED"
 
 

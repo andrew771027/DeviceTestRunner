@@ -851,7 +851,10 @@ def test_run_timeout_must_be_finite_and_positive(timeout_seconds):
     raw = {"run_timeout_seconds": timeout_seconds}
 
     with pytest.raises(ValueError, match="run_timeout_seconds must be finite and > 0"):
-        ConfigLoader._load_optional_positivbe_timeout(raw, "run_timeout_seconds",)
+        ConfigLoader._load_optional_positivbe_timeout(
+            raw,
+            "run_timeout_seconds",
+        )
 
 
 @pytest.mark.parametrize(
@@ -873,4 +876,73 @@ def test_run_timeout_rejects_boolean(
     raw = {"run_timeout_seconds": (timeout_seconds)}
 
     with pytest.raises(ValueError, match=("run_timeout_seconds " "must be a number")):
-        ConfigLoader._load_optional_positivbe_timeout(raw, "run_timeout_seconds",)
+        ConfigLoader._load_optional_positivbe_timeout(
+            raw,
+            "run_timeout_seconds",
+        )
+
+
+def test_missing_run_timeout_seconds_unlimited():
+    """Acceptance scenario.
+
+    Given run timeout is omitted.
+    When the optional timeout parser reads the configuration.
+    Then the timeout is None.
+    """
+
+    raw = {}
+
+    result = ConfigLoader._load_optional_positivbe_timeout(
+        raw,
+        "run_timeout_seconds",
+    )
+
+    assert result is None
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        0,
+        -1,
+        -0.1,
+        True,
+        False,
+        float("nan"),
+        float("inf"),
+        float("-inf"),
+    ],
+)
+def test_invalid_cleanup_timeout_is_rejected(value):
+    """Acceptance scenario.
+
+    Given cleanup timeout is non-positive, boolean or non-finite.
+    When the optional timeout parser reads the value.
+    Then ValueError rejects the value.
+    """
+
+    raw = {"cleanup_timeout_seconds": value}
+
+    with pytest.raises(ValueError):
+        ConfigLoader._load_optional_positivbe_timeout(
+            raw,
+            "cleanup_timeout_seconds",
+        )
+
+
+def test_missing_cleanup_timeout_is_unlimited():
+    """Acceptance scenario.
+
+    Given cleanup timeout is omitted.
+    When the optional timeout parser reads the configuration.
+    Then the timeout is None.
+    """
+
+    raw = {}
+
+    result = ConfigLoader._load_optional_positivbe_timeout(
+        raw,
+        "cleanup_timeout_seconds",
+    )
+
+    assert result is None

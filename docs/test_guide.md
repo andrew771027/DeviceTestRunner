@@ -11,6 +11,8 @@
 
 <a id="tools"></a>
 
+v1.6.3 的 token 身分比較、Bash fixture 與 AST 檢查見 [對應案例](#v1-6-3)。
+
 ## 工具與用法
 
 下表提供閱讀入口，不表示每一版都使用全部工具。版本細節見後面的案例；教學範例不算新增測試。
@@ -122,6 +124,7 @@ python -m pytest -k timeout -v
 
 | 版本 | 閱讀重點 | 測試覆蓋與證據 |
 | --- | --- | --- |
+| [v1.6.3](#v1-6-3) | Cleanup token 身分、真實 subprocess、partial CSV、docstring AST 比較 | [Test matrix](test_matrix/test_matrix_v1.6.3.md) |
 | [v1.6.2](#v1-6-2) | Watchdog、設定邊界、JSON attempt history、orphan process | [Test matrix](test_matrix/test_matrix_v1.6.2.md) |
 | [v1.0.0](#v1-0-0) | tmp_path、參數化與基本斷言 | [Test matrix](test_matrix/test_matrix_v1.0.0.md) |
 | [v1.1.0](#v1-1-0) | 模型更名後的案例與參數化 | [Test matrix](test_matrix/test_matrix_v1.1.0.md) |
@@ -477,3 +480,43 @@ with TemporaryDirectory(prefix="runner example ") as directory:
 ```
 
 AI 協作新增與修正案例、原始缺口及驗證限制集中於 [v1.6.2 matrix](test_matrix/test_matrix_v1.6.2.md)。本次文件補充以 AST 移除 docstring 後比較，確認可執行測試行為不變。
+
+<a id="v1-6-3"></a>
+
+## v1.6.3 — Cancellation-Aware Cleanup
+
+[測試矩陣](test_matrix/test_matrix_v1.6.3.md) 記錄需求對應；[完成條件](definition_of_done/definition_of_done_v1.6.3.md) 記錄本次命令與觀察結果。
+
+### Token 身分與真實程序
+
+`test_teardown_uses_independent_cancellation_scope` 使用專案 MockTokenRecordingExecutor，透過 `is` 比較 token 身分，確認 scenario 使用 run token，兩個 cleanup stages 共用另一個 token。這是 mock 路由證據。
+
+`test_cleanup_timeout_cancels_teardown` 與 partial CSV 案例使用 SubprocessExecutor 和 ProcessTerminator，會啟動真實 Bash 程序，即使放在 test_unit 目錄也不是純模擬。tmp_path 隔離輸出；next() 按 step/artifact name 找結果，不依賴固定索引。
+
+### 指令與斷言的有效性
+
+`bash -c 'sleep 60'` 的 `-c` 表示執行命令字串；`bash 'sleep 60'` 會讀取同名腳本檔案。指令提前失敗時，attempt 可能為 PROCESS_ERROR，之後 retry delay 取消才讓 step.cancelled 成為 true；step cancellation 不代表第一個 attempt 被中止。
+
+Partial CSV 案例用 printf 寫入 header 和一筆資料，再 sleep，驗證 min_rows=2 的 final ARTIFACT_INVALID。run_timeout_seconds 控制整個 normal scope，因此也斷言 scenario 已啟動且有一次 CANCELLED attempt，避免只檢查 TIMED_OUT 的弱證據。
+
+檔案未出現不能單獨證明命令未啟動：目前 skip 測試的 `touch -c` 不建立不存在的檔案。應在後續功能測試補強有效 marker 或執行紀錄。另一個雙 timeout 測試含未閉合 Bash quote；詳見 matrix 的證據限制。本次文件任務保留其可執行測試行為。
+
+### Watchdog 收尾
+
+`test_cleanup_watchdog_uses_cleanup_timeout_reason` 使用標準函式庫 time.monotonic 和有限輪詢等待真實 thread；finally 中 stop watchdog，避免斷言失敗遺留執行緒。它驗證 reason，沒有涵蓋所有 deadline race。
+
+### 測試收集設定
+
+pytest 優先讀取根目錄的 `pytest.ini`，其中 INI 語法為 `testpaths = tests`。`pyproject.toml` 的 TOML 語法則是 `testpaths = ["tests"]`，兩種格式不能互換。INI 使用方括號寫法時會解析成 `[tests]` 路徑，找不到目錄後發出 PytestConfigWarning，並改從目前目錄遞迴搜尋。
+
+目前 pytest.ini 使用正確目錄，可透過 `.venv/bin/python -m pytest --collect-only -q` 檢查收集結果；完整執行結果見 v1.6.3 完成條件。
+
+### 執行案例
+
+```bash
+.venv/bin/python -m pytest tests/test_unit/test_watchdog.py -q
+.venv/bin/python -m pytest tests/test_unit/test_runner.py -k 'cleanup or partial_artifacts' -q
+.venv/bin/python -m pytest -q
+```
+
+Given／When／Then docstring 說明測試實際前提、操作與斷言。補說明時以移除 docstring 的 AST 比較確認行為不變；不能用增加說明取代增加測試證據。

@@ -2,6 +2,8 @@
 
 Version: v1.6.2
 
+v1.6.3 的獨立 cleanup cancellation scope、整體時間預算與報告行為見 [Cancellation-Aware Cleanup](cancellation_aware_cleanup.md)。本文件保留 v1.6.2 的程序生命週期說明。
+
 ## Purpose
 
 本文件說明一次 attempt 如何啟動、停止與收尾，以及清理和 retry 的關係。閱讀順序是「程序 → 群組 → 輸出 → 下一次 attempt」。類別介面與 UML 見 [Architecture](architecture/architecture_v1.6.2.md)，本版測試案例見 [Test Matrix](test_matrix/test_matrix_v1.6.2.md)。

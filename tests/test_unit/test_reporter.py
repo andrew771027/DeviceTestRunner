@@ -7,6 +7,7 @@ import pytest
 
 from runner.models import (
     ArtifactValidationResult,
+    CleanupSummary,
     ExecutionSummary,
     FailureType,
     RunMetadata,
@@ -18,7 +19,7 @@ from runner.reporter import JsonReporter
 
 
 @pytest.mark.parametrize(
-    argnames="metadata, summary, step_results, artifact_validation_results",
+    argnames="metadata, summary, cleanup_summary, step_results, artifact_validation_results",
     argvalues=[
         (
             RunMetadata(
@@ -46,6 +47,12 @@ from runner.reporter import JsonReporter
                 failed_artifact_rules=0,
                 failed_required_artifact_rules=0,
                 duration_seconds=600.0,
+            ),
+            CleanupSummary(
+                attempted=True,
+                timed_out=False,
+                failed=False,
+                cancellation_reason=None,
             ),
             [
                 StepResult(
@@ -149,6 +156,7 @@ def test_save_result_json(
     tmp_path: Path,
     metadata: RunMetadata,
     summary: ExecutionSummary,
+    cleanup_summary: CleanupSummary,
     step_results: List[StepResult],
     artifact_validation_results: List[ArtifactValidationResult],
 ):
@@ -162,6 +170,7 @@ def test_save_result_json(
     run_result = RunResult(
         metadata=metadata,
         summary=summary,
+        cleanup_summary=cleanup_summary,
         step_results=step_results,
         artifact_dir=str(tmp_path),
         artifact_validation_results=artifact_validation_results,
@@ -177,6 +186,7 @@ def test_save_result_json(
     assert saved["metadata"] == asdict(metadata)
     assert saved["metadata"]["run_timed_out"] is False
     assert saved["summary"] == asdict(summary)
+    assert saved["cleanup_summary"] == asdict(cleanup_summary)
     assert saved["step_results"] == [asdict(result) for result in step_results]
     assert saved["artifact_dir"] == str(tmp_path)
     assert saved["artifact_validation_results"] == [

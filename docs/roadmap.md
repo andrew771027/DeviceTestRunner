@@ -1,6 +1,6 @@
 # Device Test Runner Roadmap
 
-目前已實作 v1.6.2 run-level timeout、程序群組終止、reader 收尾與 SIGINT handler，並通過本機測試。套件、runtime 與報告版本已同步為 1.6.2；平台驗證與發佈仍待完成。接下來處理取消後的清理，再加入 YAML 變數與 recorder 管理。
+目前已實作 v1.6.3 獨立 cleanup scope、共享清理時間預算與 cleanup_summary；套件、runtime 與報告版本同步為 1.6.3。本機驗證與待辦見 v1.6.3 完成條件，平台驗證與發佈仍待完成。接下來補齊清理邊界驗證，再加入 YAML 變數與 recorder 管理。
 
 本文件保留各版本的功能規劃。`Completed` 表示該節記錄的功能已完成；`Planned` 與 `Future` 表示尚未實作。實際發佈條件與驗證結果請見各版本的完成條件文件。
 
@@ -476,6 +476,8 @@ Watchdog 在 global_setup 前啟動，到 cleanup 與 final validation 後才停
 
 ### v1.6.3 — Cancellation-aware Cleanup
 
+設定、cleanup scope、逾時、partial artifacts 與報告行為見 [Cancellation-Aware Cleanup](cancellation_aware_cleanup.md)。本節保留版本規劃與驗收範圍。
+
 #### 目標
 
 將 cancellation 後的 cleanup 從現有 best effort 路由提升為明確的 scope、時間限制與 partial artifact／report policy。
@@ -492,7 +494,7 @@ Watchdog 在 global_setup 前啟動，到 cleanup 與 final validation 後才停
 
 v1.6.0 已在進入 setup 後的取消路徑執行 teardown，並對每個 cleanup attempt 建立新 token；cleanup command 也已有一般 step timeout。這些是本版本的基礎，不是全新功能。
 
-尚未具備 cleanup scope 的整體 deadline 與管理方式。Retry delay 仍讀取原始已取消 token，可能略過 cleanup delay；global_setup 成功後、進入 setup 前的取消也可能跳過 teardown。需要明確定義這些邊界，並處理未預期例外時的 finalization。
+目前實作由 CleanupScope 管理獨立 token 與整體 deadline；cleanup attempts 與 retry delay 共用此 token。global_setup 成功即具備 teardown 條件，global_teardown 在 cleanup token 尚未取消時嘗試執行。未預期例外時的 finalization 仍待處理。
 
 目前 run 結束後仍驗證所有 artifact rules，missing required artifacts 可與 CANCELLED 並存。新的 partial policy 應保留診斷證據，明確決定哪些規則執行或標記未完成，不默默將缺失 artifact 改為通過。
 
@@ -505,7 +507,7 @@ v1.6.0 已在進入 setup 後的取消路徑執行 teardown，並對每個 clean
 
 #### 狀態
 
-Planned
+Implemented；本機驗證與未完成項目見 [完成條件](definition_of_done/definition_of_done_v1.6.3.md)，尚未確認發佈。
 
 #### v1.6.x Scope Alignment
 
@@ -807,13 +809,97 @@ First Failure:
 
 Planned
 
-### v1.11 — Job Model
+### v1.11 — Job Definition and Job Instance
+
+#### 目標
+
+區分「可重複使用的工作定義」與「某一次提交的執行工作」，讓 batch、matrix 與後續遠端 dispatch 共用同一個 job 契約。
+
+| 概念 | 責任 | 範例 |
+| --- | --- | --- |
+| Job Definition | 描述要執行的測試設定、參數與產物規則；可重複使用 | `power_idle` 測試定義 |
+| Job Instance | 某次提交產生的具體工作；具有唯一 job ID、解析後的參數與執行狀態 | 在 ABC123 執行 power_idle，duration=60 |
+| Run | Instance 呼叫 runner 後產生的實際執行與報告 | lifecycle、step attempts、result.json |
+
+Definition 本身沒有執行狀態。同一 Definition 可產生多個 Instances；初期一個 Instance 對應一次 Run，step retry 仍屬於該 Run，不建立新的 Instance。整個 job 的重新執行另建立 Instance，並保留來源關聯。
+
+#### 功能範圍
+
+* 定義 JobDefinition、JobInstance 與唯一 job ID。
+* Instance 保存 definition 識別／設定快照、解析後參數與 run artifact directory，避免 definition 修改後無法還原執行條件。
+* 定義 queued、running、completed 等 job 狀態，與 Run 的 PASSED／FAILED／CANCELLED／TIMED_OUT 結果分開；未開始即取消的 Instance 不必產生 Run。
+* 先以單一 Instance 呼叫現有 DeviceTestRunner，不加入 matrix、並行或遠端執行。
+* 沿用 v1.7.x 的參數解析基礎；Instance 開始前完成設定解析與驗證。
+
+#### 驗收條件
+
+* 相同 Definition 提交兩次會得到不同 job IDs，且能分別查詢狀態與結果。
+* 修改 Definition 不會改變已建立 Instance 的設定快照。
+* 可區分 job 尚未執行、執行完成與測試結果失敗；step retry 不增加 Instance 數量。
 
 #### 狀態
 
 Planned
 
-### v1.12 — Batch Runner
+### v1.12 — Batch Runner and Matrix Expansion
+
+#### 目標
+
+將一份 Job Definition 依參數組合展開成多個 Job Instances，再以 batch 統一執行與彙整結果。參考 GitHub Actions `strategy.matrix` 的使用方式，但不承諾完整相容其語法。
+
+目前 [CI workflow](../.github/workflows/ci.yml) 的 unit-tests 使用 python-version matrix，分別執行 Python 3.11、3.12 與 3.13。Runner 的規劃則把這個展開概念用於 device、scenario 參數等測試維度；CI matrix 與 Runner matrix 是不同層的工作。
+
+```text
+Job Definition + Matrix
+        ↓ 展開並驗證
+Job Instance A
+Job Instance B
+Job Instance C
+        ↓ 預設逐一執行
+各自的 Run / Artifacts
+        ↓
+Batch Summary
+```
+
+#### 規劃語法範例
+
+以下是尚未實作的示意設定，不能直接交給目前的 ConfigLoader。正式 schema 與參數綁定方式需在實作前確認。
+
+```yaml
+job:
+  definition: power_idle
+  config: configs/power_idle.yaml
+  strategy:
+    matrix:
+      device_serial: [ABC123, XYZ789]
+      duration_seconds: [60, 300]
+```
+
+兩個 device_serial × 兩個 duration_seconds 產生四個 Instances：
+
+| Instance | device_serial | duration_seconds |
+| --- | --- | --- |
+| A | ABC123 | 60 |
+| B | ABC123 | 300 |
+| C | XYZ789 | 60 |
+| D | XYZ789 | 300 |
+
+每個 Instance 保存一組參數與獨立輸出目錄。device_serial 的綁定必須同時更新裝置 metadata 與實際命令參數，不能只改報告欄位。
+
+#### 實作與學習順序
+
+1. 先支援明確列出的 Instance 清單，以單程序逐一執行並輸出 Batch Summary。
+2. 再支援 matrix 各維度的笛卡兒積，定義穩定的展開順序、組合上限、參數型別與唯一 Instance 身分。
+3. 接著加入 exclude（移除匹配組合）與 include（加入完整且通過驗證的參數組合）。初期 include 不做隱含合併，並明確決定重複組合的處理方式。
+4. 定義 batch cancellation 與 fail-fast：預設一個 Instance 失敗仍執行其他工作；選擇 fail-fast 時先停止啟動待執行工作，保留各 Instance 結果。
+
+Matrix 只決定「有哪些工作」，不代表同時執行。並行度由 v1.13～v1.15 的 executor、limit 與 resource ownership 控制。
+
+#### 驗收條件
+
+* 上述 2 × 2 matrix 產生四個參數快照與不同 job IDs，並按序執行。
+* 每個 Instance 的 status、result.json 與 artifacts 能獨立追蹤；單一失敗不會覆蓋其他結果。
+* 無效參數在啟動程序前被拒絕；取消 batch 後不啟動剩餘工作，已執行的結果仍保留。
 
 #### 狀態
 
@@ -821,17 +907,39 @@ Planned
 
 ### v1.13 — Multi-Process Execution
 
+#### 目標與範圍
+
+在已驗證的 Instance／batch 契約上，讓獨立工作可由不同本機程序執行。先驗證兩個不使用裝置或使用不同資源的 Instances，隔離輸出、結果回傳與取消 token。正常 batch 預設仍為逐一執行，直到 concurrency limit 與 device ownership 完成。
+
+驗收需確認不同程序的 artifacts 不互相覆蓋，子工作失敗可被 batch 收集，取消可到達正確 Instance。多程序不允許略過裝置互斥；同裝置並行須等 v1.15 的資源管理。
+
 #### 狀態
 
 Planned
 
 ### v1.14 — Concurrency Limit
 
+#### 目標與範圍
+
+限制 batch／matrix 同時執行的 Instance 數量，預設為 1。可借用 `strategy.max-parallel` 的概念；正式欄位名稱待 schema 確認。執行中的工作完成後才啟動下一個，避免一次展開大量組合就啟動大量程序。
+
+定義並行時的 fail-fast 與取消傳遞：停止新增工作後，如何讓正在執行的 Instances 受控收尾。驗收需證明執行數不超過上限、待執行工作可取消、不同 job 的狀態與結果仍可區分。
+
+Concurrency limit 只限制數量，不保證兩個工作不使用同一裝置；正式啟用裝置並行需搭配下一階段的 lock。
+
 #### 狀態
 
 Planned
 
 ### v1.15 — Resource / Device Lock
+
+#### 目標與範圍
+
+以 resource key（例如 device serial）管理 Instance 的資源取得、持有與釋放，避免 matrix 中不同參數的工作同時操作同一裝置。先支援單機 lock，再於 v2.x 擴充遠端 ownership。
+
+驗收需確認同裝置工作依序執行、不同裝置可在 concurrency limit 內並行。取消或失敗後須在 cleanup 與程序收尾完成後才釋放資源；程序狀態不明時不直接將裝置標記為可用。
+
+這些能力完成後，再讓 v2.x Controller／Worker 沿用 Job Definition、Job Instance、Batch Summary 與資源契約，增加 transport 與 scheduler。
 
 #### 狀態
 
@@ -897,38 +1005,89 @@ Device + Recorder + Test Scripts
 * basic scheduling policy
 * retry on worker failure
 
-#### Possible Implementation Stages
+#### v2.x 實作順序
 
-##### v2.0.0
+將 SSH、Worker script、Worker Agent 與 Scheduler 納入同一條版本路徑。先以一台 Linux Controller 與一台 Mac 驗證 remote execution，確認工作與結果契約後才加入網路服務；先掌握單一遠端 job 的狀態，再擴充多 worker、排程與故障復原。
 
-* Single controller
-* Single worker
-* HTTP-based dispatch
-* synchronous execution
+前面的 High-Level Architecture 是 v2.x 最終方向，不是 v2.0 的全部範圍。以下版本均為規劃，尚未實作。各版以驗收條件作為進入下一階段的依據。
 
-##### v2.1.0
+| 版本 | 執行路徑／主要能力 | 學習重點 | 依賴 |
+| --- | --- | --- | --- |
+| v2.0.0 | Linux Controller → SSH → Mac → command | SSH、遠端程序、exit code、輸出串流 | 穩定的單機 runner |
+| v2.1.0 | Linux Controller → SSH → Mac Worker script → command | Job 契約、狀態檔、結果收集 | v2.0 連線與命令執行 |
+| v2.2.0 | Linux Controller → REST → Mac Worker Agent → command | HTTP API、常駐服務、非同步狀態與取消 | v2.1 Job 與結果契約 |
+| v2.3.0 | Controller → 多個 Worker Agents | Registration、capability、heartbeat、offline detection | v2.2 單 worker API |
+| v2.4.0 | Controller → Scheduler → Worker Agent → Device | Queue、資源分配、device lock、並行限制 | v2.3 Worker inventory |
+| v2.5.0 | 遠端工作復原與安全重送 | 持久化狀態、冪等、故障處理 | v2.4 Dispatch 與資源 ownership |
+| v2.6.0 | 集中 artifacts 與 execution history | 儲存、索引、上傳復原與查詢 | 穩定的 job ID 與狀態模型 |
 
-* Multiple workers
-* worker capability registration
-* basic worker selection
+##### v2.0.0 — SSH 直接執行
 
-##### v2.2.0
+```text
+Linux Controller → SSH → Mac → command
+```
 
-* job queue
-* asynchronous execution
-* run status polling
+**範圍：** 一個 controller、一台固定 Mac、一次一個同步工作。先執行 echo 等簡單命令，再透過 SSH 呼叫既有 Device Test Runner。使用 SSH key，明確指定遠端工作目錄與命令環境；保存 stdout、stderr、exit code 與連線錯誤。
 
-##### v2.3.0
+**驗收：** Linux 可在 Mac 執行成功與失敗命令並取得結果；能區分連線失敗與命令非零退出。執行真實裝置命令前，先通過不需要裝置的範例。
 
-* heartbeat
-* worker offline detection
-* worker recovery
+**階段限制：** SSH 斷線不代表遠端程序已停止。先記錄此限制，不承諾斷線復原或自動重試，也不在此階段加入 agent、queue 或 scheduler。
 
-##### v2.4.0
+##### v2.1.0 — SSH Worker script 與工作契約
 
-* artifact upload
-* centralized report storage
-* execution history
+```text
+Linux Controller → SSH → Mac Worker script → command
+```
+
+**範圍：** Worker script 接收 job ID 與 configuration，建立獨立 job 目錄並呼叫本機 runner。定義 ExecutionRequest、RunState、result schema 與執行紀錄；以 SSH／SCP 收集 result.json 和必要 artifacts。保留同步 dispatch，另提供依 job ID 查詢狀態與提出取消的 script 入口。
+
+**驗收：** 同一請求不會因重複啟動而產生兩個並行工作；controller 能取得報告、log 與明確的 job 狀態。連線中斷後可重新查詢 job，無法確認結果時標記 unknown，不能直接判定失敗並重跑。取消入口須能識別指定 job，透過 runner 的取消流程收尾。
+
+**學習順序：** 先固定 request／result 契約，再處理 job 身分、狀態與取消。下一版沿用契約，將 SSH script 入口改為服務 API。
+
+##### v2.2.0 — 單一 Worker Agent 與 REST API
+
+```text
+Linux Controller → REST → Mac Worker Agent → command
+```
+
+**範圍：** Mac 常駐 Worker Agent 提供 submit、status、cancel、result API。提交後回傳 job ID，controller 透過 polling 查詢，避免 HTTP request 綁住整次測試。初期一次執行一個 job，忙碌時明確拒絕新工作；先驗證呼叫端身分並限制可提交的工作範圍。
+
+**驗收：** API timeout 不會被當成 job 失敗；可查詢執行中的 job、取消並取得最後結果。重複 submit 不會重複執行；agent 重啟後至少能辨識遺留工作並標記待確認狀態。
+
+**通訊選擇：** 先使用 REST／JSON，方便沿用現有 Python 與 JSON 報告並透過一般 HTTP 工具除錯。若後續出現明確的串流、型別契約或效能需求，再評估 gRPC；先不維護兩套 dispatch 協定。
+
+##### v2.3.0 — 多 Worker、註冊與健康狀態
+
+**範圍：** 加入 worker ID、registration、WorkerState、capability、device inventory 與 heartbeat。Controller 可指定 worker，或依 capability 選擇一個可用 worker；保持每個 worker 一次一個 job，不先加入複雜排程。
+
+**驗收：** 至少兩個 workers 可註冊、回報能力並接收各自的工作。Heartbeat 逾期的 worker 不再接收新工作；失聯時既有 job 標記 unknown／待確認，恢復連線後能查詢，而非自動重跑。
+
+**學習順序：** 先建立可信的可用資源資訊，再讓 scheduler 據此分派。
+
+##### v2.4.0 — Scheduler、Queue 與 Device 分配
+
+```text
+Controller → Scheduler → Worker Agent → Device
+```
+
+**範圍：** 引入 job queue、FIFO 基本排程、capability matching 與可用 worker 選擇。沿用 v1.x 的 concurrency limit／device lock 基礎，定義遠端裝置預約與 ownership；初期每台 worker 維持單 job，再逐步增加並行度。
+
+**驗收：** 無可用資源時工作留在 queue；資源釋放後才 dispatch。同一裝置不會被兩個 job 同時使用；排隊工作可取消。Worker 失聯時不立即釋放可能仍被遠端程序使用的資源，須先確認 ownership 與執行狀態。
+
+**學習順序：** 先完成可預測的 FIFO 和互斥，再考慮 priority、負載平衡或更進階 scheduling policy。
+
+##### v2.5.0 — 故障復原與重送規則
+
+**範圍：** 持久化 job state，處理 controller／agent 重啟、網路中斷、dispatch acknowledgement 遺失與結果回傳失敗。定義 reconciliation、冪等 job ID、資源回收與 retry on worker failure 的條件。
+
+**驗收：** 重啟後能恢復查詢與排程；已完成或仍執行的 job 不因重送而重複執行。只有確認原工作已停止、且任務允許重試時才重新分派。裝置操作可能有副作用，不能把失聯一律當成可安全重試。
+
+##### v2.6.0 — 集中 Artifacts 與 Execution History
+
+**範圍：** 在 v2.1 已可取得報告與檔案的基礎上，加入集中 report storage、artifact upload 狀態、上傳重試、execution history 與查詢索引。以 job ID 關聯 run、worker、device 與 artifacts。
+
+**驗收：** Controller 可查詢歷史結果與下載產物；工作結果與 artifact 傳輸狀態分開呈現。上傳失敗可單獨重試，不重跑裝置測試；缺少或部分 artifacts 保留診斷資訊。
 
 相關技術：Distributed systems、controller／worker architecture、dispatch、remote execution、state machines、failure recovery、resource scheduling。
 
@@ -1222,17 +1381,17 @@ Done
 
 ## 開發優先順序
 
-目前已實作 v1.6.2 run-level timeout 與 process-group cleanup；完整取消保證與發佈仍待完成。接下來的開發優先順序：
+目前已實作 v1.6.3 cleanup scope；例外收尾、平台驗證與發佈仍待完成。接下來的開發優先順序：
 
 ```text
 1. 程序清理的平台驗證與發佈確認
 2. v1.6.2 CLI timeout exit code、平台驗證與發佈
-3. v1.6.3 Cancellation-aware Cleanup
+3. v1.6.3 cleanup 邊界測試與例外收尾
 4. v1.7.x YAML Variables, Environment and Runtime Context
 5. v1.8 Recorder Lifecycle
 6. v1.9 Hook and Teardown Guarantees
 7. v1.10 Execution Summary
-8. v1.11～v1.15 Job、batch、multi-process、concurrency 與 device lock
+8. v1.11～v1.15 Job Definition／Instance、batch／matrix、multi-process、concurrency 與 device lock
 9. 單機 execution model 穩定後進入 v2.0 Controller／Worker
 ```
 

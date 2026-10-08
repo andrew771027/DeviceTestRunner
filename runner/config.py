@@ -48,12 +48,21 @@ class ConfigLoader:
 
         retry = self._load_retry(raw)
 
-        run_timeout_seconds = self._load_run_timeout_seconds(raw)
+        run_timeout_seconds = self._load_optional_positivbe_timeout(
+            raw,
+            "run_timeout_seconds",
+        )
+
+        cleanup_timeout_seconds = self._load_optional_positivbe_timeout(
+            raw,
+            "cleanup_timeout_seconds",
+        )
 
         return RunnerConfig(
             test_case=test_case,
             device=device,
             run_timeout_seconds=run_timeout_seconds,
+            cleanup_timeout_seconds=cleanup_timeout_seconds,
             retry=retry,
             lifecycle=lifecycle,
             artifact=artifact,
@@ -75,7 +84,11 @@ class ConfigLoader:
 
         device = raw["device"]
 
-        return DeviceInfo(serial=device["serial"], product=device["product"], build=device["build"])
+        return DeviceInfo(
+            serial=device["serial"],
+            product=device["product"],
+            build=device["build"],
+        )
 
     @staticmethod
     def _load_steps(raw: dict[str, Any]) -> LifecycleSteps:
@@ -166,19 +179,18 @@ class ConfigLoader:
         return retry_on
 
     @staticmethod
-    def _load_run_timeout_seconds(raw: dict[str, Any]) -> float | None:
+    def _load_optional_positivbe_timeout(raw: dict[str, Any], key: str) -> float | None:
+        raw_value = raw.get(key)
 
-        raw_run_timeout = raw.get("run_timeout_seconds")
-
-        if raw_run_timeout is None:
+        if raw_value is None:
             return None
 
-        if isinstance(raw_run_timeout, bool) or not isinstance(raw_run_timeout, (int, float)):
-            raise ValueError("run_timeout_seconds must be a number")
+        if isinstance(raw_value, bool) or not isinstance(raw_value, (int, float)):
+            raise ValueError(f"{key} must be a number")
 
-        run_timeout_seconds = float(raw_run_timeout)
+        value = float(raw_value)
 
-        if not math.isfinite(run_timeout_seconds) or run_timeout_seconds <= 0:
-            raise ValueError("run_timeout_seconds must be finite and > 0")
+        if not math.isfinite(value) or value <= 0:
+            raise ValueError(f"{key} must be finite and > 0")
 
-        return run_timeout_seconds
+        return value

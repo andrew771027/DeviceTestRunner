@@ -7,6 +7,7 @@ import pytest
 from runner.artifact import ArtifactManager, StepLogWriter
 from runner.artifact_validator import ArtifactValidator
 from runner.cancellation import CancellationReason, CancellationToken
+from runner.executor import SubprocessExecutor
 from runner.failure import FailureClassifier
 from runner.models import (
     ArtifactConfig,
@@ -23,6 +24,7 @@ from runner.models import (
     RunnerConfig,
     StepAttemptResult,
 )
+from runner.process import ProcessTerminator
 from runner.reporter import JsonReporter
 from runner.runner import DeviceTestRunner
 
@@ -413,6 +415,59 @@ class MockCancelAfterFirstStepExecutor:
             self.token.cancel(CancellationReason.RUN_TIMEOUT)
 
         return result
+
+
+class MockTokenRecordingExecutor:
+    def __init__(self, run_token: CancellationToken):
+        self.run_token = run_token
+        self.tokens = {}
+
+    def execute(
+        self,
+        step,
+        stage,
+        attempt,
+        log_writer,
+        working_directory,
+        cancellation_token,
+    ):
+
+        self.tokens[stage] = cancellation_token
+
+        if stage == "scenario":
+            self.run_token.cancel(CancellationReason.USER_REQUEST)
+
+            return StepAttemptResult(
+                attempt=attempt,
+                success=False,
+                failure_type=FailureType.CANCELLED,
+                timed_out=False,
+                cancelled=True,
+                exit_code=None,
+                duration_seconds=0.01,
+                stdout="",
+                stderr="",
+                stdout_log_path=str(log_writer.stdout_path),
+                stderr_log_path=str(log_writer.stderr_path),
+                error="cancelled",
+                artifact_validation_results=[],
+            )
+
+        return StepAttemptResult(
+            attempt=attempt,
+            success=True,
+            failure_type=FailureType.NONE,
+            timed_out=False,
+            cancelled=False,
+            exit_code=0,
+            duration_seconds=0.01,
+            stdout="",
+            stderr="",
+            stdout_log_path=str(log_writer.stdout_path),
+            stderr_log_path=str(log_writer.stderr_path),
+            error="",
+            artifact_validation_results=[],
+        )
 
 
 class MockRecordingArtifactValidator:
@@ -2018,6 +2073,8 @@ def test_cancelled_scenario_still_runs_cleanup(tmp_path: Path):
 
     result = runner.run(config=config, cancellation_token=token)
 
+    assert "global_setup" in executor.executed_steps
+    assert "setup" in executor.executed_steps
     assert "scenario" in executor.executed_steps
     assert "teardown" in executor.executed_steps
     assert "global_teardown" in executor.executed_steps
@@ -2362,7 +2419,7 @@ def test_cancellation_lifecycle_and_summary(
     report = json.loads(report_path.read_text(encoding="utf-8"))
 
     assert report["metadata"]["cancel_requested"] is True
-    assert report["metadata"]["runner_version"] == "1.6.2"
+    assert report["metadata"]["runner_version"] == "1.6.3"
     assert report["summary"]["status"] == "CANCELLED"
     assert report["summary"]["cancelled_steps"] == expected_cancelled_steps
     assert report["summary"]["failed_steps"] == 0
@@ -2663,3 +2720,536 @@ def test_run_timeout_between_steps_stops_next_step(
         step_result.name == "step_2" and step_result.attempts > 0
         for step_result in result.step_results
     )
+
+
+@pytest.mark.cancelled
+def test_teardown_uses_independent_cancellation_scope(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given the executor cancels the normal run during scenario.
+    When the runner executes cleanup.
+    Then both cleanup stages share a token distinct from the run token.
+    """
+
+    config = RunnerConfig(
+        test_case=DeviceTestCase(
+            id="power_001",
+            name="power_001",
+            description="Description",
+        ),
+        device=DeviceInfo(
+            serial="device_001",
+            product="pixel",
+            build="build_001",
+        ),
+        retry=RetryConfig(
+            max_attempts=3,
+            delay_seconds=1,
+        ),
+        lifecycle=LifecycleConfig(
+            global_setup=LifecycleSteps(steps=[mock_step("global_setup")]),
+            setup=LifecycleSteps(steps=[mock_step("setup")]),
+            scenario=LifecycleSteps(
+                steps=[
+                    mock_step("scenario"),
+                ]
+            ),
+            teardown=LifecycleSteps(steps=[mock_step("teardown")]),
+            global_teardown=LifecycleSteps(steps=[mock_step("global_teardown")]),
+        ),
+        artifact=ArtifactConfig(
+            output_dir=str(tmp_path),
+        ),
+    )
+
+    run_token = CancellationToken()
+
+    executor = MockTokenRecordingExecutor(run_token=run_token)
+
+    runner = DeviceTestRunner(
+        executor=executor,
+        artifact_manager=ArtifactManager(tmp_path),
+        artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
+        reporter=JsonReporter(),
+        show_console_output=False,
+    )
+
+    runner.run(config=config, cancellation_token=run_token)
+
+    assert executor.tokens["scenario"] is run_token
+
+    assert executor.tokens["teardown"] is not run_token
+
+    assert executor.tokens["global_teardown"] is executor.tokens["teardown"]
+
+
+@pytest.mark.cancelled
+def test_cleanup_timeout_cancels_teardown(tmp_path):
+    """Acceptance scenario.
+
+    Given teardown runs a command longer than the cleanup budget.
+    When the cleanup watchdog cancels the command.
+    Then the attempt is CANCELLED and cleanup timeout makes the run FAILED.
+    """
+
+    config = RunnerConfig(
+        test_case=DeviceTestCase(
+            id="power_001",
+            name="power_001",
+            description="Description",
+        ),
+        device=DeviceInfo(
+            serial="device_001",
+            product="pixel",
+            build="build_001",
+        ),
+        cleanup_timeout_seconds=0.3,
+        retry=RetryConfig(
+            max_attempts=3,
+            delay_seconds=1,
+        ),
+        lifecycle=LifecycleConfig(
+            global_setup=LifecycleSteps(steps=[mock_step("global_setup")]),
+            setup=LifecycleSteps(steps=[mock_step("setup")]),
+            scenario=LifecycleSteps(
+                steps=[
+                    mock_step("scenario"),
+                ]
+            ),
+            teardown=LifecycleSteps(
+                steps=[
+                    LifecycleStepContent(
+                        name="teardown",
+                        type="command",
+                        command="bash -c 'sleep 60'",
+                        timeout_second=100,
+                    ),
+                ]
+            ),
+            global_teardown=LifecycleSteps(steps=[mock_step("global_teardown")]),
+        ),
+        artifact=ArtifactConfig(
+            output_dir=str(tmp_path),
+        ),
+    )
+
+    runner = DeviceTestRunner(
+        executor=SubprocessExecutor(
+            project_directory=tmp_path,
+            failure_classifier=FailureClassifier(),
+            process_terminator=ProcessTerminator(grace_period_seconds=2.0),
+        ),
+        artifact_manager=ArtifactManager(tmp_path),
+        artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
+        reporter=JsonReporter(),
+        show_console_output=False,
+    )
+
+    result = runner.run(config=config)
+
+    teardown = next(result for result in result.step_results if result.name == "teardown")
+
+    assert teardown.cancelled is True
+
+    assert teardown.attempt_results[0].failure_type == FailureType.CANCELLED
+
+    assert result.cleanup_summary.timed_out is True
+
+    assert result.cleanup_summary.cancellation_reason == "cleanup_timeout"
+
+    assert result.summary.status == "FAILED"
+
+
+@pytest.mark.cancelled
+def test_cleanup_timeout_does_not_override_run_timeout(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given run and cleanup deadlines are configured with a shell scenario and sleeping teardown.
+    When the runner executes normal work and cleanup.
+    Then the report retains run_timeout and TIMED_OUT alongside cleanup timeout.
+    """
+
+    config = RunnerConfig(
+        test_case=DeviceTestCase(
+            id="power_001",
+            name="power_001",
+            description="Description",
+        ),
+        device=DeviceInfo(
+            serial="device_001",
+            product="pixel",
+            build="build_001",
+        ),
+        run_timeout_seconds=0.3,
+        cleanup_timeout_seconds=0.3,
+        retry=RetryConfig(
+            max_attempts=3,
+            delay_seconds=1,
+        ),
+        lifecycle=LifecycleConfig(
+            global_setup=LifecycleSteps(steps=[mock_step("global_setup")]),
+            setup=LifecycleSteps(steps=[mock_step("setup")]),
+            scenario=LifecycleSteps(
+                steps=[
+                    LifecycleStepContent(
+                        name="scenario",
+                        type="command",
+                        command="bash -c 'sleep 60",
+                        timeout_second=100,
+                    ),
+                ]
+            ),
+            teardown=LifecycleSteps(
+                steps=[
+                    LifecycleStepContent(
+                        name="teardown",
+                        type="command",
+                        command="bash -c 'sleep 60'",
+                        timeout_second=100,
+                    ),
+                ]
+            ),
+            global_teardown=LifecycleSteps(steps=[mock_step("global_teardown")]),
+        ),
+        artifact=ArtifactConfig(
+            output_dir=str(tmp_path),
+        ),
+    )
+
+    runner = DeviceTestRunner(
+        executor=SubprocessExecutor(
+            project_directory=tmp_path,
+            failure_classifier=FailureClassifier(),
+            process_terminator=ProcessTerminator(grace_period_seconds=2.0),
+        ),
+        artifact_manager=ArtifactManager(tmp_path),
+        artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
+        reporter=JsonReporter(),
+        show_console_output=False,
+    )
+
+    result = runner.run(config=config)
+
+    assert result.metadata.cancel_reason == "run_timeout"
+
+    assert result.cleanup_summary.timed_out is True
+
+    assert result.summary.status == "TIMED_OUT"
+
+
+@pytest.mark.cancelled
+def test_teardown_step_timeout_is_not_cleanup_timeout(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given teardown has a step timeout shorter than its cleanup budget.
+    When the runner executes teardown.
+    Then the attempt is TIMEOUT and cleanup fails without a scope timeout.
+    """
+
+    config = RunnerConfig(
+        test_case=DeviceTestCase(
+            id="power_001",
+            name="power_001",
+            description="Description",
+        ),
+        device=DeviceInfo(
+            serial="device_001",
+            product="pixel",
+            build="build_001",
+        ),
+        cleanup_timeout_seconds=5,
+        retry=RetryConfig(
+            max_attempts=3,
+            delay_seconds=1,
+        ),
+        lifecycle=LifecycleConfig(
+            global_setup=LifecycleSteps(steps=[mock_step("global_setup")]),
+            setup=LifecycleSteps(steps=[mock_step("setup")]),
+            scenario=LifecycleSteps(steps=[mock_step("scenario")]),
+            teardown=LifecycleSteps(
+                steps=[
+                    LifecycleStepContent(
+                        name="teardown",
+                        type="command",
+                        command="bash -c 'sleep 100'",
+                        timeout_second=0.2,
+                    ),
+                ]
+            ),
+            global_teardown=LifecycleSteps(steps=[mock_step("global_teardown")]),
+        ),
+        artifact=ArtifactConfig(
+            output_dir=str(tmp_path),
+        ),
+    )
+
+    runner = DeviceTestRunner(
+        executor=SubprocessExecutor(
+            project_directory=tmp_path,
+            failure_classifier=FailureClassifier(),
+            process_terminator=ProcessTerminator(grace_period_seconds=2.0),
+        ),
+        artifact_manager=ArtifactManager(tmp_path),
+        artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
+        reporter=JsonReporter(),
+        show_console_output=False,
+    )
+
+    result = runner.run(config=config)
+
+    teardown = next(step for step in result.step_results if step.name == "teardown")
+
+    assert teardown.attempt_results[0].failure_type == FailureType.TIMEOUT
+
+    assert teardown.attempt_results[0].timed_out is True
+
+    assert result.cleanup_summary.timed_out is False
+
+    assert result.cleanup_summary.failed is True
+
+
+@pytest.mark.artifact
+@pytest.mark.cancelled
+def test_cancelled_run_still_validates_partial_artifacts(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a scenario writes a CSV with fewer rows than required.
+    When the run timeout cancels the scenario.
+    Then partial artifacts are still validated and the run is TIMED_OUT.
+    """
+
+    config = RunnerConfig(
+        test_case=DeviceTestCase(
+            id="power_001",
+            name="power_001",
+            description="Description",
+        ),
+        device=DeviceInfo(
+            serial="device_001",
+            product="pixel",
+            build="build_001",
+        ),
+        run_timeout_seconds=2.0,
+        cleanup_timeout_seconds=5.0,
+        retry=RetryConfig(
+            max_attempts=3,
+            delay_seconds=1,
+        ),
+        lifecycle=LifecycleConfig(
+            global_setup=LifecycleSteps(steps=[mock_step("global_setup")]),
+            setup=LifecycleSteps(steps=[mock_step("setup")]),
+            scenario=LifecycleSteps(
+                steps=[
+                    LifecycleStepContent(
+                        name="scenario",
+                        type="command",
+                        command=(
+                            "bash -c '"
+                            'printf "timestamp,power\\n0,1.5\\n" > power.csv; '
+                            "sleep 60"
+                            "'"
+                        ),
+                        timeout_second=100,
+                    ),
+                ]
+            ),
+            teardown=LifecycleSteps(steps=[mock_step("teardown")]),
+            global_teardown=LifecycleSteps(steps=[mock_step("global_teardown")]),
+        ),
+        artifact=ArtifactConfig(
+            output_dir=str(tmp_path),
+            validation=ArtifactValidationConfig(
+                rules=[
+                    ArtifactValidationRule(
+                        name="power_csv",
+                        type="csv_content",
+                        path="power.csv",
+                        after_step="scenario",
+                        required=True,
+                        required_columns=["timestamp", "power"],
+                        min_rows=2,
+                    ),
+                ]
+            ),
+        ),
+    )
+
+    runner = DeviceTestRunner(
+        executor=SubprocessExecutor(
+            project_directory=tmp_path,
+            failure_classifier=FailureClassifier(),
+            process_terminator=ProcessTerminator(grace_period_seconds=2.0),
+        ),
+        artifact_manager=ArtifactManager(tmp_path),
+        artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
+        reporter=JsonReporter(),
+        show_console_output=False,
+    )
+
+    result = runner.run(config=config)
+
+    scenario = next(step for step in result.step_results if step.name == "scenario")
+
+    assert scenario.cancelled is True
+    assert scenario.attempts == 1
+    assert scenario.attempt_results[0].failure_type == FailureType.CANCELLED
+
+    power_result = next(
+        artifact for artifact in result.artifact_validation_results if artifact.name == "power_csv"
+    )
+
+    assert Path(power_result.path).is_file()
+    assert power_result.passed is False
+    assert power_result.failure_type == FailureType.ARTIFACT_INVALID
+
+    assert result.metadata.cancel_reason == "run_timeout"
+    assert result.summary.status == "TIMED_OUT"
+    assert result.cleanup_summary.failed is False
+
+
+@pytest.mark.artifact
+@pytest.mark.cancelled
+def test_missing_artifact_does_not_override_cancellation(tmp_path: Path):
+    """Acceptance scenario.
+
+    Given a user-cancelled run requires an absent artifact.
+    When the runner performs final validation.
+    Then the artifact is ARTIFACT_MISSING and the run remains CANCELLED.
+    """
+
+    rule = ArtifactValidationRule(
+        name="missing",
+        type="exists",
+        path="missing.txt",
+        after_step="scenario",
+    )
+
+    config = RunnerConfig(
+        test_case=DeviceTestCase(
+            id="power_001",
+            name="power_001",
+            description="Description",
+        ),
+        device=DeviceInfo(
+            serial="device_001",
+            product="pixel",
+            build="build_001",
+        ),
+        retry=RetryConfig(max_attempts=2, delay_seconds=2),
+        lifecycle=LifecycleConfig(
+            scenario=LifecycleSteps(steps=[mock_step("scenario")]),
+        ),
+        artifact=ArtifactConfig(
+            output_dir=str(tmp_path),
+            validation=ArtifactValidationConfig(rules=[rule]),
+        ),
+    )
+
+    token = CancellationToken()
+
+    token.cancel(CancellationReason.USER_REQUEST)
+
+    runner = DeviceTestRunner(
+        executor=SubprocessExecutor(
+            project_directory=tmp_path,
+            failure_classifier=FailureClassifier(),
+            process_terminator=ProcessTerminator(grace_period_seconds=2.0),
+        ),
+        artifact_manager=ArtifactManager(tmp_path),
+        artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
+        reporter=JsonReporter(),
+        show_console_output=False,
+    )
+
+    result = runner.run(config=config, cancellation_token=token)
+
+    artifact = next(
+        result for result in result.artifact_validation_results if result.name == "missing"
+    )
+
+    assert artifact.passed is False
+
+    assert artifact.failure_type == FailureType.ARTIFACT_MISSING
+
+    assert result.summary.status == "CANCELLED"
+
+
+def test_cleanup_timeout_stops_remaining_cleanup_steps(
+    tmp_path: Path,
+):
+    """Acceptance scenario.
+
+    Given cleanup has a short budget and a second command targets a marker.
+    When the first cleanup command exhausts the budget.
+    Then cleanup times out and the marker remains absent.
+    """
+
+    tmp_file = tmp_path / "should_not_run.txt"
+
+    config = RunnerConfig(
+        test_case=DeviceTestCase(
+            id="power_001",
+            name="power_001",
+            description="Description",
+        ),
+        device=DeviceInfo(
+            serial="device_001",
+            product="pixel",
+            build="build_001",
+        ),
+        cleanup_timeout_seconds=0.2,
+        retry=RetryConfig(
+            max_attempts=3,
+            delay_seconds=1,
+        ),
+        lifecycle=LifecycleConfig(
+            global_setup=LifecycleSteps(steps=[mock_step("global_setup")]),
+            setup=LifecycleSteps(steps=[mock_step("setup")]),
+            scenario=LifecycleSteps(steps=[mock_step("scenario")]),
+            teardown=LifecycleSteps(
+                steps=[
+                    LifecycleStepContent(
+                        name="cleanup_1",
+                        type="command",
+                        command="bash -c 'sleep 100'",
+                        timeout_second=30,
+                    ),
+                    LifecycleStepContent(
+                        name="cleanup_2",
+                        type="command",
+                        command=f"touch -c '{tmp_file}'",
+                        timeout_second=1,
+                    ),
+                ]
+            ),
+            global_teardown=LifecycleSteps(steps=[mock_step("global_teardown")]),
+        ),
+        artifact=ArtifactConfig(
+            output_dir=str(tmp_path),
+        ),
+    )
+
+    runner = DeviceTestRunner(
+        executor=SubprocessExecutor(
+            project_directory=tmp_path,
+            failure_classifier=FailureClassifier(),
+            process_terminator=ProcessTerminator(grace_period_seconds=2.0),
+        ),
+        artifact_manager=ArtifactManager(tmp_path),
+        artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
+        reporter=JsonReporter(),
+        show_console_output=False,
+    )
+
+    result = runner.run(config=config)
+
+    assert result.cleanup_summary.timed_out is True
+
+    assert tmp_file.exists() is False

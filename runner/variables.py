@@ -1,3 +1,9 @@
+"""解析執行前的靜態變數，僅支援 vars.NAME 與 run.dir。
+
+ConfigLoader 驗證定義並保留模板；Runner 建立 run directory 後再解析允許的
+欄位。解析器不執行 expression、不讀取 environment，也不進行 shell escaping。
+"""
+
 from __future__ import annotations
 
 import math
@@ -7,6 +13,7 @@ from dataclasses import fields, is_dataclass, replace
 from pathlib import Path
 from typing import Any
 
+# 內插可包含多個模板；FULL 用於辨識完整引用，以保留原始 scalar 型別。
 EXPRESSION = re.compile(r"\$\{\{\s*([^{}]*?)\s*\}\}")
 UNRESOLVED = re.compile(r"\$\{\{")
 NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -14,14 +21,26 @@ FULL = re.compile(r"^\$\{\{\s*([^{}]*?)\s*\}\}$")
 
 
 class VariableResolutionError(ValueError):
-    """Invalid expression, undefined variable, or invalid resolved type."""
+    """變數定義、引用語法或解析後的欄位型別不合法。"""
 
 
 class StaticVariableResolver:
+    """保存變數的副本，並以當次 run 的絕對路徑解析設定。
+
+    僅 command、timeout_second 與 validation path 由 resolve_dataclass 處理。
+    原始 frozen dataclass 不會被修改，因此同一份設定可用於多次 run。
+    """
 
     def __init__(self, variables: Mapping[str, Any], run_dir: str | Path):
-        """
-        驗證變數名稱、型別及禁止遞迴引用
+        """驗證並複製變數定義，將 run_dir 正規化為絕對路徑。
+
+        Args:
+            variables: 名稱須符合 NAME，值限 str、int、float 或 bool。
+                字串不得含模板起始符號，避免變數間遞迴引用。
+            run_dir: 當次 run 的目錄；此處不建立目錄。
+
+        Raises:
+            VariableResolutionError: 定義不是 mapping，或名稱／值不合法。
         """
         if not isinstance(variables, Mapping):
             raise VariableResolutionError("variables must be a mapping")
@@ -44,8 +63,10 @@ class StaticVariableResolver:
         self.run_dir = str(Path(run_dir).resolve())
 
     def _lookup(self, expression: str) -> Any:
-        """
-        查找 vars.* 或 run.dir
+        """查找單一白名單引用；不支援運算、巢狀欄位或 env namespace。
+
+        run.dir 回傳絕對路徑字串；vars.NAME 回傳宣告時的原始值。
+        未定義名稱或不支援的語法會拋出 VariableResolutionError。
         """
 
         if expression == "run.dir":
@@ -65,8 +86,12 @@ class StaticVariableResolver:
         raise VariableResolutionError(f"unsupported expression: {expression!r}")
 
     def resolve(self, value: Any) -> Any:
-        """
-        解析單一值，完整引用時保留原型別
+        """解析單一值，完整引用保留型別，字串內插則轉為 str。
+
+        非字串原樣回傳。完整引用如 ${{ vars.duration }} 可回傳 int 或 float；
+        內插如 "duration=${{ vars.duration }}" 始終回傳字串。
+        替換後若仍含模板起始符號，視為不完整或未解析的引用並拋出錯誤。
+        此方法不驗證使用欄位的型別；呼叫端應使用 string 或 timeout。
         """
 
         if not isinstance(value, str):
@@ -85,8 +110,9 @@ class StaticVariableResolver:
         return rendered
 
     def string(self, value: Any, field_name: str) -> str:
-        """
-        要求解析結果是字串
+        """解析 command 或 path，要求結果為字串。
+
+        不將完整引用的數字或 bool 隱式轉成字串；field_name 用於錯誤定位。
         """
 
         result = self.resolve(value)
@@ -97,8 +123,11 @@ class StaticVariableResolver:
         return result
 
     def timeout(self, value: Any, field_name: str = "timeout_second") -> int | float:
-        """
-        要求結果是有限的正整數或正浮點數
+        """解析每次 attempt 的 timeout 秒數，保留 int 或 float 型別。
+
+        拒絕字串、bool、零、負數、NaN 與 infinity。使用精確型別檢查，
+        避免 bool 因為是 int 的子類別而被當成合法秒數。
+        field_name 可包含 stage 和索引，方便定位無效的設定。
         """
 
         result = self.resolve(value)
@@ -113,12 +142,20 @@ class StaticVariableResolver:
         return result
 
     def resolve_dataclass(self, obj: Any, *, path: str = "config") -> Any:
-        """Resolve ONLY explicit allowlisted fields, preserving immutable model types.
+        """解析允許的 dataclass 欄位，回傳同型別的新物件。
 
-        Apply to LifecycleConfig and ArtifactValidationConfig (not entire RunnerConfig).
+        LifecycleStepContent 解析 command 與 timeout_second；
+        ArtifactValidationRule 只解析 path，其餘驗證參數維持原值。
+        容器限 LifecycleConfig、LifecycleSteps、ArtifactValidationConfig；
+        RunnerConfig 與 artifact.output_dir 不在解析範圍內。
 
+        Args:
+            obj: 支援的 dataclass instance，不接受 dataclass class。
+            path: 錯誤訊息的欄位前綴，遞迴時附加欄位名稱與 list 索引。
 
-        只解析允許的 Config 欄位，產生新 dataclasss
+        Raises:
+            TypeError: 輸入不是 instance，或 dataclass 不在白名單內。
+            VariableResolutionError: 引用無效，或解析後不符合欄位型別。
         """
 
         if not is_dataclass(obj) or isinstance(obj, type):

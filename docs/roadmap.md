@@ -1,6 +1,6 @@
 # Device Test Runner Roadmap
 
-目前已實作 v1.6.3 獨立 cleanup scope、共享清理時間預算與 cleanup_summary；套件、runtime 與報告版本同步為 1.6.3。本機驗證與待辦見 v1.6.3 完成條件，平台驗證與發佈仍待完成。接下來補齊清理邊界驗證，再加入 YAML 變數與 recorder 管理。
+目前已實作 v1.7.0 靜態變數替換，支援 vars.NAME、run.dir 與有限正整數／小數 step timeout；套件、runtime 與報告版本同步為 1.7.0。本機驗證與待辦見 [v1.7.0 完成條件](definition_of_done/definition_of_done_v1.7.0.md)。Environment 與 Runtime Context 保持規劃狀態；發佈尚未驗證。
 
 本文件保留各版本的功能規劃。`Completed` 表示該節記錄的功能已完成；`Planned` 與 `Future` 表示尚未實作。實際發佈條件與驗證結果請見各版本的完成條件文件。
 
@@ -536,7 +536,7 @@ Implemented；本機驗證與未完成項目見 [完成條件](definition_of_don
 
 | 能力 | 責任 | 解析時機 |
 | --- | --- | --- |
-| Static Variable Substitution | YAML `variables` 定義固定值並在支援的設定欄位引用 | 載入 configuration 時 |
+| Static Variable Substitution | YAML `variables` 定義固定值並在支援的設定欄位引用 | 載入時驗證定義，run directory 建立後解析 |
 | Environment | 引用 host environment，並透過 run／step `environment` 設定傳入 subprocess 的環境 | 每次 run 建立 host environment snapshot；每個 attempt 組合 subprocess environment |
 | Runtime Context | 提供 runner 管理的 run、stage、step、attempt 資訊 | 對應 run／stage／attempt 建立後，在使用欄位前解析 |
 
@@ -550,18 +550,20 @@ Implemented；本機驗證與未完成項目見 [完成條件](definition_of_don
 
 ##### 目標
 
-載入 YAML 時替換固定參數，建立後續 Environment 與 Runtime Context 共用的解析規則。
+集中宣告固定參數，在建立 run directory 後解析支援欄位。
 
-##### 範圍與驗收條件
+##### 實作範圍
 
-* 支援 `variables` 與 `vars` namespace，定義可引用的設定欄位。
-* 支援重複引用、literal escaping 與明確的缺值錯誤；偵測巢狀引用中的循環。
-* 區分完整 scalar 引用與字串內插，替換後仍執行欄位型別驗證。
-* 不含變數語法的既有 YAML 維持相容；不執行任意 expression 或 shell command。
+* `variables` 接受 str、int、float、bool，省略為空 mapping。
+* 僅支援 `${{ vars.NAME }}` 與 `${{ run.dir }}`，可重複引用。
+* 解析全部 lifecycle command／timeout_second 和 validation path。
+* 完整引用保留型別；內插轉為字串；timeout 限有限正 int／float。
+* 原始 config 不變；錯誤在 subprocess／watchdog 開始前拋出。
+* 不支援 literal escaping、遞迴、算術、environment／secret 或任意欄位替換。
 
 ##### 狀態
 
-Planned
+Implemented; local verification and release gaps are recorded in [完成條件](definition_of_done/definition_of_done_v1.7.0.md)。功能與測試依 `194faf3` 及本次工作目錄核對，tag／GitHub Release 尚未確認。
 
 #### v1.7.1 — Environment
 
@@ -939,7 +941,127 @@ Planned
 
 驗收需確認同裝置工作依序執行、不同裝置可在 concurrency limit 內並行。取消或失敗後須在 cleanup 與程序收尾完成後才釋放資源；程序狀態不明時不直接將裝置標記為可用。
 
-這些能力完成後，再讓 v2.x Controller／Worker 沿用 Job Definition、Job Instance、Batch Summary 與資源契約，增加 transport 與 scheduler。
+這些能力完成後，v1.16～v1.19 依序補上單機監控、歷史查詢與安全復原；v2.x Controller／Worker 再沿用 Job Definition、Job Instance、Batch Summary、資源及監控契約，增加 transport 與 scheduler。
+
+#### 狀態
+
+Planned
+
+### v1.16 — Monitoring + Failure Alert
+
+#### 目標
+
+先讓實驗狀態透明：在單機執行期間持續呈現工作進度與各元件健康狀態，異常時提供可追蹤的告警。沿用 v1.8 recorder lifecycle、v1.11 Job Instance 與 v1.12 batch 的識別及進度資訊。
+
+#### 功能範圍
+
+* 提供可查詢的即時 status snapshot 與 CLI monitor，包含 Job、Device、Workstation、Iteration、Current Step、Elapsed 和 Last heartbeat。
+* Iteration 表示同一實驗定義的第幾次重複執行／總次數，與 step retry attempt 分開；未設定重複執行時顯示 `1 / 1`，沿用 batch Instance 關聯。
+* 分開呈現 Process、Device、Recorder、Artifact 狀態，不以程序仍存活推論裝置或 recorder 健康。
+* Runner 回報 heartbeat；device／recorder 健康由可設定的 probe 或 adapter 提供。每項觀測保留時間，未提供 probe 或資料過期時顯示 UNKNOWN／STALE。
+* Artifact 更新狀態依寫入時間／大小變化觀測；停滯門檻由 scenario 設定，不將尚未到預期輸出時機的檔案視為失敗。
+* 支援 process failure、device offline、recorder unhealthy、artifact stalled 與 heartbeat overdue 告警；提供可設定門檻、去重與恢復通知。
+* 初期提供 console 與本機結構化告警紀錄，保留 job／run／step／attempt 識別、時間與原因；此階段先回報異常，不觸發自動復原。
+
+#### Monitor 範例
+
+以下為規劃中的顯示格式，尚未實作。
+
+```text
+Job: power_test_001
+Device: Pixel_A
+Workstation: WS_03
+
+Iteration: 2 / 3
+Current Step: youtube_power
+Elapsed: 01:24:35
+
+Process: RUNNING
+Device: ONLINE
+Recorder: HEALTHY
+Artifact: UPDATING
+
+Last heartbeat: 5s ago
+```
+
+#### 驗收條件
+
+* 長時間 step 執行中仍能查詢進度；elapsed 以 monotonic clock 計算，正常完成、失敗、取消與逾時均有最終 snapshot。
+* 模擬裝置離線、recorder 異常、artifact 停滯與 heartbeat 過期時，可在設定門檻內告警，並保留最後觀測時間；同一持續異常不反覆洗版。
+* Probe 或 monitor 輸出失敗不阻止 runner cleanup 與結果保存；監控故障本身可被辨識。
+
+#### 狀態
+
+Planned
+
+### v1.17 — Execution History
+
+#### 目標
+
+讓失敗可以追溯，將既有的單次 run 報告擴充為可跨 run 查詢的本機執行歷史。
+
+#### 既有能力與新增範圍
+
+v1.2 與 v1.5.x 已保存 run artifacts、每次 attempt 的 stdout／stderr、failure type 與結果；目前 `result.json` 也包含 metadata、summary 與 cleanup_summary。本版沿用這些資料，不重做 attempt history 或報告產生。
+
+* 建立持久化本機 history 索引，關聯 Job Definition／Instance、run、device、workstation、iteration 與 artifacts 路徑。
+* 保存 v1.16 的狀態轉換、告警及其恢復事件，形成有時間戳記的 execution timeline。
+* 依 job、device、時間範圍、最終狀態及 failure type 查詢；可定位失敗 stage／step／attempt 並開啟對應 log 與 artifact。
+* 保留設定快照與來源關聯；區分 step retry、實驗 iteration 與整個 job 重新執行。
+* 定義索引重建、保留期限與中斷紀錄處理；無法確認結果的工作標記 UNKNOWN／待確認，不能直接當作失敗或成功。
+
+#### 驗收條件
+
+* Runner 重啟後仍能查詢歷史；兩次執行相同 definition 的工作可分別追溯設定、告警、attempts 與輸出。
+* 中斷執行及遺失 artifacts 的歷史紀錄仍可查詢，並明確呈現資料缺失。
+
+#### 狀態
+
+Planned
+
+### v1.18 — Policy-Based Recovery
+
+#### 目標
+
+只自動處理安全且可恢復的異常，先建立可稽核的 recovery decision 與受控動作，再開放 scenario 自動重跑。
+
+#### 功能範圍
+
+* 沿用既有 FailureType，依 scenario、failure type、目前 stage、資源 ownership 與健康觀測判斷是否允許 recovery；預設拒絕，僅開放明確 allowlist。
+* Recovery action 由 domain adapter／script 提供，例如重新探測連線或恢復已停止的 recorder；每項動作須定義前置條件、冪等性、時間預算、次數上限與完成後驗證。
+* 執行前確認受管理程序已收尾且資源仍由該 job 持有；狀態 UNKNOWN、ownership 不明、取消中或無法確認安全條件時，保留告警並交由人工處理。
+* Recovery 沿用 cancellation／cleanup 契約，不清除原始失敗證據、不覆蓋主要失敗原因；動作、決策理由與驗證結果寫入 v1.17 history。
+* 明確區分 recovery 與 retry：恢復連線或 recorder 健康不代表原本的量測資料有效，也不自動重跑 scenario 或將失敗改成成功。
+
+#### 驗收條件
+
+* Allowlist 內的可恢復異常完成動作並通過健康驗證；未授權、不可恢復或狀態不明的異常不執行動作。
+* Recovery 失敗、逾時或取消時仍有界收尾，保留原始 failure、動作結果與 artifacts，且不形成無限復原迴圈。
+
+#### 狀態
+
+Planned
+
+### v1.19 — Validated Scenario Auto Retry
+
+#### 目標
+
+在監控、歷史與 recovery policy 可驗證後，只針對經過驗證的 Scenario 與 Failure Type 組合開放自動重試。
+
+#### 既有能力與新增範圍
+
+v1.5.1～v1.5.3 已有 artifact-aware retry、failure classification、`retry_on` allowlist、次數上限與 delay；v1.6.x 提供取消、timeout 與程序清理。本版補上 scenario 層的安全准入與重跑契約，沿用現有 step retry，避免重複建立機制。
+
+* 建立經驗證的 scenario × failure type allowlist，附驗證依據、適用設定版本與可重跑範圍；未驗證的組合不自動重跑。
+* 明確選擇 step 或整個 scenario 的 retry boundary；scenario 重跑前須驗證 cleanup、裝置狀態重置、recorder lifecycle 與 artifact 隔離，避免重複量測或副作用。
+* 組合 recovery 與 retry decision：需要 recovery 的異常先完成並驗證復原，才允許下一次執行；單純符合 `retry_on` 不代表 scenario 重跑安全。
+* 設定 scenario retry 次數、delay／backoff 與總時間預算，限制與既有 step retry 的累積次數；取消或預算耗盡後不啟動下一次執行。
+* 每次 scenario 重跑保留獨立輸出與來源關聯，記錄觸發 failure、policy decision、recovery 和最終結果；不將 retry 次數混入實驗 iteration。
+
+#### 驗收條件
+
+* 已驗證組合能在清理及必要復原完成後重跑，保留所有失敗與成功紀錄；未驗證組合維持失敗並告警。
+* 驗證 recorder 不重複啟動、舊程序不殘留、artifacts 不覆蓋；重試耗盡、recovery 失敗、取消及總預算耗盡均可停止並產生可追溯結果。
 
 #### 狀態
 
@@ -1084,6 +1206,8 @@ Controller → Scheduler → Worker Agent → Device
 **驗收：** 重啟後能恢復查詢與排程；已完成或仍執行的 job 不因重送而重複執行。只有確認原工作已停止、且任務允許重試時才重新分派。裝置操作可能有副作用，不能把失聯一律當成可安全重試。
 
 ##### v2.6.0 — 集中 Artifacts 與 Execution History
+
+沿用 v1.17 的本機 history 與事件契約，本版擴充跨 worker 的集中儲存及查詢。
 
 **範圍：** 在 v2.1 已可取得報告與檔案的基礎上，加入集中 report storage、artifact upload 狀態、上傳重試、execution history 與查詢索引。以 job ID 關聯 run、worker、device 與 artifacts。
 

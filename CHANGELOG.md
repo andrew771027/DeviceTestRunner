@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.7.0]
+
+Version scope: Static Variable Substitution. Package, runtime and report versions are synchronized to 1.7.0. This records the inspected working tree, not a published release.
+
+### Added
+
+- Optional YAML `variables` mapping with string, integer, float and boolean values.
+- `${{ vars.NAME }}` and absolute `${{ run.dir }}` references in lifecycle commands, step timeouts and artifact validation paths.
+- StaticVariableResolver validates definitions at load time and resolves immutable configuration copies after run directory creation, before watchdogs or subprocesses start.
+- Standalone CSV example in `configs/advance_sample.yaml`; lifecycle/retry demonstration in `configs/basic_sample.yaml`.
+- Resolver unit tests, real subprocess/artifact/report integration tests, and v1.7.0 architecture, test matrix, acceptance criteria and completion records.
+
+### Changed
+
+- Whole references preserve scalar types; embedded references render strings.
+- Step timeouts accept finite positive integers and floats, rejecting booleans, numeric strings, zero, negatives, NaN and infinity.
+- Runtime version and four report-version regression assertions match the package version.
+- User manual, README, roadmap and test guide describe the supported substitution fields and fail-fast behavior.
+
+### Fixed
+
+- Timeout validation accepts positive integers instead of rejecting them and checks type before comparing unsupported values.
+- Integration command templates use ordinary strings to preserve double braces, separate script arguments with whitespace, and parse report text with json.loads.
+
+### Verification and limitations
+
+- Commands and observed results: [v1.7.0 Definition of Done](docs/definition_of_done/definition_of_done_v1.7.0.md).
+- Recursive references, literal escaping, arithmetic, environment/secret templates and arbitrary field substitution are unsupported.
+- Resolution errors can leave an empty run directory and propagate without a JSON report. Substitution does not escape shell arguments.
+- Existing CLI TIMED_OUT exit-code, exception-finalization and platform limitations remain; release checks are pending.
+
 ## [1.6.3]
 
 Version scope: Cancellation-Aware Cleanup. Distribution, runtime and report versions are synchronized to 1.6.3. This entry describes the inspected working tree, not a verified release.

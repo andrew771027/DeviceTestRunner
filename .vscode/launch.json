@@ -24,7 +24,7 @@
             "args": [
                 "tests/test_unit/test_runner.py",
                 "-k",
-                "test_cancelled_step_is_not_retried"
+                "test_cancel_before_run_only_runs_global_teardown"
 
             ]
         }

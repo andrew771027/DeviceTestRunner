@@ -1,4 +1,5 @@
 import time
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List
@@ -27,6 +28,7 @@ from runner.reporter import JsonReporter
 from runner.retry import RetryPolicy
 from runner.run_status import calculate_run_status
 from runner.run_timeout import RunTimeoutWatchdog
+from runner.variables import StaticVariableResolver
 
 
 class DeviceTestRunner:
@@ -64,6 +66,26 @@ class DeviceTestRunner:
 
         run_dir = self.artifact_manager.create_run_directory(
             test_case_id=config.test_case.id,
+        )
+
+        resolver = StaticVariableResolver(
+            config.variables,
+            run_dir,
+        )
+
+        config = replace(
+            config,
+            lifecycle=resolver.resolve_dataclass(
+                config.lifecycle,
+                path="lifecycle",
+            ),
+            artifact=replace(
+                config.artifact,
+                validation=resolver.resolve_dataclass(
+                    config.artifact.validation,
+                    path="artifact.validation",
+                ),
+            ),
         )
 
         step_results: List[StepResult] = []

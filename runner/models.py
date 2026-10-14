@@ -38,7 +38,7 @@ class LifecycleStepContent:
     name: str
     type: str
     command: str
-    timeout_second: int
+    timeout_second: int | float | str
 
 
 @dataclass(frozen=True)
@@ -125,6 +125,7 @@ class RunnerConfig:
     artifact: ArtifactConfig
     run_timeout_seconds: float | None = None
     cleanup_timeout_seconds: float | None = None
+    variables: dict[str, str | int | float | bool] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

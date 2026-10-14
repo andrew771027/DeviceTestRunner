@@ -1,6 +1,6 @@
 
 exec:
-	@python3 main.py --config="./configs/sample.yaml"
+	@python3 main.py --config="./configs/basic_sample.yaml"
 
 test:
 	@pytest -v ./tests

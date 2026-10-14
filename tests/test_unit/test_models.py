@@ -88,7 +88,7 @@ from runner.models import (
                 delay_seconds=1,
             ),
             artifact=ArtifactConfig(
-                output_dir="artifact/sample_device_config",
+                output_dir="artifacts/sample_device_config",
                 validation=ArtifactValidationConfig(
                     rules=[
                         ArtifactValidationRule(
@@ -158,7 +158,7 @@ def test_config_contains_all_section(config: RunnerConfig):
     assert config.lifecycle.global_teardown.steps[0].timeout_second == 10
 
     assert hasattr(config.artifact, "output_dir")
-    assert config.artifact.output_dir == "artifact/sample_device_config"
+    assert config.artifact.output_dir == "artifacts/sample_device_config"
 
     assert hasattr(config.artifact, "validation")
     assert len(config.artifact.validation.rules) == 2

@@ -72,7 +72,7 @@ lifecycle:
 
 
 artifact:
-  output_dir: "artifact/intergration_test"
+  output_dir: "artifacts/intergration_test"
 """,
         encoding="utf-8",
     )
@@ -213,7 +213,7 @@ lifecycle:
         command: "echo 'Hello World'"
         timeout_second: 1
 artifact:
-  output_dir: "artifact/intergration_test"
+  output_dir: artifacts/intergration_test"
 """,
         encoding="utf-8",
     )

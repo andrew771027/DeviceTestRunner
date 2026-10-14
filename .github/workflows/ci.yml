@@ -64,9 +64,10 @@ jobs:
             run: mkdir -p artifacts/unit
 
           - name: Run Unit Test
-            run: poetry run pytest tests/test_unit \
+            run: |
+              poetry run pytest tests/test_unit \
               --junitxml=artifacts/unit/results.xml \
-              --log-file=artifacts/unit/ptest.log \
+              --log-file=artifacts/unit/pytest.log \
               --log-file-level=INFO
           - name: Upload Unit Test Results
             if: always()

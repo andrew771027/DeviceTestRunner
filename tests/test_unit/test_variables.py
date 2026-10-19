@@ -23,10 +23,8 @@ def test_command_interpolation(resolver):
     When the command embeds the repeat placeholder.
     Then the command contains the string argument 3.
     """
-    assert (
-        resolver.string("python run.py --repeat ${{ vars.repeat }}", "command")
-        == "python run.py --repeat 3"
-    )
+    command = resolver.string("python run.py --repeat ${{ vars.repeat }}", "command")
+    assert command == "python run.py --repeat 3"
 
 
 def test_timeout_preserves_integer(resolver):

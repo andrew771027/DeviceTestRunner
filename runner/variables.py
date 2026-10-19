@@ -4,8 +4,6 @@ ConfigLoader 驗證定義並保留模板；Runner 建立 run directory 後再解
 欄位。解析器不執行 expression、不讀取 environment，也不進行 shell escaping。
 """
 
-from __future__ import annotations
-
 import math
 import re
 from collections.abc import Mapping
@@ -13,10 +11,23 @@ from dataclasses import fields, is_dataclass, replace
 from pathlib import Path
 from typing import Any
 
-# 內插可包含多個模板；FULL 用於辨識完整引用，以保留原始 scalar 型別。
+# 比對字串內的 ${{ ... }} 模板，可用於多個引用的內插。
+# \s* 允許前後空白；([^{}]*?) 非貪婪擷取不含大括號的內容至 group(1)。
+# 例："out/${{ vars.name }}.txt" → group(1) 為 "vars.name"。
+# 此處僅辨識模板結構，引用內容是否合法由 _lookup 驗證。
 EXPRESSION = re.compile(r"\$\{\{\s*([^{}]*?)\s*\}\}")
+
+# 搜尋模板起始符號，即使缺少結尾也能偵測，用於拒絕遞迴或未解析的引用。
+# 例："${{ vars.name"、"out/${{ vars.name }}" 均可被 search 找到。
 UNRESOLVED = re.compile(r"\$\{\{")
+
+# 變數名稱：首字元為 ASCII 英文字母或底線，後續可加數字；以 fullmatch 驗證。
+# 例："device_1"、"_timeout" 合法；"1device"、"device-name" 不合法。
 NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+# 與 EXPRESSION 相同的模板結構，加上 ^ / $ 標示頭尾，並以 fullmatch 比對整串。
+# 完整引用保留原始 scalar 型別；例：vars.timeout = 30 時，
+# "${{ vars.timeout }}" 解析為整數 30；"timeout=${{ vars.timeout }}" 不符合 FULL。
 FULL = re.compile(r"^\$\{\{\s*([^{}]*?)\s*\}\}$")
 
 
@@ -132,11 +143,8 @@ class StaticVariableResolver:
 
         result = self.resolve(value)
 
-        if (
-            type(result) not in (int, float)
-            or result <= 0
-            or (type(result) is float and not math.isfinite(result))
-        ):
+        invalid_number = type(result) not in (int, float) or result <= 0
+        if invalid_number or (type(result) is float and not math.isfinite(result)):
             raise VariableResolutionError(f"{field_name} must resolve to a finite positive number")
 
         return result

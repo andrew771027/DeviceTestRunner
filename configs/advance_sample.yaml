@@ -1,0 +1,62 @@
+test_case:
+  id: static_variables_001
+  name: Static Variables Example
+  description: Generate and validate artifacts using static variables
+
+device:
+  serial: emulator-5566
+  product: pixel
+  build: test_build
+
+# 變數值不可再引用其他變數。
+variables:
+  output_name: power_result.csv
+  power: 110
+  voltage: 4.2
+  step_timeout: 5
+  cleanup_timeout: 0.5
+
+run_timeout_seconds: 60
+cleanup_timeout_seconds: 10
+
+retry:
+  max_attempts: 1
+  delay_seconds: 0
+  retry_on: []
+
+# command、timeout_second 與 artifact validation 的 path 支援變數引用。
+lifecycle:
+  global_setup:
+    steps: []
+  setup:
+    steps: []
+  scenario:
+    steps:
+      - name: create_power_csv
+        type: command
+        command: |
+          printf 'timestamp,power,voltage\n1,${{ vars.power }},${{ vars.voltage }}\n2,${{ vars.power }},${{ vars.voltage }}\n' > "${{ run.dir }}/${{ vars.output_name }}"
+        # 完整引用保留 int 或 float 型別。
+        timeout_second: "${{ vars.step_timeout }}"
+  teardown:
+    steps:
+      - name: cleanup_message
+        type: command
+        command: echo "Artifact saved to ${{ run.dir }}/${{ vars.output_name }}"
+        timeout_second: "${{ vars.cleanup_timeout }}"
+  global_teardown:
+    steps: []
+
+artifact:
+  output_dir: artifacts/static_variables
+  validation:
+    rules:
+      - name: check_power_csv
+        type: csv_content
+        path: "${{ run.dir }}/${{ vars.output_name }}"
+        required: true
+        required_columns:
+          - timestamp
+          - power
+          - voltage
+        min_rows: 2

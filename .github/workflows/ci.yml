@@ -60,11 +60,31 @@ jobs:
           - name: Install dependencies
             run: poetry install --no-interaction
 
+          - name: Create Arfifact directory
+            run: mkdir -p artifacts/unit
+
           - name: Run Unit Test
-            run: poetry run pytest tests/test_unit
+            run: |
+              poetry run pytest tests/test_unit \
+              --junitxml=artifacts/unit/results.xml \
+              --log-file=artifacts/unit/pytest.log \
+              --log-file-level=INFO
+          - name: Upload Unit Test Results
+            if: always()
+            uses: actions/upload-artifact@v7
+            with:
+              name: unit-test-results-${{ matrix.python-version }}
+              path: artifacts/unit/
+              if-no-files-found: error
+              retention-days: 14
+
     integration-tests:
         name: Integration Tests
         runs-on: ubuntu-latest
+
+        env:
+          DTR_TEST_ARTIFACT_DIR: artifacts/integration/dtr
+
         steps:
           - name: Checkout repository
             uses: actions/checkout@v7
@@ -80,5 +100,22 @@ jobs:
           - name: Install dependencies
             run: poetry install --no-interaction
 
-          - name: Run Integration Test
-            run: poetry run pytest tests/test_integration
+          - name: Create artifact directory
+            run: |
+              mkdir -p artifacts/integration/dtr
+
+          - name: Run integration tests
+            run: |
+              poetry run pytest tests/test_integration \
+              --junitxml=artifacts/integration/junit.xml \
+              --log-file=artifacts/integration/pytest.log \
+              --log-file-level=INFO
+
+          - name: Upload integration artifacts
+            if: always()
+            uses: actions/upload-artifact@v7
+            with:
+              name: integration-python-3.12
+              path: artifacts/integration/
+              if-no-files-found: warn
+              retention-days: 14

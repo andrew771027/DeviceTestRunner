@@ -16,6 +16,7 @@ from runner.models import (
     RetryConfig,
     RunnerConfig,
 )
+from runner.variables import StaticVariableResolver
 
 
 class ConfigLoader:
@@ -30,6 +31,8 @@ class ConfigLoader:
         test_case = self._load_test_case(raw)
 
         device = self._load_device(raw)
+
+        variables = self._load_variables(raw)
 
         lifecycle_raw = raw.get("lifecycle", {})
 
@@ -59,6 +62,7 @@ class ConfigLoader:
         )
 
         return RunnerConfig(
+            variables=variables,
             test_case=test_case,
             device=device,
             run_timeout_seconds=run_timeout_seconds,
@@ -89,6 +93,20 @@ class ConfigLoader:
             product=device["product"],
             build=device["build"],
         )
+
+    @staticmethod
+    def _load_variables(
+        raw: dict[str, Any],
+    ) -> dict[str, str | int | float | bool]:
+
+        variables = raw.get("variables", {})
+
+        validator = StaticVariableResolver(
+            variables,
+            run_dir=".",
+        )
+
+        return dict(validator.values)
 
     @staticmethod
     def _load_steps(raw: dict[str, Any]) -> LifecycleSteps:

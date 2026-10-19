@@ -11,6 +11,8 @@
 
 <a id="tools"></a>
 
+v1.7.0 的型別保留、模板測試資料與 JSON 字串解析見 [對應案例](#v1-7-0)。
+
 v1.6.3 的 token 身分比較、Bash fixture 與 AST 檢查見 [對應案例](#v1-6-3)。
 
 ## 工具與用法
@@ -124,6 +126,7 @@ python -m pytest -k timeout -v
 
 | 版本 | 閱讀重點 | 測試覆蓋與證據 |
 | --- | --- | --- |
+| [v1.7.0](#v1-7-0) | Scalar 型別斷言、參數化、真實 YAML／subprocess／CSV／JSON、不可變 config | [Test matrix](test_matrix/test_matrix_v1.7.0.md) |
 | [v1.6.3](#v1-6-3) | Cleanup token 身分、真實 subprocess、partial CSV、docstring AST 比較 | [Test matrix](test_matrix/test_matrix_v1.6.3.md) |
 | [v1.6.2](#v1-6-2) | Watchdog、設定邊界、JSON attempt history、orphan process | [Test matrix](test_matrix/test_matrix_v1.6.2.md) |
 | [v1.0.0](#v1-0-0) | tmp_path、參數化與基本斷言 | [Test matrix](test_matrix/test_matrix_v1.0.0.md) |
@@ -520,3 +523,42 @@ pytest 優先讀取根目錄的 `pytest.ini`，其中 INI 語法為 `testpaths =
 ```
 
 Given／When／Then docstring 說明測試實際前提、操作與斷言。補說明時以移除 docstring 的 AST 比較確認行為不變；不能用增加說明取代增加測試證據。
+
+<a id="v1-7-0"></a>
+
+## v1.7.0 — Static Variable Substitution
+
+來源為 `194faf3` 與本次工作目錄；[測試矩陣](test_matrix/test_matrix_v1.7.0.md) 記錄需求及邊界，[完成條件](definition_of_done/definition_of_done_v1.7.0.md) 記錄實際命令結果。
+
+### 型別保留與參數化
+
+`tests/test_unit/test_variables.py` 使用 `resolver` fixture 與 `tmp_path` 建立隔離的解析器。`test_timeout_accepts_positive_numbers` 以三個參數同時檢查 literal 與完整引用，除了值相等，也檢查 `type(result) is type(value)`。只檢查 `==` 無法區分 1、1.0 與 True。無效 timeout 以十二個參數搭配 `pytest.raises(VariableResolutionError)`，覆蓋非正值、非有限值與非數字型別。
+
+測試內宣告的 frozen dataclasses 是專案測試替身；解析器依 class name 選擇允許欄位，因此可用它們測試 replace 與原始 command 不變。它們不等於完整 production models，真正 models 的串接由整合測試驗證。
+
+### 真實 YAML 與 subprocess
+
+`tests/test_integration/test_integration_static_variables.py` 的 `write_yaml()` 是測試輔助函式，不是 pytest fixture。它使用 `yaml.safe_dump()` 寫入 YAML，以 `sys.executable` 與 `shlex.quote()` 組出命令，實際啟動 Python subprocess，寫入 CSV，再驗證結果 JSON。
+
+模板參數使用一般字串：
+
+```python
+command = (
+    f"{shlex.quote(sys.executable)} -c {shlex.quote(script)}"
+    " '${{ vars.output_name }}' '${{ vars.repeat }}'"
+)
+```
+
+若第二段使用 f-string，`{{` 和 `}}` 會被吃成單層大括號。開頭空白分隔 script 和第一個參數，避免 shell 將兩段合併。這是測試資料修正，不是 resolver 允許單層大括號的新語法。
+
+JSON 報告以 `json.loads(path.read_text())` 解析；`json.load()` 接受 file object，不能直接接收字串。`test_yaml_to_subprocess_artifact_and_json_report` 同時斷言 CSV 行數、step success、validation、PASSED report，以及原始 command/path 未被修改。`test_two_runs_resolve_distinct_run_dirs` 重用原始 config，檢查各 run 產物；沒有驗證 concurrent directory creation。
+
+### 錯誤與測試說明
+
+無效模板的三列參數檢查 command、timeout 和 path，斷言例外以及沒有 CSV／result.json。這些斷言不是 executor/watchdog 呼叫次數的直接監測，解析先於啟動的順序仍需核對 source。
+
+本次為 16 個變數測試函式補上具體 Given／When／Then。移除 docstring 後與 staged baseline 比較 AST，兩個檔案的 executable statements 相同。四個既有報告版本斷言另行同步為 1.7.0，屬於版本核對修改。
+
+```bash
+python -m pytest -q tests/test_unit/test_variables.py tests/test_integration/test_integration_static_variables.py
+```

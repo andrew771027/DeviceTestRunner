@@ -72,7 +72,7 @@ lifecycle:
 
 
 artifact:
-  output_dir: "artifact/intergration_test"
+  output_dir: "artifacts/intergration_test"
 """,
         encoding="utf-8",
     )
@@ -149,7 +149,7 @@ artifact:
 
     report = json.loads((run_dir / "result.json").read_text(encoding="utf-8"))
 
-    assert report["metadata"]["runner_version"] == "1.6.3"
+    assert report["metadata"]["runner_version"] == "1.7.0"
 
     assert report["summary"]["status"] == "PASSED"
 
@@ -213,7 +213,7 @@ lifecycle:
         command: "echo 'Hello World'"
         timeout_second: 1
 artifact:
-  output_dir: "artifact/intergration_test"
+  output_dir: artifacts/intergration_test
 """,
         encoding="utf-8",
     )
@@ -294,7 +294,7 @@ artifact:
 
     report = json.loads((run_dir / "result.json").read_text(encoding="utf-8"))
 
-    assert report["metadata"]["runner_version"] == "1.6.3"
+    assert report["metadata"]["runner_version"] == "1.7.0"
 
     assert report["summary"]["status"] == "FAILED"
 

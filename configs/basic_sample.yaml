@@ -71,7 +71,7 @@ lifecycle:
         command: bash "$DEVICE_TEST_RUNNER_ROOT/scripts/release_resource.sh"
         timeout_second: 10
 artifact:
-  output_dir: artifact/sample_device_config
+  output_dir: artifacts/sample_device_config
   validation:
     rules:
       - name: check_artifact_log

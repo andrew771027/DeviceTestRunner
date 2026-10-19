@@ -6,7 +6,7 @@
 
 Device Test Runner 使用 YAML 定義裝置測試流程，執行既有的 Bash、Python、ADB 等命令，並保存每次執行的輸出與 JSON 報告。它負責安排測試步驟、驗證輸出檔案，以及依設定重試失敗步驟；裝置操作仍由你的腳本處理。
 
-目前版本為 **v1.6.3**。支援五階段測試流程、整次執行、清理範圍與步驟逾時、選擇性重試、輸出檔案驗證、程序群組清理與 Ctrl+C 取消。
+目前版本為 **v1.7.0**。支援五階段測試流程、整次執行、清理範圍與步驟逾時、選擇性重試、輸出檔案驗證、程序群組清理、Ctrl+C 取消與靜態變數替換。
 
 ## 解決的痛點
 
@@ -26,6 +26,7 @@ Config Loader
 RunnerConfig
         ↓
 DeviceTestRunner
+        ├── StaticVariableResolver (run directory 建立後解析)
         ├── Lifecycle Orchestration
         ├── CleanupScope / scope watchdogs
         ├── CancellationToken
@@ -47,7 +48,7 @@ DeviceTestRunner
 | `tests/` | 專案自動化測試 |
 | `docs/` | 架構、測試、驗收與版本文件 |
 
-詳細介面與執行流程見 [v1.6.3 架構](docs/architecture/architecture_v1.6.3.md)。
+詳細介面與執行流程見 [v1.7.0 架構](docs/architecture/architecture_v1.7.0.md)。
 
 ## 安裝
 
@@ -92,6 +93,14 @@ poetry run python main.py --config configs/hello.yaml
 
 完整操作、所有設定欄位的必填／選填、預設值、用途與範例，請閱讀 [使用手冊](docs/user_manual.md)。命令在 run directory 執行；引用專案腳本使用 `$DEVICE_TEST_RUNNER_ROOT`。ADB 等外部工具與裝置需自行準備，`device` 欄位只提供報告資訊。
 
+靜態變數範例 [advance_sample.yaml](configs/advance_sample.yaml) 不需要裝置，會生成並驗證 CSV：
+
+```bash
+poetry run python main.py --config configs/advance_sample.yaml
+```
+
+`variables` 可在 step command、timeout_second 與 artifact validation path 中以 `${{ vars.NAME }}` 引用；`${{ run.dir }}` 提供當次絕對路徑。完整引用保留型別，step timeout 接受有限正整數或小數。語法與限制見 [靜態變數指南](docs/static_variable_substitution.md)。
+
 ## 執行專案測試
 
 執行所有測試：
@@ -124,7 +133,7 @@ poetry run pytest -m cancelled
 poetry run pytest -m artifact
 ```
 
-測試工具與撰寫方式見 [測試指南](docs/test_guide.md)；覆蓋範圍與驗證紀錄見 [測試矩陣](docs/test_matrix/test_matrix_v1.6.3.md) 與 [完成條件](docs/definition_of_done/definition_of_done_v1.6.3.md)。
+測試工具與撰寫方式見 [測試指南](docs/test_guide.md)；覆蓋範圍與驗證紀錄見 [測試矩陣](docs/test_matrix/test_matrix_v1.7.0.md) 與 [完成條件](docs/definition_of_done/definition_of_done_v1.7.0.md)。
 
 ## 持續整合
 
@@ -152,14 +161,15 @@ poetry run pytest
 | [快速開始](#快速開始) | 建立第一個設定並查看結果 |
 | [CHANGELOG](CHANGELOG.md) | 歷史變更與版本差異 |
 | [使用手冊](docs/user_manual.md) | 操作步驟、設定欄位、範例與結果判讀 |
+| [靜態變數指南](docs/static_variable_substitution.md) | 引用語法、解析順序、整合與錯誤行為 |
 | [Roadmap](docs/roadmap.md) | 後續功能與版本規劃 |
 | [Process Lifecycle](docs/process_lifecycle.md) | 程序清理行為與限制 |
 | [Cancellation-Aware Cleanup](docs/cancellation_aware_cleanup.md) | v1.6.3 cleanup scope、逾時、partial artifacts 與報告優先順序 |
 | [提交檢查清單](CommitManual.md) | 提交、發佈與文件維護流程 |
-| [架構 v1.6.3](docs/architecture/architecture_v1.6.3.md) | 元件、取消路由、報告欄位與相容性 |
+| [架構 v1.7.0](docs/architecture/architecture_v1.7.0.md) | 元件、取消路由、報告欄位與相容性 |
 | [測試指南](docs/test_guide.md) | Pytest 工具、fixture、Mock 與各版用法 |
-| [測試矩陣 v1.6.3](docs/test_matrix/test_matrix_v1.6.3.md) | 功能對應的測試與覆蓋限制 |
-| [驗收條件 v1.6.3](docs/acceptance_criteria/acceptance_criteria_v1.6.3.md) | 可觀察的預期行為 |
-| [完成條件 v1.6.3](docs/definition_of_done/definition_of_done_v1.6.3.md) | 驗證紀錄與待完成的發佈項目 |
+| [測試矩陣 v1.7.0](docs/test_matrix/test_matrix_v1.7.0.md) | 功能對應的測試與覆蓋限制 |
+| [驗收條件 v1.7.0](docs/acceptance_criteria/acceptance_criteria_v1.7.0.md) | 可觀察的預期行為 |
+| [完成條件 v1.7.0](docs/definition_of_done/definition_of_done_v1.7.0.md) | 驗證紀錄與待完成的發佈項目 |
 
 `docs/` 內的舊版文件保留當時的設計與介面，使用時請確認版本。

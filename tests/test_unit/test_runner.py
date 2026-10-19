@@ -1311,7 +1311,7 @@ def test_artifact_failure_triggers_retry(tmp_path: Path):
                     ArtifactValidationRule(
                         name="test_file_exist",
                         type="exists",
-                        path=tmp_path / "test_file.txt",
+                        path=str(tmp_path / "test_file.txt"),
                         after_step="scenario_1",
                         required=True,
                     ),
@@ -1430,7 +1430,7 @@ def test_artifact_failure_exhausts_retry(tmp_path: Path):
                     ArtifactValidationRule(
                         name="test_file_exist",
                         type="exists",
-                        path=tmp_path / "test_file.txt",
+                        path=str(tmp_path / "test_file.txt"),
                         after_step="scenario_1",
                         required=True,
                     ),
@@ -1529,7 +1529,7 @@ def test_non_retryable_artifact_failure_does_not_retry(tmp_path: Path):
                     ArtifactValidationRule(
                         name="test_file_exist",
                         type="exists",
-                        path=tmp_path / "test_file.txt",
+                        path=str(tmp_path / "test_file.txt"),
                         after_step="scenario_1",
                         required=False,
                     ),
@@ -1637,14 +1637,14 @@ def test_retry_rules_are_filteredby_step(tmp_path: Path):
                     ArtifactValidationRule(
                         name="test_file_1_exist",
                         type="exists",
-                        path=tmp_path / "test_file_1.txt",
+                        path=str(tmp_path / "test_file_1.txt"),
                         after_step="scenario_1",
                         required=True,
                     ),
                     ArtifactValidationRule(
                         name="test_file_2_exist",
                         type="exists",
-                        path=tmp_path / "test_file_2.txt",
+                        path=str(tmp_path / "test_file_2.txt"),
                         after_step="scenario_2",
                         required=True,
                     ),
@@ -1705,7 +1705,7 @@ def test_artifact_missing_retries(tmp_path: Path):
                     ArtifactValidationRule(
                         name="test_file_exist",
                         type="exists",
-                        path=tmp_path / "test_file.txt",
+                        path=str(tmp_path / "test_file.txt"),
                         after_step="scenario_1",
                         required=True,
                     ),
@@ -1782,7 +1782,7 @@ def test_optional_artifact_missing_does_not_fail_step(tmp_path: Path):
                     ArtifactValidationRule(
                         name="test_file_exist",
                         type="exists",
-                        path=tmp_path / "test_file.txt",
+                        path=str(tmp_path / "test_file.txt"),
                         after_step="scenario_1",
                         required=False,
                     ),
@@ -1859,7 +1859,7 @@ def test_required_invalid_artifact_fails_without_retry(tmp_path: Path):
                     ArtifactValidationRule(
                         name="test_file_exist",
                         type="csv_content",
-                        path=tmp_path / "test_file.csv",
+                        path=str(tmp_path / "test_file.csv"),
                         after_step="scenario_1",
                         required=True,
                     ),
@@ -2419,7 +2419,7 @@ def test_cancellation_lifecycle_and_summary(
     report = json.loads(report_path.read_text(encoding="utf-8"))
 
     assert report["metadata"]["cancel_requested"] is True
-    assert report["metadata"]["runner_version"] == "1.6.3"
+    assert report["metadata"]["runner_version"] == "1.7.0"
     assert report["summary"]["status"] == "CANCELLED"
     assert report["summary"]["cancelled_steps"] == expected_cancelled_steps
     assert report["summary"]["failed_steps"] == 0

@@ -102,6 +102,8 @@ jobs:
 
           - name: Create artifact directory
             run: |
+              mkdir -p artifacts/integration/reports
+              mkdir -p artifacts/integration/logs
               mkdir -p artifacts/integration/dtr
 
           - name: Run integration tests

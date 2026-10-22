@@ -2419,7 +2419,7 @@ def test_cancellation_lifecycle_and_summary(
     report = json.loads(report_path.read_text(encoding="utf-8"))
 
     assert report["metadata"]["cancel_requested"] is True
-    assert report["metadata"]["runner_version"] == "1.7.0"
+    assert report["metadata"]["runner_version"] == "1.7.1"
     assert report["summary"]["status"] == "CANCELLED"
     assert report["summary"]["cancelled_steps"] == expected_cancelled_steps
     assert report["summary"]["failed_steps"] == 0

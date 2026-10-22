@@ -186,7 +186,7 @@ class StaticVariableResolver:
         cls_name = type(obj).__name__
 
         if cls_name == "DeviceInfo":
-            return repalce(obj, serial=self.string(obj.serial, f"{path}.serial"))
+            return replace(obj, serial=self.string(obj.serial, f"{path}.serial"))
 
         if cls_name == "LifecycleStepContent":
             return replace(

@@ -64,7 +64,7 @@ class DeviceTestRunner:
         # One resolver snapshot is reused throughout the run.
         resolver = StaticVariableResolver(
             config.variables,
-            run_dir,
+            Path.cwd(),
         )
 
         config = replace(
@@ -81,7 +81,7 @@ class DeviceTestRunner:
         )
 
         # Keep the same environment snapshot; only run.dir bevomes available now.
-        resolver.run_dir = str(Path(dun_dir).resolve())
+        resolver.run_dir = str(Path(run_dir).resolve())
 
         config = replace(
             config,

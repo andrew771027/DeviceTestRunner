@@ -297,7 +297,7 @@ def test_missing_env_prevents_run_directory_creation(tmp_path, monkeypatch):
 
     yaml_path = write_yaml(tmp_path)
 
-    raw = yaml_path.safe_load(yaml_path.read_text())
+    raw = yaml.safe_load(yaml_path.read_text())
 
     raw["device"]["serial"] = "${{ env.DEVICE_SERIAL }}"
 

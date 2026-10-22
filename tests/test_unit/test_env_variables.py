@@ -63,5 +63,5 @@ def test_environment_is_snapshpt(monkeypatch):
 def test_env_does_not_change_numeric_timeout():
     resolver = StaticVariableResolver({}, ".", environ={"DURATION": "600"})
 
-    with pytest.raises(VariableResolutionError, match="postive number"):
+    with pytest.raises(VariableResolutionError, match="positive number"):
         resolver.timeout("${{ env.DURATION }}")

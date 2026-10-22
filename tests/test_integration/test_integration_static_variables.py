@@ -261,7 +261,7 @@ def test_environment_serial_from_yaml_to_report(tmp_path, monkeypatch):
 
     raw = yaml.safe_load(yaml_path.read_text())
 
-    raw["deivce"]["serial"] = "${{ env.DEVICE_SERIAL }}"
+    raw["device"]["serial"] = "${{ env.DEVICE_SERIAL }}"
 
     yaml_path.write_text(yaml.safe_dump(raw), encoding="utf-8")
 

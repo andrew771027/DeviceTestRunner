@@ -32,7 +32,7 @@ def test_missing_env_is_fail_fast(monkeypatch):
     with pytest.raises(VariableResolutionError, match="undefined environment variable"):
         resolver.string("${{ env.DEVICE_SERIAL }}", "device.serial")
 
-@pytest.mark.parameterize(
+@pytest.mark.parametrize(
     "expression",
     [
         "${{ env }}",

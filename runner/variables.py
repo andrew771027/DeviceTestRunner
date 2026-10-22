@@ -74,7 +74,7 @@ class StaticVariableResolver:
         self.run_dir = str(Path(run_dir).resolve())
 
         # Snapshot the environment once, so one run has consistent values.
-        self.environ = dict[os.environ if environ is None else environ]
+        self.environ = dict(os.environ if environ is None else environ)
 
     def _lookup(self, expression: str) -> Any:
         """查找單一白名單引用；不支援運算、巢狀欄位或 env namespace。

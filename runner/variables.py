@@ -6,6 +6,7 @@ ConfigLoader 驗證定義並保留模板；Runner 建立 run directory 後再解
 
 import math
 import re
+import os
 from collections.abc import Mapping
 from dataclasses import fields, is_dataclass, replace
 from pathlib import Path

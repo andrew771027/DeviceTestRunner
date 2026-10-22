@@ -105,7 +105,7 @@ jobs:
           - name: Run unit tests with coverage
             run: |
               poetry run pytest tests/test_unit \
-                --cov=device_test_runner \
+                --cov=runner \
                 --cov-report=term-missing \
                 --cov-report=xml:artifacts/coverage/coverage.xml \
                 --cov-report=html:artifacts/coverage/html

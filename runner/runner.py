@@ -32,7 +32,7 @@ from runner.variables import StaticVariableResolver
 
 
 class DeviceTestRunner:
-    VERSION = "1.7.0"
+    VERSION = "1.7.1"
 
     def __init__(
         self,
@@ -60,6 +60,18 @@ class DeviceTestRunner:
         if cancellation_token is None:
             cancellation_token = CancellationToken()
 
+        # Resolve device identity before creating artifacts or starting a process.
+        # One resolver snapshot is reused throughout the run.
+        resolver = StaticVariableResolver(
+            config.variables,
+            run_dir,
+        )
+
+        config = replace(
+            config,
+            device=resolver.resolve_dataclass(config.device, path="device"),
+        )
+
         started_at = datetime.now(timezone.utc)
 
         started_counter = time.perf_counter()
@@ -68,10 +80,8 @@ class DeviceTestRunner:
             test_case_id=config.test_case.id,
         )
 
-        resolver = StaticVariableResolver(
-            config.variables,
-            run_dir,
-        )
+        # Keep the same environment snapshot; only run.dir bevomes available now.
+        resolver.run_dir = str(Path(dun_dir).resolve())
 
         config = replace(
             config,

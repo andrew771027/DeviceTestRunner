@@ -92,7 +92,7 @@ class StaticVariableResolver:
             if name not in self.environ:
                 raise VariableResolutionError(f"undefined environment variable: env. {name}")
             
-            return environ[name]
+            return self.environ[name]
 
         if expression == "run.dir":
             return self.run_dir

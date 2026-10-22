@@ -259,7 +259,7 @@ def test_environment_serial_from_yaml_to_report(tmp_path, monkeypatch):
     
     yaml_path = write_yaml(tmp_path)
 
-    raw = yaml.safe_dump(yaml_path.read_text())
+    raw = yaml.safe_load(yaml_path.read_text())
 
     raw["deivce"]["serial"] = "${{ env.DEVICE_SERIAL }}"
 

@@ -6,6 +6,6 @@ test:
 	@pytest -v ./tests
 
 test_cov:
-	@pytest -v ./tests \
+	@pytest -v ./tests/test_unit \
 			--cov=runner \
 			--cov-report=term-missing

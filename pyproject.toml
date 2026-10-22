@@ -23,3 +23,41 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+]
+
+markers = [
+    "test_lifecycle: Test lifecycle tests",
+    "artifact: Artifact validation tests",
+    "retry: Retry mechanism tests",
+    "cancelled: Cancellation handling tests",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["runner"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+fail_under = 80
+
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]
+
+[tool.coverage.html]
+directory = "artifacts/coverage/html"
+
+[tool.coverage.xml]
+output = "artifacts/coverage/coverage.xml"
+
+[dependency-groups]
+dev = [
+    "pytest-cov (>=7.1.0,<8.0.0)"
+]

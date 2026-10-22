@@ -77,6 +77,47 @@ jobs:
               path: artifacts/unit/
               if-no-files-found: error
               retention-days: 14
+    coverage:
+      name: Coverage - Python 3.12
+      runs-on: ubuntu-latest
+      steps:
+        steps:
+
+          - name: Checkout repository
+            uses: actions/checkout@v7
+
+          - name: Set up Python
+            uses: actions/setup-python@v7
+            with:
+              python-version: "3.12"
+            
+          - name: Install Poetry
+            run: python -m pip install "poetry>=2,<3"
+
+          - name: Install dependencies
+            run: poetry install --no-interaction
+
+          - name: Create Coverage Arfifact directory
+            run: | 
+              mkdir -p artifacts/coverage
+              mkdir -p artifacts/coverage/html
+
+          - name: Run unit tests with coverage
+            run: |
+              poetry run pytest tests/test_unit \
+                --cov=device_test_runner \
+                --cov-report=term-missing \
+                --cov-report=xml:artifacts/coverage/coverage.xml \
+                --cov-report=html:artifacts/coverage/html
+          
+          - name: Upload coverage reports
+            if: always()
+            uses: actions/upload-artifact@v7
+            with:
+              name: coverage-python-3.12
+              path: artifacts/coverage/
+              if-no-files-found: warn
+              retention-days: 14
 
     integration-tests:
         name: Integration Tests

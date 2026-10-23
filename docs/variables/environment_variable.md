@@ -1,104 +1,75 @@
 # Device Test Runner v1.7.1 — Environment Variables
 
-## Goal
+## Run a device-free example
 
-Extend the existing v1.7.0 static resolver with `${{ env.NAME }}`.
+Save this complete YAML as `configs/env_demo.yaml`:
 
 ```yaml
-variables:
-  repeat: 3
-  test_duration: 600
-  output_name: power_result.csv
-
-test_case:
-  id: env_demo
-  name: Environment demo
-  description: Uses a workstation-provided serial
-
+test_case: {id: env_demo, name: Environment demo, description: Read a host serial.}
 device:
-  serial: "${{ env.DEVICE_SERIAL }}"
-  product: pixel
-  build: test
-
-retry:
-  max_attempts: 1
-  delay_seconds: 0
-  retry_on: []
-
+  serial: '${{ env.DEVICE_SERIAL }}'
+  product: demo
+  build: demo
+variables:
+  duration: 5
 lifecycle:
-  global_setup:
-    steps: []
-  setup:
-    steps: []
+  global_setup: {steps: []}
+  setup: {steps: []}
   scenario:
     steps:
-      - name: collect
+      - name: show_serial
         type: command
-        command: "python run.py --repeat ${{ vars.repeat }}"
-        timeout_second: "${{ vars.test_duration }}"
-  teardown:
-    steps: []
-  global_teardown:
-    steps: []
-
+        command: 'echo "${{ env.DEVICE_SERIAL }}" > "${{ run.dir }}/serial.txt"'
+        timeout_second: '${{ vars.duration }}'
+  teardown: {steps: []}
+  global_teardown: {steps: []}
 artifact:
-  output_dir: ./artifacts
+  output_dir: artifacts/env_demo
   validation:
     rules:
-      - name: output
+      - name: serial_file
         type: exists
-        path: "${{ run.dir }}/${{ vars.output_name }}"
-        required: true
+        path: '${{ run.dir }}/serial.txt'
 ```
 
-## Run
+From the repository root:
 
 ```bash
-export DEVICE_SERIAL=ABCD1234
-python -m pytest -q tests/test_env_variables.py tests/test_static_variables_e2e.py
+export DEVICE_SERIAL=demo-001
+poetry run python main.py --config configs/env_demo.yaml
 ```
 
-The sample YAML illustrates substitution only; its `run.py` must be supplied separately to run it as a real scenario.
+No physical device is needed. The run directory contains serial.txt and result.json; expect summary.status PASSED and metadata.device_serial demo-001. This feature reads a supplied serial; it does not discover or validate hardware.
 
-## Design
+## Fields and values
 
-1. `ConfigLoader` reads YAML into an *unresolved* `RunnerConfig`.
-2. `DeviceTestRunner.run()` snapshots `os.environ` once through `StaticVariableResolver`.
-3. `device.serial` is resolved before allocating an artifact directory. Undefined environment names raise `VariableResolutionError`.
-4. ArtifactManager creates `run.dir`.
-5. The same resolver instance updates `run.dir` and resolves lifecycle commands, timeouts, and artifact paths.
-6. The existing retry, cancellation, cleanup, validation and reporting paths are unchanged.
+| Reference / field | Required / default | Behavior |
+| --- | --- | --- |
+| `${{ env.NAME }}` | Host must supply each referenced name; no default | Always a string; empty is defined, missing raises VariableResolutionError |
+| `device.serial` | Required; no default | String; supports vars and env before run directory allocation |
+| Lifecycle `command` | Required per step | String; supports vars, env and run.dir |
+| Lifecycle `timeout_second` | Optional; YAML default 60 | Finite positive int/float; env numeric strings are rejected; use typed vars |
+| Validation rule `path` | Required per rule | String; supports vars, env and run.dir |
 
-Supported expressions: `${{ env.NAME }}`, `${{ vars.NAME }}`, `${{ run.dir }}`. Names must match `[A-Za-z_][A-Za-z0-9_]*`.
+Names match `[A-Za-z_][A-Za-z0-9_]*`. No default expression, arithmetic, recursive templates, secret namespace, or custom run/step environment mapping is implemented. product, build, output_dir, scope timeouts and retry settings are not substituted. Inserting a value does not escape shell syntax or mask it in commands, logs or reports.
 
-### Environment versus YAML variables
+## Resolution and failures
 
-`vars.*` preserves YAML primitive types; `env.*` always returns strings. Thus `${{ env.TIMEOUT }}` **does not** automatically become a numeric `timeout_second`. Continue using `vars.test_duration` for typed timeouts in v1.7.1.
+1. ConfigLoader validates variable definitions and retains unresolved field templates.
+2. DeviceTestRunner.run constructs a resolver with one copy of os.environ and the current working directory as the initial run_dir.
+3. It resolves device.serial in a new config copy before creating the run subdirectory. Missing env names here produce no run directory or result.json. ArtifactManager construction can already create the output parent.
+4. ArtifactManager creates the run directory. The same resolver updates run_dir, then resolves all lifecycle commands/timeouts and validation paths.
+5. Watchdogs and subprocesses start only after resolution succeeds. Later field errors may leave the run directory, without result.json.
+6. Retries reuse resolved values; another run creates a new snapshot. Original configuration templates remain unchanged.
 
-### Snapshot semantics
+Use run.dir in commands and validation paths. In device.serial it currently resolves to the startup working directory because serial resolution occurs before artifact allocation.
 
-Changes to `os.environ` after a run begins do not affect that run. The next run takes a new snapshot.
+The snapshot applies to template resolution. SubprocessExecutor separately copies live os.environ for each execute call, then supplies DEVICE_TEST_RUNNER_ROOT and RUN_ARTIFACT_DIR. These executor values are not automatically available as template env names in the runner snapshot. No entire environment snapshot is written to reports, but rendered values can appear in metadata, command strings and artifact paths.
 
-### Failure behavior
-
-Missing variables and malformed expressions fail before execution. An empty but defined environment variable is **not** considered missing. For device serial, an empty string is generally invalid for real hardware; enforce device-specific validation before dispatch.
-
-### Security
-
-Environment variables are not automatically secrets. **Do not put credentials in templated commands, device metadata, or artifact paths**: they can appear in logs, subprocess arguments and JSON reports. No `${{ env.* }}` secret masking is implemented. Use dedicated credential passing instead.
-
-### Limits
-
-- No default values, nested references, expressions, or recursion.
-- Only `device.serial`, lifecycle `command`/`timeout_second`, and artifact rule `path` are allowlisted.
-- No implicit shell escaping. When inserting env values into shell commands, consider shell injection; use safe argument lists in a future executor design.
-- This feature does not auto-discover physical devices; it reads values supplied by the host environment.
-- `run.dir` is still resolved only after ArtifactManager creates it.
-
-## Tests
+## Verification
 
 ```bash
-PYTHONPATH=. pytest -q tests/test_env_variables.py tests/test_static_variables_e2e.py
+poetry run pytest -q tests/test_unit/test_env_variables.py tests/test_integration/test_integration_static_variables.py
 ```
 
-Tests include: successful device serial in final report, missing variable fails before artifact directory creation, snapshot stability, invalid syntax, empty variable, typed timeout guard, and v1.7.0 regression.
+The [v1.7.1 matrix](../test_matrix/test_matrix_v1.7.1.md) distinguishes direct assertions from inspected behavior. Full configuration and report reference: [user manual](../user_manual.md). Historical static feature: [v1.7.0 guide](static_variable_substitution.md).

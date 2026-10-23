@@ -254,9 +254,15 @@ def test_two_runs_resolve_distinct_run_dirs(tmp_path):
 
     assert Path(second.artifact_dir, "power_result.csv").exists()
 
+
 def test_environment_serial_from_yaml_to_report(tmp_path, monkeypatch):
+    """
+    Given YAML references a defined host serial.
+    When the real runner executes a CSV-producing subprocess.
+    Then the run passes and both result metadata and JSON contain the resolved serial.
+    """
     monkeypatch.setenv("DEVICE_SERIAL", "pixel-lab-007")
-    
+
     yaml_path = write_yaml(tmp_path)
 
     raw = yaml.safe_load(yaml_path.read_text())
@@ -292,7 +298,13 @@ def test_environment_serial_from_yaml_to_report(tmp_path, monkeypatch):
 
     assert report["metadata"]["device_serial"] == "pixel-lab-007"
 
+
 def test_missing_env_prevents_run_directory_creation(tmp_path, monkeypatch):
+    """
+    Given YAML references an absent DEVICE_SERIAL.
+    When the real runner starts configuration resolution.
+    Then VariableResolutionError occurs and the artifact parent has no run entries.
+    """
     monkeypatch.delenv("DEVICE_SERIAL", raising=False)
 
     yaml_path = write_yaml(tmp_path)
@@ -321,5 +333,5 @@ def test_missing_env_prevents_run_directory_creation(tmp_path, monkeypatch):
     with pytest.raises(VariableResolutionError, match="undefined environment variable"):
 
         runner.run(config)
-    
+
     assert not list((tmp_path / "runs").iterdir())

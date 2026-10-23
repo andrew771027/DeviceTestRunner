@@ -1,297 +1,42 @@
 # GitHub Actions Coverage Configuration
 
-## Overview
+## Current configuration
 
-Device Test Runner uses `pytest-cov` and `coverage.py` to measure test coverage and enforce a minimum coverage threshold.
+Applicable version: v1.7.1. Coverage uses pytest-cov with configuration in [pyproject.toml](../../pyproject.toml). The measured package is `runner`. No pytest.ini or .coveragerc is required by the current repository.
 
-Two configuration styles are supported:
+| Setting | Value | Effect |
+| --- | --- | --- |
+| tool.coverage.run.source | `["runner"]` | Measure production runner code |
+| tool.coverage.run.branch | true | Include branch coverage |
+| tool.coverage.report.fail_under | 80 | Fail when combined coverage is below 80% |
+| show_missing / skip_covered | true / false | Show missing lines and include fully covered files |
+| HTML directory | artifacts/coverage/html | Local default for HTML output |
+| XML output | artifacts/coverage/coverage.xml | Local default for XML output |
 
-```text
-Option A
-pyproject.toml
+Pytest uses testpaths=tests, -ra, --strict-markers and --strict-config. Coverage is enabled by command-line arguments, not by default pytest addopts. pytest-cov is declared in both project dependencies and the dev dependency group; this document records the current declaration, not a dependency cleanup.
 
-Option B
-pytest.ini + .coveragerc
-```
+## Run locally
 
-Both configurations should represent the same coverage policy.
-
----
-
-## Option A — pyproject.toml
-
-Coverage configuration can be stored directly in `pyproject.toml`.
-
-```toml
-[tool.coverage.run]
-branch = true
-source = ["device_test_runner"]
-
-[tool.coverage.report]
-show_missing = true
-skip_covered = false
-fail_under = 80
-
-exclude_also = [
-    "if TYPE_CHECKING:",
-    "if __name__ == .__main__.:",
-]
-
-[tool.coverage.html]
-directory = "artifacts/coverage/html"
-
-[tool.coverage.xml]
-output = "artifacts/coverage/coverage.xml"
-```
-
-Run coverage:
+From the repository root:
 
 ```bash
 poetry run pytest tests/test_unit \
-  --cov=device_test_runner \
+  --cov=runner \
   --cov-report=term-missing \
-  --cov-report=xml \
-  --cov-report=html
+  --cov-report=xml:artifacts/coverage/coverage.xml \
+  --cov-report=html:artifacts/coverage/html
 ```
 
-The coverage threshold is defined by:
+`make test_cov` runs verbose unit tests with `--cov=runner --cov-report=term-missing`. `make test` runs all tests without enabling coverage. Full-suite success alone does not prove the unit-only coverage threshold passes.
 
-```toml
-fail_under = 80
-```
+## CI job and artifacts
 
-If total coverage falls below 80%, the test command returns a non-zero exit code and the CI coverage job fails.
+The coverage job in [ci.yml](../../.github/workflows/ci.yml) uses Ubuntu and Python 3.12, installs Poetry 2.x and runs `poetry install --no-interaction`. It creates the coverage directories and executes the unit-only command above.
 
----
+The upload step runs with `if: always()`, uploads artifacts/coverage/ as coverage-python-3.12, retains it for 14 days and warns if files are missing. A failed test or threshold can still leave downloadable reports; upload success does not mean tests passed.
 
-## Option B — pytest.ini + .coveragerc
+Other CI jobs run unit tests on Python 3.11, 3.12 and 3.13, and integration tests on Python 3.14. The integration artifact is currently named integration-python-3.12 despite that job's Python 3.14 setting; inspect workflow configuration when interpreting artifact names. Code Quality uses Python 3.14 and pre-commit.
 
-Coverage configuration can also be separated into pytest configuration and coverage configuration.
+## Verification boundary
 
-### pytest.ini
-
-```ini
-[pytest]
-testpaths = tests
-
-addopts =
-    --cov=device_test_runner
-    --cov-report=term-missing
-    --cov-report=xml
-    --cov-report=html
-```
-
-The pytest configuration controls how the test suite invokes `pytest-cov`.
-
-With this configuration, developers can run:
-
-```bash
-poetry run pytest tests/test_unit
-```
-
-without repeating the coverage command-line arguments.
-
----
-
-### .coveragerc
-
-```ini
-[run]
-branch = True
-source =
-    device_test_runner
-
-[report]
-show_missing = True
-skip_covered = False
-fail_under = 80
-
-exclude_also =
-    if TYPE_CHECKING:
-    if __name__ == .__main__.:
-
-[html]
-directory = artifacts/coverage/html
-
-[xml]
-output = artifacts/coverage/coverage.xml
-```
-
-The `.coveragerc` file controls coverage measurement and reporting policy.
-
-Responsibilities include:
-
-```text
-branch coverage
-source package
-coverage threshold
-excluded patterns
-HTML output
-XML output
-```
-
----
-
-## Configuration Responsibility
-
-The recommended separation is:
-
-```text
-pytest.ini
-    ↓
-How pytest runs
-
-.coveragerc
-    ↓
-How coverage is measured
-
-GitHub Actions
-    ↓
-When coverage is executed
-```
-
-For example:
-
-```yaml
-- name: Run unit tests with coverage
-  run: poetry run pytest tests/test_unit
-```
-
-The CI workflow does not need to duplicate the coverage policy.
-
----
-
-## Coverage Threshold
-
-The current minimum coverage requirement is:
-
-```text
-80%
-```
-
-The threshold should primarily act as a regression guard.
-
-Coverage below the threshold causes the CI coverage job to fail.
-
-Coverage percentage should not be treated as a direct measurement of test quality.
-
----
-
-## Branch Coverage
-
-Branch coverage is enabled:
-
-```ini
-[run]
-branch = True
-```
-
-or:
-
-```toml
-[tool.coverage.run]
-branch = true
-```
-
-Branch coverage is particularly useful for Device Test Runner because the implementation contains significant control-flow logic, including:
-
-```text
-Retry decisions
-Cancellation
-Timeout handling
-Failure classification
-Artifact validation
-Variable substitution
-Environment variable resolution
-```
-
-Testing both sides of important decision branches provides more useful information than line coverage alone.
-
----
-
-## Coverage Reports
-
-Three forms of coverage output are used.
-
-### Terminal
-
-```text
-term-missing
-```
-
-Used for quick CI diagnostics and displays uncovered line numbers.
-
-### XML
-
-Output:
-
-```text
-artifacts/coverage/coverage.xml
-```
-
-Used as machine-readable coverage data for future CI integrations.
-
-### HTML
-
-Output:
-
-```text
-artifacts/coverage/html/
-```
-
-The main entry point is:
-
-```text
-artifacts/coverage/html/index.html
-```
-
-The HTML report is useful for inspecting covered and uncovered source lines.
-
----
-
-## Exclusions
-
-The coverage configuration may exclude code that is not meaningful to execute during normal tests.
-
-Current examples:
-
-```text
-if TYPE_CHECKING:
-if __name__ == "__main__":
-```
-
-Exclusions should be conservative.
-
-Production code should not be excluded only to increase the reported coverage percentage.
-
----
-
-## pyproject.toml vs pytest.ini
-
-Both approaches are valid.
-
-### pyproject.toml
-
-Recommended when Python tooling configuration is centralized.
-
-```text
-pyproject.toml
-├── Poetry
-├── pytest
-├── Ruff
-└── Coverage
-```
-
-### pytest.ini + .coveragerc
-
-Recommended when explicit separation of tool responsibilities is preferred.
-
-```text
-pytest.ini
-    → pytest configuration
-
-.coveragerc
-    → coverage configuration
-```
-
-Device Test Runner may use either approach, but the repository should maintain one authoritative coverage policy to avoid configuration drift.
+This describes the checked-in workflow, not an observed remote run. Local full-suite and package checks for this documentation update are recorded in [v1.7.1 Definition of Done](../definition_of_done/definition_of_done_v1.7.1.md). The project/lock mismatch observed during documentation editing was resolved by regenerating poetry.lock; poetry check --lock now passes. Dependency installation and CI must be verified separately.

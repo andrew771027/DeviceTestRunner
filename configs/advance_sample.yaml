@@ -1,10 +1,12 @@
 test_case:
   id: static_variables_001
   name: Static Variables Example
-  description: Generate and validate artifacts using static variables
+  description: Generate and validate artifacts using static and environment variables
 
+# 執行前設定：export ANDROID_SERIAL=emulator-5566
+# 此範例不連接裝置；序號用於報告。未設定環境變數時，執行前解析會失敗。
 device:
-  serial: emulator-5566
+  serial: "${{ env.ANDROID_SERIAL }}"
   product: pixel
   build: test_build
 
@@ -24,7 +26,7 @@ retry:
   delay_seconds: 0
   retry_on: []
 
-# command、timeout_second 與 artifact validation 的 path 支援變數引用。
+# device.serial、command 與 artifact validation path 可引用 env；timeout 使用數字 vars。
 lifecycle:
   global_setup:
     steps: []

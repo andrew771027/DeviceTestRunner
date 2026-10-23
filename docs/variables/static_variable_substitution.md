@@ -1,5 +1,7 @@
 # Device Test Runner v1.7.0 — Static Variable Substitution Integration Guide
 
+Historical scope: v1.7.0. For current env references and device.serial resolution, see the [v1.7.1 environment guide](environment_variable.md).
+
 ## Purpose and implementation
 
 Static variable substitution resolves allowlisted `${{ ... }}` placeholders before execution, after the run directory exists. The resolver does not use `eval`, execute shell commands, evaluate arithmetic, read environment variables, or recursively resolve variable values.

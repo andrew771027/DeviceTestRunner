@@ -126,6 +126,7 @@ python -m pytest -k timeout -v
 
 | 版本 | 閱讀重點 | 測試覆蓋與證據 |
 | --- | --- | --- |
+| [v1.7.1](#v1-7-1) | monkeypatch host 隔離、明確 environ mapping、快照斷言、執行前失敗與 JSON metadata | [Test matrix](test_matrix/test_matrix_v1.7.1.md) |
 | [v1.7.0](#v1-7-0) | Scalar 型別斷言、參數化、真實 YAML／subprocess／CSV／JSON、不可變 config | [Test matrix](test_matrix/test_matrix_v1.7.0.md) |
 | [v1.6.3](#v1-6-3) | Cleanup token 身分、真實 subprocess、partial CSV、docstring AST 比較 | [Test matrix](test_matrix/test_matrix_v1.6.3.md) |
 | [v1.6.2](#v1-6-2) | Watchdog、設定邊界、JSON attempt history、orphan process | [Test matrix](test_matrix/test_matrix_v1.6.2.md) |
@@ -562,3 +563,23 @@ JSON 報告以 `json.loads(path.read_text())` 解析；`json.load()` 接受 file
 ```bash
 python -m pytest -q tests/test_unit/test_variables.py tests/test_integration/test_integration_static_variables.py
 ```
+
+
+<a id="v1-7-1"></a>
+
+## v1.7.1 — Host Environment References
+
+來源為 `c1d457c`；[測試矩陣](test_matrix/test_matrix_v1.7.1.md) 記錄測試斷言、修正歷史與邊界，[完成條件](definition_of_done/definition_of_done_v1.7.1.md) 記錄本次實際結果。
+
+`tests/test_unit/test_env_variables.py` 使用 pytest 的 monkeypatch.setenv／delenv 隔離 host 值，fixture 結束後由 pytest 還原。缺少變數測試用 raising=False，避免原環境沒有該值時準備階段就失敗。空值與 timeout 案例直接傳 environ mapping，明確控制輸入。Snapshot 案例先建 resolver 再改 host，驗證既有 resolver 仍回傳 before；不代表 subprocess 也使用同一份快照。
+
+invalid_env_expression 使用 parametrize 測試三種不合法引用，pytest.raises 檢查錯誤；numeric timeout 案例另核對 message。整合測試沿用 write_yaml 輔助函式與 tmp_path，使用真實 executor 生成 CSV，json.loads 解析 report text，核對 metadata.device_serial。Missing-env 案例檢查已存在的 artifact parent 沒有 run entries；這不等同於直接斷言 executor 或 watchdog 未被呼叫。
+
+本次文件工作為七個 unit 與兩個 integration 測試補上 Given／When／Then，不修改 executable AST；不依作者風格推斷既有測試是否由 AI 撰寫。既有函式 test_environment_is_snapshpt 保留原拼字。
+
+```bash
+poetry run pytest -q tests/test_unit/test_env_variables.py tests/test_integration/test_integration_static_variables.py
+poetry run pytest tests/test_unit --cov=runner --cov-report=term-missing
+```
+
+Pytest 設定目前集中在 pyproject.toml：testpaths、strict markers/config、branch coverage 與 fail_under=80。make test_cov 只執行 unit tests；coverage CI 也是 unit scope。CI 設定不代表本次已觀察到遠端 job 通過。

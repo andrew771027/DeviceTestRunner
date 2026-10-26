@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.7.1]
+
+Scope: host environment references. Inspected baseline `c1d457c`; no release publication claimed.
+
+### Added
+
+- `${{ env.NAME }}` resolves strings from one host environment snapshot per run.
+- device.serial supports template resolution before artifact run directory allocation; resolved identity appears in report metadata.
+- Unit and integration cases cover missing/empty names, invalid syntax, snapshot stability, timeout type rejection and real YAML-to-report execution.
+- v1.7.1 architecture, test matrix, acceptance and completion records; environment guide with a device-free example.
+- CI unit coverage job on Python 3.12, branch coverage and 80% threshold, configured in pyproject.toml with pytest options and pytest-cov dependency; Makefile test_cov runs unit coverage. This describes configuration, not an observed CI pass.
+
+### Fixed
+
+- Resolver snapshot construction/import, env lookup and early serial/run-directory resolution errors documented in the source-fix commits.
+- Current documentation links follow the variables/ and ci/ directory moves; environment test commands use actual test paths.
+- Package/runtime/report expectations identify 1.7.1; nine environment tests now have Given/When/Then descriptions.
+
+### Limits and verification
+
+Env values are strings; no numeric timeout conversion, run/step environment mapping, defaults, escaping or secret masking. Serial errors precede allocation; later template errors may leave a directory without a report. Executor environments are copied separately from live os.environ. See [v1.7.1 completion record](docs/definition_of_done/definition_of_done_v1.7.1.md) for actual commands, lock consistency verification and open checks.
+
 ## [1.7.0]
 
 Version scope: Static Variable Substitution. Package, runtime and report versions are synchronized to 1.7.0. This records the inspected working tree, not a published release.

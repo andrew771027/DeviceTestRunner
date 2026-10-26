@@ -1,6 +1,6 @@
 # Device Test Runner Roadmap
 
-目前已實作 v1.7.0 靜態變數替換，支援 vars.NAME、run.dir 與有限正整數／小數 step timeout；套件、runtime 與報告版本同步為 1.7.0。本機驗證與待辦見 [v1.7.0 完成條件](definition_of_done/definition_of_done_v1.7.0.md)。Environment 與 Runtime Context 保持規劃狀態；發佈尚未驗證。
+目前已實作 v1.7.1 host 環境變數引用，支援 env.NAME 與建立 run directory 前的 device.serial 解析。套件、runtime 與報告版本為 1.7.1；[完成條件](definition_of_done/definition_of_done_v1.7.1.md) 記錄本機結果及 lock 一致性檢查。Run／step environment mapping 與 Runtime Context 仍在規劃，發佈未驗證。
 
 本文件保留各版本的功能規劃。`Completed` 表示該節記錄的功能已完成；`Planned` 與 `Future` 表示尚未實作。實際發佈條件與驗證結果請見各版本的完成條件文件。
 
@@ -534,6 +534,8 @@ Implemented；本機驗證與未完成項目見 [完成條件](definition_of_don
 
 #### 功能範圍
 
+下表涵蓋整體規劃；run／step environment mapping 與 context 尚未實作，實際進度見各版本段落。
+
 | 能力 | 責任 | 解析時機 |
 | --- | --- | --- |
 | Static Variable Substitution | YAML `variables` 定義固定值並在支援的設定欄位引用 | 載入時驗證定義，run directory 建立後解析 |
@@ -567,21 +569,16 @@ Implemented; local verification and release gaps are recorded in [完成條件](
 
 #### v1.7.1 — Environment
 
-##### 目標
+##### 已實作範圍
 
-在靜態變數基礎上提供 host、run、step environment 設定與一致的覆寫順序。
+* 每次 run 建立 host snapshot，以 `${{ env.NAME }}` 取得字串。
+* device.serial 在 run directory 建立前解析；同一 resolver 在目錄建立後解析 commands／timeouts／validation paths。
+* 缺少名稱拋出 VariableResolutionError；空字串視為已定義。數字字串不能當 step timeout。
+* 不修改原始 config；沒有隱式 shell escaping 或 secret masking。
 
-##### 範圍與驗收條件
+##### 狀態與後續範圍
 
-* 每次 run 建立 host environment snapshot，以 `env` namespace 引用。
-* 合併順序為 host snapshot → run environment → step environment；不修改 host `os.environ`。
-* 可使用 v1.7.0 靜態變數設定 environment 值，缺少 host 變數時提供錯誤或顯式預設值。
-* 保留 `DEVICE_TEST_RUNNER_ROOT`、`RUN_ARTIFACT_DIR`，禁止使用者覆寫 runner 保留欄位。
-* 不將完整環境或敏感值寫入 report／模板診斷，明確定義 shell quoting 責任。
-
-##### 狀態
-
-Planned
+Implemented；[完成條件](definition_of_done/definition_of_done_v1.7.1.md) 與 [測試矩陣](test_matrix/test_matrix_v1.7.1.md) 記錄本機證據及限制，發佈未確認。Run／step environment mapping、合併順序、保留欄位覆寫政策與顯式預設值未實作，屬於後續設計。Executor 每次 execute 複製 live os.environ，並非使用模板 snapshot。
 
 #### v1.7.2 — Runtime Context
 
@@ -593,7 +590,7 @@ Planned
 
 * `context` namespace 提供 run ID、artifact directory、stage、step 與 attempt。
 * 沿用 runner 的既有識別值；retry 更新 attempt，cleanup 更新 stage／step，run 資訊保持一致。
-* v1.7.1 的 environment mapping 可引用當次有效 context。
+* 後續規劃的 environment mapping 可引用當次有效 context。
 * 定義欄位解析時機；禁止尚未建立或已失效的 context 引用，避免 run directory 自我依賴。
 * Final validation 的 run scope 與 attempt scope 分開，不隱含採用最後一次 attempt。
 
@@ -1505,7 +1502,7 @@ Done
 
 ## 開發優先順序
 
-目前已實作 v1.6.3 cleanup scope；例外收尾、平台驗證與發佈仍待完成。接下來的開發優先順序：
+目前已實作 v1.7.1 host environment 引用；例外收尾、平台驗證與發佈仍待完成。接下來的開發優先順序：
 
 ```text
 1. 程序清理的平台驗證與發佈確認

@@ -159,4 +159,4 @@ Existing YAML without templates remains usable when its commands, paths and time
 
 No recursive substitution, literal escaping, arithmetic, environment/secret namespaces, runtime step outputs or arbitrary field traversal is implemented. Substitution does not escape shell arguments. Resolution errors propagate before work starts and may leave an empty run directory without result.json.
 
-POSIX process termination, reader draining, detached descendants, exception-safe finalization and CLI TIMED_OUT exit code limitations remain. See the [user manual](../user_manual.md), [static variable guide](../static_variable_substitution.md), [test matrix](../test_matrix/test_matrix_v1.7.0.md) and [completion record](../definition_of_done/definition_of_done_v1.7.0.md).
+POSIX process termination, reader draining, detached descendants, exception-safe finalization and CLI TIMED_OUT exit code limitations remain. See the [user manual](../user_manual.md), [static variable guide](../variables/static_variable_substitution.md), [test matrix](../test_matrix/test_matrix_v1.7.0.md) and [completion record](../definition_of_done/definition_of_done_v1.7.0.md).

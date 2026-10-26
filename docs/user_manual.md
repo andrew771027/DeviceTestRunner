@@ -1,6 +1,6 @@
 # Device Test Runner 使用手冊
 
-適用版本：v1.7.0。本手冊說明如何設定、執行與判讀測試。安裝步驟見 [README](../README.md#安裝)。
+適用版本：v1.7.1。本手冊說明如何設定、執行與判讀測試。安裝步驟見 [README](../README.md#安裝)。
 
 先完成第一個流程，再依需要查閱設定參考。本文的「必填／選填」以 YAML 經 ConfigLoader 載入的行為為準；Python API 的差異另行說明。
 
@@ -222,7 +222,7 @@ YAML 根節點必須是 mapping（鍵值表）。欄位名稱區分大小寫；`
 | `device` | 必填 | mapping；無預設 | 裝置描述，寫入報告；不會自動連線或選擇裝置 | 見下表 |
 | `lifecycle` | 必填 | mapping；無可用 YAML 預設 | 安排五個階段與命令 | `scenario: {steps: []}`，其他階段也需提供 |
 | `artifact` | 必填 | mapping；無預設 | 指定輸出目錄與驗證規則 | `output_dir: artifacts` |
-| `variables` | 選填 | mapping；省略為 `{}`，null 不合法 | 定義固定 scalar 值，供 command、step timeout 與驗證 path 引用 | `step_timeout: 0.5` |
+| `variables` | 選填 | mapping；省略為 `{}`，null 不合法 | 定義固定 scalar 值，供 device.serial、command、step timeout 與驗證 path 引用 | `step_timeout: 0.5` |
 | `retry` | 選填 | mapping；最多一次、不延遲、不重試 | 指定可重試失敗與上限 | `max_attempts: 3` |
 | `run_timeout_seconds` | 選填 | 有限正數；省略／null 為不限時 | 限制 normal scope，含準備、scenario 與 retry delay | `3600` |
 | `cleanup_timeout_seconds` | 選填 | 有限正數；省略／null 為不限時 | teardown 與 global_teardown 共用清理預算 | `60` |
@@ -236,7 +236,7 @@ YAML 根節點必須是 mapping（鍵值表）。欄位名稱區分大小寫；`
 | `test_case.id` | 必填 | 字串；無預設 | 測試識別碼，也用於 run directory 名稱 | `power_idle` |
 | `test_case.name` | 必填 | 字串；無預設 | 報告中供人閱讀的名稱 | `Power Idle Test` |
 | `test_case.description` | 必填 | 字串；無預設 | 說明測試目的 | `Measure idle power.` |
-| `device.serial` | 必填 | 字串；無預設 | 報告中的裝置序號 | `ABC123` |
+| `device.serial` | 必填 | 字串；無預設 | 報告中的裝置序號；可引用 vars／env，建立 run directory 前解析 | `${{ env.DEVICE_SERIAL }}` |
 | `device.product` | 必填 | 字串；無預設 | 報告中的產品名稱 | `pixel` |
 | `device.build` | 必填 | 字串；無預設 | 報告中的版本描述 | `build_001` |
 
@@ -356,6 +356,7 @@ artifact:
 使用 [advance_sample.yaml](../configs/advance_sample.yaml) 可在無裝置環境生成與驗證 CSV：
 
 ```bash
+export ANDROID_SERIAL=emulator-5566
 poetry run python main.py --config configs/advance_sample.yaml
 ```
 
@@ -368,15 +369,29 @@ poetry run python main.py --config configs/advance_sample.yaml
 | `${{ vars.NAME }}` | 選用 | 完整引用保留原型別；內插轉為 str | 例如 `timeout_second: '${{ vars.step_timeout }}'`；名稱必須已宣告 |
 | `${{ run.dir }}` | 自動提供 | 當次 run directory 的絕對路徑字串 | 例如 `path: '${{ run.dir }}/${{ vars.output_name }}'`；建立目錄後才可解析 |
 
-可替換欄位僅限全部 lifecycle stages 的 `command`、`timeout_second` 與全部 artifact validation rules 的 `path`。其他欄位如 `artifact.output_dir`、scope timeouts、retry、device 與 expected_json_values 不會套用模板。整段引用數字不能用作 command 或 path；這些欄位解析後必須是字串。timeout 拒絕數字字串、bool、零、負數、NaN 與 Infinity，Python API 經 `run()` 執行時也適用。
+可替換欄位包含 `device.serial`，以及全部 lifecycle stages 的 `command`、`timeout_second` 與全部 artifact validation rules 的 `path`。其他欄位如 `artifact.output_dir`、scope timeouts、retry、device.product、device.build 與 expected_json_values 不會套用模板。整段引用數字不能用作 command 或 path；這些欄位解析後必須是字串。timeout 拒絕數字字串、bool、零、負數、NaN 與 Infinity，Python API 經 `run()` 執行時也適用。
 
-ConfigLoader 驗證定義但保留模板。Runner 建立目錄後，使用新 config copy 完成解析，再啟動 watchdog 與第一個 subprocess。原始設定不變；同一份設定執行兩次會引用各自的 run directory。
+ConfigLoader 驗證定義但保留模板。Runner 先建立 host environment 快照並解析 device.serial，再建立 run directory；同一 resolver 隨後更新 run.dir 並解析其餘欄位，最後啟動 watchdog 與第一個 subprocess。原始設定不變；同一份設定執行兩次會引用各自的 run directory。
 
 無效名稱或定義在載入時拋出 `VariableResolutionError`；未知變數、不完整模板、錯誤欄位型別在執行前拋出同一錯誤。目錄可能已建立，這類錯誤不產生正常 FAILED 報告。CLI 未捕捉此例外，會顯示 traceback。
 
-模板不支援遞迴、運算式、環境／secret 引用或 literal escaping。Shell 的 `$RUN_ARTIFACT_DIR` 與 `$DEVICE_TEST_RUNNER_ROOT` 仍由 shell 展開，與靜態模板解析分開。插值不進行 shell escaping；使用可信任設定、為路徑加引號，避免將 secrets 放進可能出現在報告的 command。
+模板支援 `${{ env.NAME }}`，不支援遞迴、運算式、secret namespace 或 literal escaping。Shell 的 `$RUN_ARTIFACT_DIR` 與 `$DEVICE_TEST_RUNNER_ROOT` 仍由 shell 展開，與靜態模板解析分開。插值不進行 shell escaping；使用可信任設定、為路徑加引號，避免將 secrets 放進可能出現在報告的 command。
 
-解析器介面與整合細節見 [靜態變數指南](static_variable_substitution.md)。
+解析器介面與整合細節見 [靜態變數指南](variables/static_variable_substitution.md)。
+
+### 引用 host 環境變數
+
+在啟動 runner 前執行 `export DEVICE_SERIAL=demo-001`，將 YAML 設為 `device.serial: "${{ env.DEVICE_SERIAL }}"`。命令若也需要序號，明確使用 `command: 'echo "${{ env.DEVICE_SERIAL }}"'`。完整可執行 YAML 見 [環境變數指南](variables/environment_variable.md)。
+
+| 完整引用 | 必填／選填 | 型別與預設值 | 用途與條件 |
+| --- | --- | --- | --- |
+| `${{ env.NAME }}` | 依引用需要；host 自行提供 | 字串；無預設 | 例如 DEVICE_SERIAL；名稱符合 `[A-Za-z_][A-Za-z0-9_]*`，缺少即拋出 VariableResolutionError，已定義空字串合法 |
+
+每次 run 建立一次 host 快照，供 serial、command 與 validation path 使用。env 值始終是字串，因此即使 `DURATION=600`，也不能用 `${{ env.DURATION }}` 作為 timeout_second；改用數字 literal 或 vars 的數字值。引用不會替 subprocess 設定新的環境變數。executor 在每次 execute 時另複製當時的 os.environ，與模板快照分開。
+
+serial 的引用錯誤發生在建立 run 子目錄之前；command／path 的引用錯誤發生在建立之後，兩者都不產生 result.json。ArtifactManager 初始化仍可能建立 output parent。解析值可出現在報告與 logs，沒有 secret masking 或 shell escaping。
+
+`device.serial` 的解析早於當次 run directory；不要在此欄位使用 `${{ run.dir }}`，目前會得到啟動工作目錄。`${{ run.dir }}` 應用於後續 command／validation path。
 
 ## 路徑與環境變數
 
@@ -389,7 +404,7 @@ ConfigLoader 驗證定義但保留模板。Runner 建立目錄後，使用新 co
 
 CLI 的 --config 和相對 artifact.output_dir 以啟動命令時的工作目錄為基準。step command 的工作目錄則是 run directory；artifact rule 的相對 path 也以 run directory 為基準，絕對 path 直接使用原位置。
 
-YAML 支援 `${{ vars.NAME }}` 與 `${{ run.dir }}`，詳見「使用靜態變數」。目前不支援自訂 run／step environment mapping、`env.*` 或 `context.*` 模板。`$DEVICE_TEST_RUNNER_ROOT` 等值由 shell 展開，引用路徑時加上雙引號。`device.serial` 不會自動成為 subprocess environment。
+YAML 支援 `${{ vars.NAME }}`、`${{ run.dir }}` 與 `${{ env.NAME }}`。目前不支援自訂 run／step environment mapping 或 `context.*` 模板。`$DEVICE_TEST_RUNNER_ROOT` 等值由 shell 展開，引用路徑時加上雙引號。`device.serial` 不會自動成為 subprocess environment。
 
 ## CLI 與結果判讀
 
@@ -574,7 +589,7 @@ artifacts/
     "device_serial": "demo",
     "device_product": "demo",
     "device_build": "demo",
-    "runner_version": "1.7.0",
+    "runner_version": "1.7.1",
     "started_at": "2026-09-12T00:00:00+00:00",
     "finished_at": "2026-09-12T00:00:01+00:00",
     "cancel_requested": false,

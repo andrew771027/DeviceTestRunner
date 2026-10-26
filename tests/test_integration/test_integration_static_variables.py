@@ -253,3 +253,85 @@ def test_two_runs_resolve_distinct_run_dirs(tmp_path):
     assert Path(first.artifact_dir, "power_result.csv").exists()
 
     assert Path(second.artifact_dir, "power_result.csv").exists()
+
+
+def test_environment_serial_from_yaml_to_report(tmp_path, monkeypatch):
+    """
+    Given YAML references a defined host serial.
+    When the real runner executes a CSV-producing subprocess.
+    Then the run passes and both result metadata and JSON contain the resolved serial.
+    """
+    monkeypatch.setenv("DEVICE_SERIAL", "pixel-lab-007")
+
+    yaml_path = write_yaml(tmp_path)
+
+    raw = yaml.safe_load(yaml_path.read_text())
+
+    raw["device"]["serial"] = "${{ env.DEVICE_SERIAL }}"
+
+    yaml_path.write_text(yaml.safe_dump(raw), encoding="utf-8")
+
+    config = ConfigLoader().load(str(yaml_path))
+
+    runner = DeviceTestRunner(
+        executor=SubprocessExecutor(
+            project_directory=tmp_path,
+            failure_classifier=FailureClassifier(),
+            process_terminator=ProcessTerminator(grace_period_seconds=2.0),
+        ),
+        artifact_manager=ArtifactManager(tmp_path / "runs"),
+        artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
+        reporter=JsonReporter(),
+        show_console_output=False,
+    )
+
+    assert config.device.serial == "${{ env.DEVICE_SERIAL }}"
+
+    result = runner.run(config=config)
+
+    assert result.metadata.device_serial == "pixel-lab-007"
+
+    assert result.summary.status == "PASSED"
+
+    report = json.loads((Path(result.artifact_dir) / "result.json").read_text())
+
+    assert report["metadata"]["device_serial"] == "pixel-lab-007"
+
+
+def test_missing_env_prevents_run_directory_creation(tmp_path, monkeypatch):
+    """
+    Given YAML references an absent DEVICE_SERIAL.
+    When the real runner starts configuration resolution.
+    Then VariableResolutionError occurs and the artifact parent has no run entries.
+    """
+    monkeypatch.delenv("DEVICE_SERIAL", raising=False)
+
+    yaml_path = write_yaml(tmp_path)
+
+    raw = yaml.safe_load(yaml_path.read_text())
+
+    raw["device"]["serial"] = "${{ env.DEVICE_SERIAL }}"
+
+    yaml_path.write_text(yaml.safe_dump(raw), encoding="utf-8")
+
+    config = ConfigLoader().load(str(yaml_path))
+
+    runner = DeviceTestRunner(
+        executor=SubprocessExecutor(
+            project_directory=tmp_path,
+            failure_classifier=FailureClassifier(),
+            process_terminator=ProcessTerminator(grace_period_seconds=2.0),
+        ),
+        artifact_manager=ArtifactManager(tmp_path / "runs"),
+        artifact_validator=ArtifactValidator(),
+        failure_classifier=FailureClassifier(),
+        reporter=JsonReporter(),
+        show_console_output=False,
+    )
+
+    with pytest.raises(VariableResolutionError, match="undefined environment variable"):
+
+        runner.run(config)
+
+    assert not list((tmp_path / "runs").iterdir())

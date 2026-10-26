@@ -13,3 +13,6 @@ env/
 
 artifacts/
 .coverage
+.coveragerc
+
+pytest.ini

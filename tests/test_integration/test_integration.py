@@ -149,7 +149,7 @@ artifact:
 
     report = json.loads((run_dir / "result.json").read_text(encoding="utf-8"))
 
-    assert report["metadata"]["runner_version"] == "1.7.1"
+    assert report["metadata"]["runner_version"] == "1.7.2"
 
     assert report["summary"]["status"] == "PASSED"
 
@@ -294,7 +294,7 @@ artifact:
 
     report = json.loads((run_dir / "result.json").read_text(encoding="utf-8"))
 
-    assert report["metadata"]["runner_version"] == "1.7.1"
+    assert report["metadata"]["runner_version"] == "1.7.2"
 
     assert report["summary"]["status"] == "FAILED"
 

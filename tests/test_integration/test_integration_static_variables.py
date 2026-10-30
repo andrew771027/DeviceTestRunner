@@ -338,6 +338,12 @@ def test_missing_env_prevents_run_directory_creation(tmp_path, monkeypatch):
 
 
 def test_runtime_context_end_to_end(tmp_path, monkeypatch):
+    """
+    Given YAML serial references the host and a real CSV subprocess references device.serial.
+    When the runner resolves and executes the configuration.
+    Then resolved metadata and command pass CSV validation while the original
+         command retains its template.
+    """
     monkeypatch.setenv("DEVICE_SERIAL", "pixel-lab-172")
 
     yaml_path = write_yaml(tmp_path)
@@ -383,6 +389,11 @@ def test_runtime_context_end_to_end(tmp_path, monkeypatch):
 
 
 def test_runtime_context_unknown_key_fails_before_subprocess(tmp_path):
+    """
+    Given a YAML command references unsupported device.imei.
+    When the runner resolves the configuration.
+    Then VariableResolutionError is raised and no result.json is written.
+    """
     yaml_path = write_yaml(tmp_path, command="echo '${{ device.imei }}'")
 
     config = ConfigLoader().load(str(yaml_path))

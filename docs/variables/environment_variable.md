@@ -1,5 +1,7 @@
 # Device Test Runner v1.7.1 — Environment Variables
 
+Historical scope: v1.7.1. For current device binding and the non-empty serial/product/build requirement, see the [v1.7.2 Runtime Context guide](runtime_context.md). Empty environment values remain valid lookups but cannot be bound as serial.
+
 ## Run a device-free example
 
 Save this complete YAML as `configs/env_demo.yaml`:

@@ -32,7 +32,7 @@ from runner.variables import StaticVariableResolver
 
 
 class DeviceTestRunner:
-    VERSION = "1.7.1"
+    VERSION = "1.7.2"
 
     def __init__(
         self,
@@ -71,6 +71,10 @@ class DeviceTestRunner:
             config,
             device=resolver.resolve_dataclass(config.device, path="device"),
         )
+
+        # DeviceInfo is resolved first (env.* / vars.*), then becomes
+        # immutable runtime context for lifecycle commands and artifacts.
+        resolver.bind_device(config.device)
 
         started_at = datetime.now(timezone.utc)
 

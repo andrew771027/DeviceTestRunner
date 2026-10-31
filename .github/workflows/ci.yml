@@ -3,7 +3,7 @@ name: Device Test Runner CI
 on:
     push:
         branches:
-            - "**"
+            - main
     pull_request:
         branches:
             - main
@@ -12,7 +12,7 @@ permissions:
     contents: read
 
 jobs:
-    code-quailiry:
+    code-quality:
         name: Code Quality
         runs-on: ubuntu-latest
         steps:
@@ -60,7 +60,7 @@ jobs:
           - name: Install dependencies
             run: poetry install --no-interaction
 
-          - name: Create Arfifact directory
+          - name: Create Artifact directory
             run: mkdir -p artifacts/unit
 
           - name: Run Unit Test
@@ -88,15 +88,15 @@ jobs:
             uses: actions/setup-python@v7
             with:
               python-version: "3.12"
-            
+
           - name: Install Poetry
             run: python -m pip install "poetry>=2,<3"
 
           - name: Install dependencies
             run: poetry install --no-interaction
 
-          - name: Create Coverage Arfifact directory
-            run: | 
+          - name: Create Coverage Artifact directory
+            run: |
               mkdir -p artifacts/coverage
               mkdir -p artifacts/coverage/html
 
@@ -107,7 +107,7 @@ jobs:
                 --cov-report=term-missing \
                 --cov-report=xml:artifacts/coverage/coverage.xml \
                 --cov-report=html:artifacts/coverage/html
-          
+
           - name: Upload coverage reports
             if: always()
             uses: actions/upload-artifact@v7
@@ -116,7 +116,6 @@ jobs:
               path: artifacts/coverage/
               if-no-files-found: warn
               retention-days: 14
-
     integration-tests:
         name: Integration Tests
         runs-on: ubuntu-latest
@@ -160,3 +159,36 @@ jobs:
               path: artifacts/integration/
               if-no-files-found: warn
               retention-days: 14
+    pr-quality-gate:
+      name: PR Quality Gate
+      runs-on: ununtu-latest
+
+      needs:
+        - code-quality
+        - unit-tests
+        - coverage
+        - integration-tests
+
+      if: always()
+
+      steps:
+        - name: Show CI Results
+          run: |
+            echo "Code Quality: ${{ needs.code-quality.result }}"
+            echo "Unit Tests: ${{ needs.unit-tests.result }}"
+            echo "Coverage: ${{ needs.coverage.result }}"
+            echo "Integration Tests: ${{ needs.integration-tests.result }}"
+
+        - name: Evaluate required CI jobs
+          run: |
+            if [[ "${{ needs.code-quality.result }}" != "success" ||
+                  "${{ needs.unit-tests.result }}" != "success" ||
+                  "${{ needs.coverage.result }}" != "success" ||
+                  "${{ needs.integration-tests.result }}" != "success" ]]; then
+
+                  echo "PR Quality Gate FAILED"
+
+                  exit 1
+            fi
+
+            echo "PR Quality Gate PASSED"

@@ -12,65 +12,53 @@ The CI pipeline preserves:
 
 ## CI Artifact Flow
 
-```text
-                        GitHub Actions
-                              │
-          ┌───────────────────┼──────────────────┐
-          ▼                   ▼                  ▼
-      Code Quality        Unit Matrix       Integration
-                              │                  │
-                    ┌─────────┼────────┐         │
-                    ▼         ▼        ▼         ▼
-                  3.11      3.12     3.13     DTR v1.7
-                    │         │        │         │
-                    ▼         ▼        ▼         ▼
-                  JUnit     JUnit    JUnit    JUnit
-                  Logs      Logs     Logs     Logs
-                                                 │
-                                                 ▼
-                                          report.json
-                                          stdout/stderr
-                                                 │
-                 ┌───────────────────────────────┘
-                 ▼
-          GitHub Artifacts
-```
+Unit matrix entries, Coverage and Integration Tests upload separate artifacts.
+Code Quality and PR Quality Gate do not produce report artifacts.
 
 ## Artifact Structure
+
+Paths below are relative to the repository root before upload. Each upload uses
+its job-specific directory as the artifact root.
 
 ```text
 artifacts/
 ├── unit/
-│   ├── reports/
-│   │   └── junit.xml
-│   └── logs/
-│       └── pytest.log
-│
+│   ├── results.xml
+│   └── pytest.log
+├── coverage/
+│   ├── coverage.xml
+│   └── html/
 └── integration/
+    ├── junit.xml
+    ├── pytest.log
     ├── reports/
-    │   └── junit.xml
     ├── logs/
-    │   └── pytest.log
     └── dtr/
-        ├── report.json
-        ├── stdout.log
-        └── stderr.log
 ```
+
+The integration job creates `reports/` and `logs/`, but pytest writes its report
+and log directly under `artifacts/integration/`. `DTR_TEST_ARTIFACT_DIR` selects
+`dtr/`; its contents depend on the tests.
 
 ## Unit Test Artifacts
 
 Each supported Python version produces an independent artifact.
 
 ```text
-unit-python-3.11
-unit-python-3.12
-unit-python-3.13
+unit-test-results-3.11
+unit-test-results-3.12
+unit-test-results-3.13
 ```
 
 Each artifact contains:
 
 - JUnit test result
 - pytest log
+
+## Coverage Artifacts
+
+`coverage-python-3.12` contains `coverage.xml` and the `html/` report directory.
+See [Coverage configuration](ci_coverage.md) for scope and threshold.
 
 ## Integration Test Artifacts
 
@@ -79,6 +67,9 @@ Integration testing produces:
 ```text
 integration-python-3.12
 ```
+
+The job runs on Python 3.14 despite the artifact's `3.12` suffix. The name above
+matches the current workflow rather than the actual runtime version.
 
 The artifact may contain:
 
@@ -95,7 +86,12 @@ Artifact upload uses:
 if: always()
 ```
 
-This allows diagnostic output to be preserved even when tests fail.
+This preserves existing diagnostic output even when tests fail. Unit uploads
+use `if-no-files-found: error`; coverage and integration uploads use `warn`.
+Uploads cannot preserve files that were never produced.
+
+[PR Quality Gate](ci_pull_request_quality_gate.md) evaluates job results, not
+artifact presence. A successful upload does not override a failed test.
 
 ## Retention
 

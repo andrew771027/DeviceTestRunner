@@ -2,7 +2,7 @@
 
 ## Current configuration
 
-Applicable version: v1.7.1. Coverage uses pytest-cov with configuration in [pyproject.toml](../../pyproject.toml). The measured package is `runner`. No pytest.ini or .coveragerc is required by the current repository.
+Coverage uses pytest-cov with configuration in [pyproject.toml](../../pyproject.toml). The measured package is `runner`. No pytest.ini or .coveragerc is required by the current repository.
 
 | Setting | Value | Effect |
 | --- | --- | --- |
@@ -36,6 +36,12 @@ The coverage job in [ci.yml](../../.github/workflows/ci.yml) uses Ubuntu and Pyt
 The upload step runs with `if: always()`, uploads artifacts/coverage/ as coverage-python-3.12, retains it for 14 days and warns if files are missing. A failed test or threshold can still leave downloadable reports; upload success does not mean tests passed.
 
 Other CI jobs run unit tests on Python 3.11, 3.12 and 3.13, and integration tests on Python 3.14. The integration artifact is currently named integration-python-3.12 despite that job's Python 3.14 setting; inspect workflow configuration when interpreting artifact names. Code Quality uses Python 3.14 and pre-commit.
+
+## Quality gate integration
+
+The `coverage` job is required by [PR Quality Gate](ci_pull_request_quality_gate.md).
+A failed unit test or coverage below 80% fails this dependency and therefore the
+gate when it executes. Uploading reports does not override that result.
 
 ## Verification boundary
 

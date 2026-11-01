@@ -15,6 +15,8 @@ v1.7.0 的型別保留、模板測試資料與 JSON 字串解析見 [對應案�
 
 v1.6.3 的 token 身分比較、Bash fixture 與 AST 檢查見 [對應案例](#v1-6-3)。
 
+v1.7.2 的一次綁定、負向例外與真實 subprocess 案例見 [對應案例](#v1-7-2)。
+
 ## 工具與用法
 
 下表提供閱讀入口，不表示每一版都使用全部工具。版本細節見後面的案例；教學範例不算新增測試。
@@ -126,6 +128,7 @@ python -m pytest -k timeout -v
 
 | 版本 | 閱讀重點 | 測試覆蓋與證據 |
 | --- | --- | --- |
+| [v1.7.2](#v1-7-2) | 一次綁定、parametrize 無效 serial、monkeypatch 快照與 subprocess context | [Test matrix](test_matrix/test_matrix_v1.7.2.md) |
 | [v1.7.1](#v1-7-1) | monkeypatch host 隔離、明確 environ mapping、快照斷言、執行前失敗與 JSON metadata | [Test matrix](test_matrix/test_matrix_v1.7.1.md) |
 | [v1.7.0](#v1-7-0) | Scalar 型別斷言、參數化、真實 YAML／subprocess／CSV／JSON、不可變 config | [Test matrix](test_matrix/test_matrix_v1.7.0.md) |
 | [v1.6.3](#v1-6-3) | Cleanup token 身分、真實 subprocess、partial CSV、docstring AST 比較 | [Test matrix](test_matrix/test_matrix_v1.6.3.md) |
@@ -583,3 +586,23 @@ poetry run pytest tests/test_unit --cov=runner --cov-report=term-missing
 ```
 
 Pytest 設定目前集中在 pyproject.toml：testpaths、strict markers/config、branch coverage 與 fail_under=80。make test_cov 只執行 unit tests；coverage CI 也是 unit scope。CI 設定不代表本次已觀察到遠端 job 通過。
+
+<a id="v1-7-2"></a>
+
+## v1.7.2 — Device Runtime Context
+
+來源：`940fe66` 產品實作、`2aeb559` 測試、`278e012` 文件草稿。覆蓋範圍見 [測試矩陣](test_matrix/test_matrix_v1.7.2.md)。本次只補測試 docstring，不改斷言或執行內容；沒有證據可判定原始測試作者是否為 AI。
+
+`tests/test_unit/test_runtime_context.py` 直接使用 resolver 與真實 DeviceInfo。`test_context_cannot_be_rebound` 先 bind，再用 `pytest.raises(..., match="already bound")` 驗證同一物件也不能重綁；這驗證 API 契約，不代表底層 dictionary 不可修改。`test_unresolved_device_metadata_is_rejected` 以 parametrize 測空字串與兩種未解析 serial，共三個案例，並未遍歷 product／build 或非字串。
+
+`test_device_metadata_from_env_is_snapshotted` 用 monkeypatch 在 resolver 建立前後改 host 值，斷言解析與綁定後仍是 before。這驗證模板 snapshot，不驗證 subprocess 繼承的 live environment。
+
+`tests/test_integration/test_integration_static_variables.py::test_runtime_context_end_to_end` 用 tmp_path、write_yaml helper、yaml.safe_load/safe_dump 與 shlex.quote 建立真實 subprocess 流程，斷言 resolved serial、command、PASSED、CSV validation 及原始模板保留。它沒有讀回 JSON 或檢查 CSV 儲存格值；這些不能視為該函式的直接斷言。未知 device 欄位案例使用 pytest.raises 並確認沒有 result.json，未使用 Mock 計算 execute 次數。
+
+```bash
+poetry run pytest -q tests/test_unit/test_runtime_context.py
+poetry run pytest -q tests/test_integration/test_integration_static_variables.py -k runtime_context
+poetry run pytest -q
+```
+
+這些技巧沿用既有 pytest 與標準函式庫，沒有新增 fixture 或 decorator。原先缺少的裝置 namespace、未綁定／重綁錯誤與快照案例由上述測試補上；尚缺裝置 path 專用案例、product/build 非法型別、同設定多次 run 的裝置 context 與 retry 專用斷言。

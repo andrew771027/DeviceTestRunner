@@ -1,6 +1,6 @@
 # Device Test Runner v1.7.0 — Static Variable Substitution Integration Guide
 
-Historical scope: v1.7.0. For current env references and device.serial resolution, see the [v1.7.1 environment guide](environment_variable.md).
+Historical scope: v1.7.0. Current device references and validation are described in the [v1.7.2 Runtime Context guide](runtime_context.md). For current env references and device.serial resolution, see the [v1.7.1 environment guide](environment_variable.md).
 
 ## Purpose and implementation
 

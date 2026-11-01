@@ -1,10 +1,11 @@
 test_case:
   id: static_variables_001
-  name: Static Variables Example
-  description: Generate and validate artifacts using static and environment variables
+  name: Device Runtime Context Example
+  description: Generate and validate artifacts using v1.7.2 device context, static and environment variables
 
 # 執行前設定：export ANDROID_SERIAL=emulator-5566
-# 此範例不連接裝置；序號用於報告。未設定環境變數時，執行前解析會失敗。
+# 此範例不連接裝置；序號用於報告與 CSV。未設定或設為空字串時，執行前解析會失敗。
+# 三個欄位都須為非空字串；product 與 build 使用 literal，不解析模板。
 device:
   serial: "${{ env.ANDROID_SERIAL }}"
   product: pixel
@@ -26,7 +27,8 @@ retry:
   delay_seconds: 0
   retry_on: []
 
-# device.serial、command 與 artifact validation path 可引用 env；timeout 使用數字 vars。
+# serial 先解析 env，再綁定 device context，供 command 與 validation path 引用。
+# timeout 使用數字 vars；device context 與 env 的值都是字串，不能當作 timeout。
 lifecycle:
   global_setup:
     steps: []
@@ -37,14 +39,17 @@ lifecycle:
       - name: create_power_csv
         type: command
         command: |
-          printf 'timestamp,power,voltage\n1,${{ vars.power }},${{ vars.voltage }}\n2,${{ vars.power }},${{ vars.voltage }}\n' > "${{ run.dir }}/${{ vars.output_name }}"
+          printf 'timestamp,power,voltage,serial,product,build\n' > "${{ run.dir }}/${{ vars.output_name }}"
+          printf '%s,%s,%s,%s,%s,%s\n' 1 '${{ vars.power }}' '${{ vars.voltage }}' '${{ device.serial }}' '${{ device.product }}' '${{ device.build }}' >> "${{ run.dir }}/${{ vars.output_name }}"
+          printf '%s,%s,%s,%s,%s,%s\n' 2 '${{ vars.power }}' '${{ vars.voltage }}' '${{ device.serial }}' '${{ device.product }}' '${{ device.build }}' >> "${{ run.dir }}/${{ vars.output_name }}"
+        # 使用可信任且不含引號、逗號或換行的示範值；模板替換不提供 shell／CSV escaping。
         # 完整引用保留 int 或 float 型別。
         timeout_second: "${{ vars.step_timeout }}"
   teardown:
     steps:
       - name: cleanup_message
         type: command
-        command: echo "Artifact saved to ${{ run.dir }}/${{ vars.output_name }}"
+        command: echo "Artifact for ${{ device.serial }} saved to ${{ run.dir }}/${{ vars.output_name }}"
         timeout_second: "${{ vars.cleanup_timeout }}"
   global_teardown:
     steps: []
@@ -61,4 +66,7 @@ artifact:
           - timestamp
           - power
           - voltage
+          - serial
+          - product
+          - build
         min_rows: 2

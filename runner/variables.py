@@ -5,8 +5,8 @@ ConfigLoader 驗證定義並保留模板；Runner 建立 run directory 後再解
 """
 
 import math
-import re
 import os
+import re
 from collections.abc import Mapping
 from dataclasses import fields, is_dataclass, replace
 from pathlib import Path
@@ -35,6 +35,8 @@ FULL = re.compile(r"^\$\{\{\s*([^{}]*?)\s*\}\}$")
 class VariableResolutionError(ValueError):
     """變數定義、引用語法或解析後的欄位型別不合法。"""
 
+    """Invalid expression, undefined variable, or invalid resolved type."""
+
 
 class StaticVariableResolver:
     """保存變數的副本，並以當次 run 的絕對路徑解析設定。
@@ -43,7 +45,12 @@ class StaticVariableResolver:
     原始 frozen dataclass 不會被修改，因此同一份設定可用於多次 run。
     """
 
-    def __init__(self, variables: Mapping[str, Any], run_dir: str | Path, environ: Mapping[str, str] | None = None):
+    def __init__(
+        self,
+        variables: Mapping[str, Any],
+        run_dir: str | Path,
+        environ: Mapping[str, str] | None = None,
+    ):
         """驗證並複製變數定義，將 run_dir 正規化為絕對路徑。
 
         Args:
@@ -76,6 +83,26 @@ class StaticVariableResolver:
 
         # Snapshot the environment once, so one run has consistent values.
         self.environ = dict(os.environ if environ is None else environ)
+        self.device_context: dict[str, str] | None = None
+
+    def bind_device(self, device: Any) -> None:
+        """Bind already resolved device metadata for the duration of this run."""
+
+        if self.device_context is not None:
+            raise VariableResolutionError("device context already bound")
+
+        expected = ("serial", "product", "build")
+
+        context = {}
+
+        for name in expected:
+            value = getattr(device, name, None)
+
+            if not isinstance(value, str) or not value or UNRESOLVED.search(value):
+                raise VariableResolutionError(f"device.{name} must be a resolved non-empty string")
+            context[name] = value
+
+        self.device_context = context
 
     def _lookup(self, expression: str) -> Any:
         """查找單一白名單引用；不支援運算、巢狀欄位或 env namespace。
@@ -83,6 +110,16 @@ class StaticVariableResolver:
         run.dir 回傳絕對路徑字串；vars.NAME 回傳宣告時的原始值。
         未定義名稱或不支援的語法會拋出 VariableResolutionError。
         """
+        if expression.startswith("device."):
+            name = expression[7:]
+
+            if name not in ("serial", "product", "build"):
+                raise VariableResolutionError(f"unsupported device context: {expression!r}")
+
+            if self.device_context is None:
+                raise VariableResolutionError("device context is not bound")
+
+            return self.device_context[name]
 
         if expression.startswith("env."):
             name = expression[4:]
@@ -91,7 +128,7 @@ class StaticVariableResolver:
 
             if name not in self.environ:
                 raise VariableResolutionError(f"undefined environment variable: env. {name}")
-            
+
             return self.environ[name]
 
         if expression == "run.dir":

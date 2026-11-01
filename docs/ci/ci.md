@@ -9,29 +9,43 @@ The CI workflow runs on:
 * Pushes to `main`
 * Pull requests targeting `main`
 
+Pushes to other branches do not trigger this workflow. There are no path filters,
+so documentation-only pull requests targeting `main` also run CI.
+
 ## CI Pipeline
 
+Validation jobs run independently and feed the aggregate gate:
+
 ```text
-Checkout
-    ↓
-Setup Python
-    ↓
-Install Poetry and Check Lock File
-    ↓
-Install Dependencies
-    ↓
-Pre-commit Hooks
-    ↓
-pytest
-    ↓
-Success / Failure
+Code Quality ───────────────────────┐
+Unit Tests (Python 3.11/3.12/3.13) ──┤
+Coverage (Python 3.12) ──────────────┼── PR Quality Gate
+Integration Tests (Python 3.14) ────┘
 ```
+
+| Job ID | Validation |
+| --- | --- |
+| `code-quality` | pre-commit on Python 3.14 |
+| `unit-tests` | Unit tests on Python 3.11, 3.12 and 3.13; `fail-fast: false` |
+| `coverage` | Unit tests with runner coverage on Python 3.12; minimum 80% |
+| `integration-tests` | Integration tests on Python 3.14 |
+| `pr-quality-gate` | Require all four upstream jobs to report `success` |
+
+Each validation job checks out the repository, sets up Python, installs Poetry
+2.x and runs `poetry install --no-interaction`. Test and coverage jobs upload
+artifacts with `if: always()`.
+
+The aggregate gate uses `needs` and `if: always()` to evaluate upstream results
+even after validation failures. It runs on both supported workflow events.
+See [Pull Request Quality Gate](ci_pull_request_quality_gate.md) for repository
+protection configuration and the current runner-label issue.
 
 ## Local Development
 
-The workflow uses Ubuntu and Python 3.14, matching the Python version in
-`.pre-commit-config.yaml`. Poetry 2.x installs dependencies from `poetry.lock`,
-including pre-commit and pytest.
+Code Quality and integration tests use Python 3.14. Unit compatibility testing
+uses Python 3.11–3.13; coverage uses Python 3.12.
+`.pre-commit-config.yaml` selects Python 3.14 for hook environments.
+Poetry 2.x installs dependencies from `poetry.lock`, including pre-commit and pytest.
 
 Check that project metadata and the lock file are consistent:
 
@@ -105,27 +119,24 @@ and agreeing on the lint rules first.
 
 ## Quality Gates
 
-| Check       | Purpose                              |
-| ----------- | ------------------------------------ |
-| Poetry lock | Verify dependency metadata consistency |
-| Pre-commit  | Check syntax, file hygiene, imports, formatting, and lint |
-| pytest      | Verify expected application behavior |
+Configure `PR Quality Gate` as a required status check in the `main` ruleset to
+enforce validation at merge time. The workflow does not configure repository
+rules itself. When the gate executes, a failed, cancelled or skipped upstream
+job causes it to fail.
 
-A failing check causes the CI job to fail. Subsequent steps are skipped by default.
+`poetry check --lock` above is a local consistency check; the workflow does not
+run it as a separate step.
 
 ## Scope
 
-CI checks code quality and runs the full unit and integration test suite with
-`poetry run pytest`, including process cleanup, retry, and cancellation tests.
+CI includes code quality checks, unit and integration testing, coverage reports,
+and retained test artifacts. Deployment and hardware-dependent test execution
+are outside the workflow's scope.
 
-Not included:
+## Related Documentation
 
-* Coverage reporting
-* Test artifacts
-* Matrix testing
-* Deployment
-* Hardware-dependent test execution
-
-## Workflow
-
-[CI workflow](../.github/workflows/ci.yml)
+* [CI workflow](../../.github/workflows/ci.yml)
+* [Pull Request Quality Gate](ci_pull_request_quality_gate.md)
+* [Matrix testing](ci_matrix_testing.md)
+* [Coverage configuration](ci_coverage.md)
+* [Artifact management](ci_artifact_management.md)

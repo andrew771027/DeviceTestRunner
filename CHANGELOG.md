@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.7.2]
+
+Scope: device runtime context. Inspected source `940fe66`, tests `2aeb559` and guide draft `278e012`; release publication is unverified.
+
+### Added
+
+- `${{ device.serial }}`, `${{ device.product }}` and `${{ device.build }}` references in lifecycle commands and artifact validation paths.
+- `StaticVariableResolver.bind_device()` validates and copies resolved identity once per resolver, before run directory allocation; repeated binding and unknown device fields raise VariableResolutionError.
+- Runtime-context unit tests and real subprocess integration cases; current usage guides and v1.7.2 architecture, matrix, acceptance and completion records.
+
+### Compatibility and limits
+
+All three device fields must now be non-empty resolved strings, including configurations without templates. Product/build remain literal inputs; templates in them fail binding. Empty env values remain valid lookups but fail when used as serial. Context values are strings and cannot serve as numeric step timeouts. No device discovery, context.* namespace, step outputs, environment mapping, shell escaping or report schema change. Package/runtime version is 1.7.2. See [verification record](docs/definition_of_done/definition_of_done_v1.7.2.md).
+
 ## [1.7.1]
 
 Scope: host environment references. Inspected baseline `c1d457c`; no release publication claimed.

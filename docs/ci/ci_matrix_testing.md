@@ -74,8 +74,14 @@ GitHub Actions is responsible for executing the compatibility matrix.
 
 ## Current Scope
 
-Version 0.4 applies matrix testing to unit tests only.
+The current workflow applies matrix testing to unit tests only.
 
-Integration tests continue to run using the project's primary Python version.
+Integration tests and Code Quality run on Python 3.14. Coverage runs separately
+on Python 3.12.
+
+The `unit-tests` job is a dependency of [PR Quality Gate](ci_pull_request_quality_gate.md).
+All matrix entries must succeed for this dependency to succeed.
+`fail-fast: false` lets remaining entries continue when one fails.
+Each entry uploads its own [test artifact](ci_artifact_management.md).
 
 Future versions may introduce additional matrix dimensions such as operating system or environment configuration.

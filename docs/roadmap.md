@@ -1,6 +1,6 @@
 # Device Test Runner Roadmap
 
-目前已實作 v1.7.1 host 環境變數引用，支援 env.NAME 與建立 run directory 前的 device.serial 解析。套件、runtime 與報告版本為 1.7.1；[完成條件](definition_of_done/definition_of_done_v1.7.1.md) 記錄本機結果及 lock 一致性檢查。Run／step environment mapping 與 Runtime Context 仍在規劃，發佈未驗證。
+目前已實作 v1.7.2 裝置 Runtime Context，提供 device.serial／product／build 引用，沿用 vars、env 與 run.dir。套件與 runtime 版本為 1.7.2；[完成條件](definition_of_done/definition_of_done_v1.7.2.md) 記錄驗證及限制。Run／step environment mapping、stage／attempt context 仍在規劃，發佈未驗證。
 
 本文件保留各版本的功能規劃。`Completed` 表示該節記錄的功能已完成；`Planned` 與 `Future` 表示尚未實作。實際發佈條件與驗證結果請見各版本的完成條件文件。
 
@@ -534,7 +534,7 @@ Implemented；本機驗證與未完成項目見 [完成條件](definition_of_don
 
 #### 功能範圍
 
-下表涵蓋整體規劃；run／step environment mapping 與 context 尚未實作，實際進度見各版本段落。
+下表涵蓋整體規劃；run／step environment mapping 與 stage／attempt context 尚未實作，實際進度見各版本段落。
 
 | 能力 | 責任 | 解析時機 |
 | --- | --- | --- |
@@ -582,25 +582,20 @@ Implemented；[完成條件](definition_of_done/definition_of_done_v1.7.1.md) �
 
 #### v1.7.2 — Runtime Context
 
-##### 目標
+##### 已實作範圍
 
-在 run 與 attempt 建立後，提供唯讀的執行資訊，供設定與 subprocess environment 使用。
+* serial 先解析 vars／env，三個裝置欄位再由 bind_device 驗證並複製一次。
+* `${{ device.serial }}`、`${{ device.product }}`、`${{ device.build }}` 可用於命令與驗證路徑。
+* 裝置欄位須為非空、無未解析模板的字串；product／build 保持 literal。
+* 原始設定保留，沒有裝置探索、context.*、step output 或自動 shell escaping。
 
-##### 範圍與驗收條件
+##### 狀態與後續範圍
 
-* `context` namespace 提供 run ID、artifact directory、stage、step 與 attempt。
-* 沿用 runner 的既有識別值；retry 更新 attempt，cleanup 更新 stage／step，run 資訊保持一致。
-* 後續規劃的 environment mapping 可引用當次有效 context。
-* 定義欄位解析時機；禁止尚未建立或已失效的 context 引用，避免 run directory 自我依賴。
-* Final validation 的 run scope 與 attempt scope 分開，不隱含採用最後一次 attempt。
-
-##### 狀態
-
-Planned
+Implemented；見 [測試矩陣](test_matrix/test_matrix_v1.7.2.md) 與 [完成條件](definition_of_done/definition_of_done_v1.7.2.md)。Run ID、stage、step、attempt context 與 environment mapping 為後續規劃，尚未實作。
 
 #### Proposed YAML
 
-以下為 v1.7.0～v1.7.2 完成後的整合規劃語法，尚未實作；實作前需確認欄位名稱與替換範圍。
+以下為後續 environment mapping 與 attempt context 的整合規劃語法，尚未實作；實作前需確認欄位名稱與替換範圍。
 
 ```yaml
 variables:
@@ -628,7 +623,7 @@ lifecycle:
 
 #### Relationship to v1.6.0
 
-目前 ConfigLoader 直接建立 models，沒有通用 YAML variable substitution、run／step environment mapping 或 runtime context resolver。Executor 已繼承 `os.environ`，並注入 `DEVICE_TEST_RUNNER_ROOT` 與 `RUN_ARTIFACT_DIR`；這是既有 environment 基礎，應保留相容性。
+目前 ConfigLoader 建立 models 並保留模板，Runner 使用 StaticVariableResolver 解析白名單欄位及裝置 context；沒有任意欄位替換、run／step environment mapping 或 attempt context。Executor 已繼承 `os.environ`，並注入 `DEVICE_TEST_RUNNER_ROOT` 與 `RUN_ARTIFACT_DIR`；這是既有 environment 基礎，應保留相容性。
 
 新增 context 需沿用已建立的 run directory、stage 與 attempt 資訊，而不是再建立一套不一致的識別值。Retry 每次重新產生 attempt context；cleanup 使用自己的 stage／step context，並保留同一次 run 的資訊。
 
@@ -1502,7 +1497,7 @@ Done
 
 ## 開發優先順序
 
-目前已實作 v1.7.1 host environment 引用；例外收尾、平台驗證與發佈仍待完成。接下來的開發優先順序：
+目前已實作 v1.7.2 裝置 context 與 host environment 引用；例外收尾、平台驗證與發佈仍待完成。接下來的開發優先順序：
 
 ```text
 1. 程序清理的平台驗證與發佈確認

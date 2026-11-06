@@ -602,7 +602,7 @@ def test_retry_max_attempts_must_be_positive(tmp_path: Path):
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match=("retry.max_attempts must be >= 1")):
+    with pytest.raises(ValueError, match=("retry.max_attempts: expected integer >= 1")):
         ConfigLoader().load(config_file)
 
 
@@ -644,7 +644,7 @@ def test_retry_delay_seconds_must_be_positive(tmp_path: Path):
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match=("retry.delay_seconds must be >= 0")):
+    with pytest.raises(ValueError, match=("retry.delay_seconds: expected number >= 0")):
         ConfigLoader().load(config_file)
 
 
@@ -656,7 +656,17 @@ def test_artifact_required_defaults_to_true():
     Then the rule defaults to required.
     """
 
-    raw = {"validation": {"rules": [{"name": "test", "type": "exists", "path": "test.csv"}]}}
+    raw = {
+        "validation": {
+            "rules": [
+                {
+                    "name": "test",
+                    "type": "exists",
+                    "path": "test.csv",
+                },
+            ]
+        }
+    }
 
     config = ConfigLoader._load_artifact_validation(raw)
 
@@ -851,7 +861,7 @@ def test_run_timeout_must_be_finite_and_positive(timeout_seconds):
     raw = {"run_timeout_seconds": timeout_seconds}
 
     with pytest.raises(ValueError, match="run_timeout_seconds must be finite and > 0"):
-        ConfigLoader._load_optional_positivbe_timeout(
+        ConfigLoader._load_optional_positive_timeout(
             raw,
             "run_timeout_seconds",
         )
@@ -876,7 +886,7 @@ def test_run_timeout_rejects_boolean(
     raw = {"run_timeout_seconds": (timeout_seconds)}
 
     with pytest.raises(ValueError, match=("run_timeout_seconds " "must be a number")):
-        ConfigLoader._load_optional_positivbe_timeout(
+        ConfigLoader._load_optional_positive_timeout(
             raw,
             "run_timeout_seconds",
         )
@@ -892,7 +902,7 @@ def test_missing_run_timeout_seconds_unlimited():
 
     raw = {}
 
-    result = ConfigLoader._load_optional_positivbe_timeout(
+    result = ConfigLoader._load_optional_positive_timeout(
         raw,
         "run_timeout_seconds",
     )
@@ -924,7 +934,7 @@ def test_invalid_cleanup_timeout_is_rejected(value):
     raw = {"cleanup_timeout_seconds": value}
 
     with pytest.raises(ValueError):
-        ConfigLoader._load_optional_positivbe_timeout(
+        ConfigLoader._load_optional_positive_timeout(
             raw,
             "cleanup_timeout_seconds",
         )
@@ -940,7 +950,7 @@ def test_missing_cleanup_timeout_is_unlimited():
 
     raw = {}
 
-    result = ConfigLoader._load_optional_positivbe_timeout(
+    result = ConfigLoader._load_optional_positive_timeout(
         raw,
         "cleanup_timeout_seconds",
     )

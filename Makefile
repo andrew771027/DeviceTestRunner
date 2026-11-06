@@ -2,6 +2,9 @@
 exec:
 	@python3 main.py --config="./configs/basic_sample.yaml"
 
+demo:
+	@python3 main.py --config="./configs/demo.yaml"
+
 test:
 	@pytest -v ./tests
 

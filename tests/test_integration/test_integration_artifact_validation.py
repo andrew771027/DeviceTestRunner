@@ -223,17 +223,17 @@ def test_command_runs_inside_run_directory(tmp_path: Path):
                 - name: save_working_directory
                   type: command
                   command: pwd > current_directory.txt
-                  timeout_seconds: 5
+                  timeout_second: 5
         teardown:
             steps: []
         global_teardown:
             steps: []
     artifact:
         output_dir: {output_dir}
-        validaiton:
+        validation:
             rules:
                 - name: cwd_file
-                  type: existsa
+                  type: exists
                   path: current_directory.txt
 """,
         encoding="utf-8",

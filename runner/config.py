@@ -3,6 +3,10 @@ from typing import Any
 
 import yaml
 
+from runner.config_validation import (
+    validate_cross_fields,
+    validate_schema,
+)
 from runner.models import (
     ArtifactConfig,
     ArtifactValidationConfig,
@@ -17,7 +21,6 @@ from runner.models import (
     RunnerConfig,
 )
 from runner.variables import StaticVariableResolver
-from runner.config_validation import validate_schema, validate_cross_fields,
 
 
 class ConfigLoader:
@@ -117,7 +120,7 @@ class ConfigLoader:
     @staticmethod
     def _load_steps(raw: dict[str, Any]) -> LifecycleSteps:
 
-        steps = raw["steps"]
+        steps = raw.get("steps", [])
 
         return LifecycleSteps(
             steps=[

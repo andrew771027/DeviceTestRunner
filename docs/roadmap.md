@@ -1,6 +1,6 @@
 # Device Test Runner Roadmap
 
-目前已實作 v1.7.2 裝置 Runtime Context，提供 device.serial／product／build 引用，沿用 vars、env 與 run.dir。套件與 runtime 版本為 1.7.2；[完成條件](definition_of_done/definition_of_done_v1.7.2.md) 記錄驗證及限制。Run／step environment mapping、stage／attempt context 仍在規劃，發佈未驗證。
+目前已實作 v1.7.3 Configuration Validation，包含結構、數值與跨欄位驗證，並允許省略 lifecycle 階段。套件與 runtime 版本為 1.7.3；[完成條件](definition_of_done/definition_of_done_v1.7.3.md) 記錄驗證及限制。發佈未驗證。
 
 本文件保留各版本的功能規劃。`Completed` 表示該節記錄的功能已完成；`Planned` 與 `Future` 表示尚未實作。實際發佈條件與驗證結果請見各版本的完成條件文件。
 
@@ -646,6 +646,10 @@ lifecycle:
 #### 狀態
 
 Planned
+
+#### v1.7.3 — Configuration Validation
+
+Implemented：ConfigLoader 依序驗證 schema、建立 dataclass、驗證跨欄位關係。未知欄位、不合法型別、重複名稱與無效 artifact 約束在執行前失敗。省略階段載入空 steps。見 [設定驗證](variables/configuration_validation.md) 與 [測試矩陣](test_matrix/test_matrix_v1.7.3.md)。JSON Schema 匯出、完整 Python API 驗證及 resolved-config 驗證仍待規劃。
 
 ### v1.8 — Recorder Lifecycle
 
@@ -1497,7 +1501,7 @@ Done
 
 ## 開發優先順序
 
-目前已實作 v1.7.2 裝置 context 與 host environment 引用；例外收尾、平台驗證與發佈仍待完成。接下來的開發優先順序：
+目前已實作 v1.7.3 設定驗證、裝置 context 與 host environment 引用；例外收尾、平台驗證與發佈仍待完成。接下來的開發優先順序：
 
 ```text
 1. 程序清理的平台驗證與發佈確認

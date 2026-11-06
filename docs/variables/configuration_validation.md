@@ -85,9 +85,9 @@ Checks:
 - `retry.max_attempts` positive integer, `retry.delay_seconds` nonnegative finite number; bool is not accepted as number.
 - Artifact rule fields have appropriate scalar/list/dict types; size limits and row counts are nonnegative integers.
 - `variables` values must be finite YAML primitive scalars; the v1.7.2 resolver additionally rejects recursive references.
-- Run and cleanup timeout values must be finite positive numbers.
+- Run and cleanup timeout values must be finite numbers >= 1e-8 when not null.
 
-**Important:** Schema validation allows an unresolved `${{ vars.duration }}` as a step timeout; `StaticVariableResolver.timeout()` validates the *resolved* integer later. The validator does not evaluate templates or inspect host environment variables.
+**Important:** Schema validation allows an unresolved `${{ vars.duration }}` as a step timeout; `StaticVariableResolver.timeout()` validates the *resolved* finite positive int or float later. The validator does not evaluate templates or inspect host environment variables.
 
 ## Cross-field validation
 
@@ -117,33 +117,19 @@ Invalid runner configuration:
 
 The structural and cross-field phases run sequentially. The first failing phase stops the loader; it does not combine both phases' errors.
 
-## Source integration
+## Loading and testing
 
-`runner/config.py`:
-
-```python
-from runner.config_validation import validate_schema, validate_cross_fields
-
-# Immediately after yaml.safe_load and root mapping check:
-validate_schema(raw)
-
-# Build config using existing parser, then:
-config = RunnerConfig(...)
-validate_cross_fields(config)
-return config
-```
-
-The included package already contains these edits. It retains the existing `variables.py`, `executor.py`, `artifact_validator.py`, cancellation and cleanup modules from v1.7.2.
-
-## Testing
+Run from the repository root:
 
 ```bash
-python -m pip install pytest pyyaml
-cd dtr_v1_7_3
-PYTHONPATH=. python -m pytest -q tests/
+poetry run pytest -q tests/test_unit/test_configuration_validation.py tests/test_unit/test_config_loader.py
 ```
 
-Tests cover invalid schema fields, aggregated errors, bad cross-field references, duplicates, artifact rule requirements, ConfigLoader integration and the previous v1.7.0–v1.7.2 end-to-end regression tests.
+ConfigLoader rejects a non-mapping root with plain ValueError before validate_schema. Direct validate_schema calls instead raise ConfigurationValidationError. Retry enum parsing and variable-definition validation also run during construction and can stop loading before cross-field validation. No schema/cross-field validation is automatically applied by DeviceTestRunner.run() to Python-created configs.
+
+Omitted lifecycle stages load as empty steps; an explicitly supplied stage requires a steps list. Omitted variables/retry/validation use empty mappings; explicit null fails. Optional scope timeouts allow null, but supplied numeric values must be finite and at least 1e-8. Literal YAML step timeouts require integers >= 1; whole templates can later resolve to positive finite floats. Nonempty required strings are checked with strip(), without trimming stored values.
+
+See the [test matrix](../test_matrix/test_matrix_v1.7.3.md) for direct assertions and coverage gaps.
 
 ## Limitations and next steps
 

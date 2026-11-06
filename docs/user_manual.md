@@ -1,6 +1,6 @@
 # Device Test Runner 使用手冊
 
-適用版本：v1.7.2。本手冊說明如何設定、執行與判讀測試。安裝步驟見 [README](../README.md#安裝)。
+適用版本：v1.7.3。本手冊說明如何設定、執行與判讀測試。安裝步驟見 [README](../README.md#安裝)。
 
 先完成第一個流程，再依需要查閱設定參考。本文的「必填／選填」以 YAML 經 ConfigLoader 載入的行為為準；Python API 的差異另行說明。
 
@@ -15,7 +15,7 @@
 
 ## 建立並執行第一個流程
 
-將以下內容存為 `configs/hello.yaml`。此範例不需要連接裝置，會產生一份 CSV 並檢查內容。五個 lifecycle 階段都需提供 `steps`；不使用的階段填入 `[]`。
+將以下內容存為 `configs/hello.yaml`。此範例不需要連接裝置，會產生一份 CSV 並檢查內容。可省略不使用的 lifecycle 階段；有提供的階段必須包含 `steps`，可填入 `[]`。
 
 ```yaml
 test_case:
@@ -212,7 +212,7 @@ artifact:
 
 ## 設定欄位參考
 
-YAML 根節點必須是 mapping（鍵值表）。欄位名稱區分大小寫；`timeout_second` 是單數，scope timeout 則使用 `*_seconds`。以下型別表示預期用法；loader 不會完整驗證每個欄位的型別或未知欄位，請勿將「可載入」視為設定一定有效。
+YAML 根節點必須是 mapping（鍵值表）。欄位名稱區分大小寫；`timeout_second` 是單數，scope timeout 則使用 `*_seconds`。ConfigLoader 先驗證結構，再建立 dataclass 並驗證跨欄位關係；未知欄位與不合法型別會被拒絕。每個驗證階段彙整該階段錯誤，第一個失敗階段停止載入。詳細規則見 [設定驗證指南](variables/configuration_validation.md)。
 
 ### 頂層設定
 
@@ -220,14 +220,16 @@ YAML 根節點必須是 mapping（鍵值表）。欄位名稱區分大小寫；`
 | --- | --- | --- | --- | --- |
 | `test_case` | 必填 | mapping；無預設 | 識別本次測試，寫入報告 | 見下表 |
 | `device` | 必填 | mapping；無預設 | 裝置描述，寫入報告；不會自動連線或選擇裝置 | 見下表 |
-| `lifecycle` | 必填 | mapping；無可用 YAML 預設 | 安排五個階段與命令 | `scenario: {steps: []}`，其他階段也需提供 |
+| `lifecycle` | 必填 | mapping；無預設，允許 `{}` | 安排五個階段與命令 | `scenario: {steps: []}` |
 | `artifact` | 必填 | mapping；無預設 | 指定輸出目錄與驗證規則 | `output_dir: artifacts` |
-| `variables` | 選填 | mapping；省略為 `{}`，null 不合法 | 定義固定 scalar 值，供 device.serial、command、step timeout 與驗證 path 引用 | `step_timeout: 0.5` |
+| `variables` | 選填 | mapping；省略為 `{}`，null 不合法 | 定義固定 scalar 值，供 device.serial、command、step timeout 與驗證 path 引用 | `step_timeout: 5` |
 | `retry` | 選填 | mapping；最多一次、不延遲、不重試 | 指定可重試失敗與上限 | `max_attempts: 3` |
 | `run_timeout_seconds` | 選填 | 有限正數；省略／null 為不限時 | 限制 normal scope，含準備、scenario 與 retry delay | `3600` |
 | `cleanup_timeout_seconds` | 選填 | 有限正數；省略／null 為不限時 | teardown 與 global_teardown 共用清理預算 | `60` |
 
-兩個 scope timeout 拒絕字串、bool、零、負數、NaN 與 Infinity。即使不使用某個 lifecycle 階段，也需要填入 `steps: []`。省略階段會因 loader 讀取 `steps` 而失敗。
+兩個 scope timeout 接受至少 `1e-8` 的有限數字，省略／null 為不限時；拒絕字串、bool、零、負數、NaN 與 Infinity。省略 lifecycle 階段時載入空 steps；明確提供 null 或缺少 steps 的階段不合法。
+
+`retry`、`variables`、`artifact.validation` 省略時使用預設 mapping，明確 null 不合法；steps／rules 需為 list，空 list 合法。必要字串不可空白；artifact 字串 list 的項目不可為空字串，retry_on 另外依 FailureType 驗證。size 與 row 界限為非負整數，min_size_bytes 不可大於 max_size_bytes。variables 僅接受有限 scalar，拒絕 null、list 與 mapping。
 
 ### 測試與裝置資訊
 
@@ -244,19 +246,19 @@ YAML 根節點必須是 mapping（鍵值表）。欄位名稱區分大小寫；`
 
 ### 階段與步驟
 
-`lifecycle.global_setup`、`setup`、`scenario`、`teardown`、`global_teardown` 都必填，各自包含 `steps` 清單。用途與失敗路由見 [測試生命週期](#測試生命週期)。
+`lifecycle.global_setup`、`setup`、`scenario`、`teardown`、`global_teardown` 可省略；有提供的階段各自必須包含 `steps` 清單。用途與失敗路由見 [測試生命週期](#測試生命週期)。
 
 下表中的 `steps[]` 代表任何階段的一個步驟，例如 `lifecycle.scenario.steps[0]`。
 
 | 變數名稱 | 必填／選填 | 型別與預設值 | 意義與用途 | 範例 |
 | --- | --- | --- | --- | --- |
-| `lifecycle.<stage>.steps` | 必填 | list；無 YAML 預設 | 按清單順序執行；空清單跳過該階段工作 | `[]` |
+| `lifecycle.<stage>.steps` | 必填 | list；階段省略時為空清單 | 按清單順序執行；空清單跳過該階段工作 | `[]` |
 | `steps[].name` | 必填 | 字串；無預設 | 步驟名稱、log 目錄名稱與 after_step 比對值 | `write_csv` |
-| `steps[].type` | 必填 | 字串；無預設 | 描述步驟類型；目前 executor 一律執行 command | `command` |
+| `steps[].type` | 必填 | 字串；無預設 | 只接受 `command` | `command` |
 | `steps[].command` | 必填 | shell 命令字串；無預設 | 在 run directory 執行的命令 | `echo hello` |
-| `steps[].timeout_second` | 選填 | 有限正 int／float 或完整變數引用；YAML 預設 `60` | 限制每次 attempt 的程序執行時間；重試各有自己的 step timeout | `30` |
+| `steps[].timeout_second` | 選填 | 正整數 literal 或完整變數引用；YAML 預設 `60`，模板解析後允許有限正 int／float | 限制每次 attempt 的程序執行時間；重試各有自己的 step timeout | `30` |
 
-請為 steps 使用不重複、適合作為目錄名稱的 `name`。目前未強制檢查唯一性；重複名稱可能共用 log 路徑，且 after_step 會比對所有同名步驟。`type` 不會切換至 Python、keyword 或其他 executor。Bash 語法請明確使用 `bash -c '...'`，不要假設預設 shell 是 Bash。
+請為 steps 使用不重複、適合作為目錄名稱的 `name`。五個階段的 step name 必須全域唯一，重複時載入失敗。`type` 不會切換至 Python、keyword 或其他 executor。Bash 語法請明確使用 `bash -c '...'`，不要假設預設 shell 是 Bash。
 
 ### 重試設定
 
@@ -277,9 +279,9 @@ retry:
 
 ### Python API 的預設差異
 
-直接建立 `RunnerConfig` 時，test_case、device、lifecycle、retry、artifact 都是必要建構參數。`LifecycleConfig()` 可省略階段，dataclass 預設空 steps；YAML loader 則需要五個階段的 steps。`LifecycleStepContent` 建構時必須提供 timeout_second，沒有 YAML 的 60 秒預設。
+直接建立 `RunnerConfig` 時，test_case、device、lifecycle、retry、artifact 都是必要建構參數。`LifecycleConfig()` 可省略階段，dataclass 預設空 steps；YAML loader 也允許省略階段；明確提供階段時須有 steps。`LifecycleStepContent` 建構時必須提供 timeout_second，沒有 YAML 的 60 秒預設。
 
-`RetryConfig()` 的 retry_on 預設包含上述五種失敗，YAML 省略 retry_on 則為空清單。使用 Python API 時明確傳入 `retry_on=[]` 或需要的 failure types。Dataclass 建構時不執行 YAML loader 的 scope timeout 驗證；經 `run()` 執行時，step timeout 仍由 StaticVariableResolver 驗證。
+`RetryConfig()` 的 retry_on 預設包含上述五種失敗，YAML 省略 retry_on 則為空清單。使用 Python API 時明確傳入 `retry_on=[]` 或需要的 failure types。Dataclass 建構與 run() 不會自動呼叫 validate_schema／validate_cross_fields；Python 呼叫者可明確呼叫 validate_cross_fields(config)，但它不取代完整結構驗證。Dataclass 建構時不執行 YAML loader 的 scope timeout 驗證；經 `run()` 執行時，step timeout 仍由 StaticVariableResolver 驗證。
 
 ## Artifact 驗證參考
 
@@ -296,7 +298,7 @@ retry:
 | `rules[].after_step` | 選填 | step name；`null` | 指定 command 成功後的 attempt-level 驗證；按名稱精確比對 | `measure_power` |
 | `rules[].required` | 選填 | bool；`true` | 失敗是否影響 attempt 與 final status | `false` 用於診斷資料 |
 
-所有規則都會做 final validation，包括設定 after_step 的規則。沒有 after_step 的規則只做 final validation。after_step 不存在時不會觸發 attempt-level 驗證；目前不拒絕這種設定。只有 command 成功後才執行 attempt-level 驗證，取消的 attempt 會跳過。
+所有規則都會做 final validation，包括設定 after_step 的規則。沒有 after_step 的規則只做 final validation。after_step 必須指向存在的非 cleanup step；teardown／global_teardown 目標在載入時被拒絕。規則名稱也必須唯一。只有 command 成功後才執行 attempt-level 驗證，取消的 attempt 會跳過。
 
 required 規則失敗可觸發符合 retry_on 的重試。重試前會清理綁定該 step 的 required artifact targets，但只移除 run directory 內的目標；optional artifacts 和外部絕對路徑不會被清除。
 
@@ -311,19 +313,19 @@ required 規則失敗可觸發符合 retry_on 的重試。重試前會清理綁�
 | `csv_content` | 檢查 CSV header、必要欄位與資料列數 | required_columns、min_rows | `min_rows: 2` |
 | `json_content` | 檢查 JSON 能解析、必要 key 路徑與值 | required_json_paths、expected_json_values | `required_json_paths: [summary.status]` |
 
-未知 type 會產生 ARTIFACT_INVALID 驗證結果，不是新的驗證插件。CSV 檢查列數與 header，不驗證每格資料是否為數字。JSON 路徑是以 `.` 分隔的物件 key，不是 JSONPath；不支援陣列索引。
+YAML 未知 type 在載入時被拒絕；直接呼叫 ArtifactValidator 的未知 type 仍回報 ARTIFACT_INVALID。CSV 檢查列數與 header，不驗證每格資料是否為數字。JSON 路徑是以 `.` 分隔的物件 key，不是 JSONPath；不支援陣列索引。
 
 | 變數名稱 | 必填／選填 | 型別與預設值 | 意義與用途 | 範例 |
 | --- | --- | --- | --- | --- |
-| `rules[].min_size_bytes` | 選填；file_size 使用 | 整數；`null` | 最小 bytes，等於下限可通過 | `100` |
-| `rules[].max_size_bytes` | 選填；file_size 使用 | 整數；`null` | 最大 bytes，等於上限可通過 | `1048576` |
+| `rules[].min_size_bytes` | 選填；file_size 使用 | 非負整數；`null` | 最小 bytes，等於下限可通過 | `100` |
+| `rules[].max_size_bytes` | 選填；file_size 使用 | 非負整數；`null` | 最大 bytes，等於上限可通過 | `1048576` |
 | `rules[].allowed_extensions` | 載入時選填；file_extension 驗證需非空 | 字串 list；`[]` | 允許的副檔名；忽略大小寫，省略開頭的點也可 | `[csv, .json]` |
 | `rules[].required_columns` | 選填；csv_content 使用 | 字串 list；`[]` | CSV 必須包含的欄位，名稱區分大小寫；實際 header 會去掉兩側空白 | `[timestamp, power]` |
-| `rules[].min_rows` | 選填；csv_content 使用 | 整數；`null` | 最少資料列數，不含 header | `2` |
+| `rules[].min_rows` | 選填；csv_content 使用 | 非負整數；`null` | 最少資料列數，不含 header | `2` |
 | `rules[].required_json_paths` | 選填；json_content 使用 | 字串 list；`[]` | 必須存在的物件 key 路徑；值為 null 仍算存在 | `[summary.status]` |
 | `rules[].expected_json_values` | 選填；json_content 使用 | mapping；`{}` | 路徑與預期值；使用 Python 相等比較，不做嚴格 schema 型別驗證 | `{summary.status: PASSED}` |
 
-file_extension 必須提供非空 allowed_extensions 才能通過驗證；省略或空清單會產生 ARTIFACT_INVALID。file_size 省略兩個界限時只檢查檔案是否存在且為檔案。CSV 即使省略 required_columns 仍需有 header；JSON 即使省略專用欄位仍需可解析。
+file_extension 必須提供非空 allowed_extensions，否則載入失敗。csv_content 至少提供非空 required_columns 或非 null min_rows；json_content 至少提供非空 required_json_paths 或 expected_json_values。file_size 省略兩個界限時只檢查檔案是否存在且為檔案。CSV 即使省略 required_columns 仍需有 header；JSON 仍需可解析。
 
 以下片段需放入完整 YAML 的 artifact 區塊；假設腳本會產生這些檔案：
 
@@ -365,7 +367,7 @@ poetry run python main.py --config configs/advance_sample.yaml
 | 完整欄位／引用 | 必填／選填 | 型別與預設值 | 用途、範例與適用條件 |
 | --- | --- | --- | --- |
 | `variables` | 選填 | mapping；預設 `{}` | 固定參數集合；`null`、list 不合法 |
-| `variables.<NAME>` | 依引用需要 | str／int／float／bool；無個別預設 | 如 `step_timeout: 0.5`；名稱符合 `[A-Za-z_][A-Za-z0-9_]*`，值不得包含 `${{`；list／mapping／null 不合法 |
+| `variables.<NAME>` | 依引用需要 | str／int／float／bool；無個別預設 | 如 `step_timeout: 5`；名稱符合 `[A-Za-z_][A-Za-z0-9_]*`，值不得包含 `${{`；list／mapping／null 不合法 |
 | `${{ vars.NAME }}` | 選用 | 完整引用保留原型別；內插轉為 str | 例如 `timeout_second: '${{ vars.step_timeout }}'`；名稱必須已宣告 |
 | `${{ run.dir }}` | 自動提供 | 當次 run directory 的絕對路徑字串 | 例如 `path: '${{ run.dir }}/${{ vars.output_name }}'`；建立目錄後才可解析 |
 
@@ -599,7 +601,7 @@ artifacts/
     "device_serial": "demo",
     "device_product": "demo",
     "device_build": "demo",
-    "runner_version": "1.7.2",
+    "runner_version": "1.7.3",
     "started_at": "2026-09-12T00:00:00+00:00",
     "finished_at": "2026-09-12T00:00:01+00:00",
     "cancel_requested": false,

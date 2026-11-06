@@ -128,6 +128,7 @@ python -m pytest -k timeout -v
 
 | 版本 | 閱讀重點 | 測試覆蓋與證據 |
 | --- | --- | --- |
+| [v1.7.3](#v1-7-3) | Schema mutations, Cartesian parameterization, error aggregation and loader integration | [Test matrix](test_matrix/test_matrix_v1.7.3.md) |
 | [v1.7.2](#v1-7-2) | 一次綁定、parametrize 無效 serial、monkeypatch 快照與 subprocess context | [Test matrix](test_matrix/test_matrix_v1.7.2.md) |
 | [v1.7.1](#v1-7-1) | monkeypatch host 隔離、明確 environ mapping、快照斷言、執行前失敗與 JSON metadata | [Test matrix](test_matrix/test_matrix_v1.7.1.md) |
 | [v1.7.0](#v1-7-0) | Scalar 型別斷言、參數化、真實 YAML／subprocess／CSV／JSON、不可變 config | [Test matrix](test_matrix/test_matrix_v1.7.0.md) |
@@ -606,3 +607,22 @@ poetry run pytest -q
 ```
 
 這些技巧沿用既有 pytest 與標準函式庫，沒有新增 fixture 或 decorator。原先缺少的裝置 namespace、未綁定／重綁錯誤與快照案例由上述測試補上；尚缺裝置 path 專用案例、product/build 非法型別、同設定多次 run 的裝置 context 與 retry 專用斷言。
+
+<a id="v1-7-3"></a>
+
+## v1.7.3 — Configuration Validation
+
+來源：f56a44b、ed6cf39、66b37ff 與目前工作目錄；覆蓋及修正見 [矩陣](test_matrix/test_matrix_v1.7.3.md)。
+
+`valid_raw()` 與 `config_with_rules()` 是一般 helper，不是 pytest fixture。每次建立新的設定，避免 mutation 汙染下一個案例。`test_invalid_schema` 用 parametrize 傳入 lambda mutation 和錯誤片段，`pytest.raises(ConfigurationValidationError, match=fragment)` 檢查診斷；match 是 regex，這些片段沒有全面 escape，不能當作完整精確字串比較。
+
+`test_non_mapping_values_report_validation_errors` 疊加兩個 parametrize，產生 11 個位置與四種值的 Cartesian product，共 44 例；空 tuple 表示直接替換 root。scope timeout 同樣以兩個欄位與五個值產生十例。`test_schema_aggregates_multiple_errors` 用 raises 的 ExceptionInfo.value.errors 檢查至少兩個錯誤，不依賴 set 迭代產生的訊息順序。
+
+跨欄位案例使用真實 dataclasses；`dataclasses.replace()` 建立 cleanup lifecycle 變體。Loader 案例用 tmp_path、safe_dump 寫入真實 YAML，先確認模板保留，再用 assignment 改成不存在的 after_step，重新載入並斷言例外；沒有 mock subprocess，也沒有執行 runner。
+
+```bash
+poetry run pytest -q tests/test_unit/test_configuration_validation.py tests/test_unit/test_config_loader.py
+poetry run pytest -q
+```
+
+本次文件工作只補測試描述，不改斷言。既有工作目錄已修正 fixture 拼字、helper 名稱與預期錯誤訊息；這些是測試設定修正，不能擴大解讀為新增產品能力或 Android demo 已通過。

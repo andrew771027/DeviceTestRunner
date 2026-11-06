@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.7.3]
+
+Scope: configuration validation. Source draft `f56a44b`, test draft `ed6cf39`, guide draft `66b37ff` and current working tree; release publication unverified.
+
+### Added
+
+- Schema validation rejects unknown fields, invalid mappings/lists/scalars and numeric ranges before configuration construction.
+- Cross-field validation rejects duplicate step/rule names, unsupported types, missing or cleanup after_step targets, reversed size bounds and missing extension/CSV/JSON constraints.
+- ConfigurationValidationError carries phase-local errors with field paths; version architecture, matrix, acceptance and completion records document the contract.
+- Workstation-specific Android demo configuration and Makefile demo target; external repositories, SDK and emulator setup are required.
+
+### Compatibility and fixes
+
+- Omitted lifecycle stages now load empty steps; supplied stages require steps. YAML step timeout literals require integers >= 1; whole templates still resolve to finite positive int/float values.
+- Unknown keys formerly ignored now fail loading, including obsolete retry_on_failure. Python-created configs bypass loader validation.
+- Working-tree fixes correct YAML fixture typos, retry diagnostic expectations, optional-timeout helper calls and the loader cross-field test mutation. See [verification and open checks](docs/definition_of_done/definition_of_done_v1.7.3.md).
+
 ## [1.7.2]
 
 Scope: device runtime context. Inspected source `940fe66`, tests `2aeb559` and guide draft `278e012`; release publication is unverified.

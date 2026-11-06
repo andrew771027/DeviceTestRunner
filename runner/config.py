@@ -17,6 +17,7 @@ from runner.models import (
     RunnerConfig,
 )
 from runner.variables import StaticVariableResolver
+from runner.config_validation import validate_schema, validate_cross_fields,
 
 
 class ConfigLoader:
@@ -27,6 +28,8 @@ class ConfigLoader:
 
         if not isinstance(raw, dict):
             raise ValueError("Config root must be a YAML mapping.")
+
+        validate_schema(raw)
 
         test_case = self._load_test_case(raw)
 
@@ -51,17 +54,17 @@ class ConfigLoader:
 
         retry = self._load_retry(raw)
 
-        run_timeout_seconds = self._load_optional_positivbe_timeout(
+        run_timeout_seconds = self._load_optional_positive_timeout(
             raw,
             "run_timeout_seconds",
         )
 
-        cleanup_timeout_seconds = self._load_optional_positivbe_timeout(
+        cleanup_timeout_seconds = self._load_optional_positive_timeout(
             raw,
             "cleanup_timeout_seconds",
         )
 
-        return RunnerConfig(
+        config = RunnerConfig(
             variables=variables,
             test_case=test_case,
             device=device,
@@ -71,6 +74,9 @@ class ConfigLoader:
             lifecycle=lifecycle,
             artifact=artifact,
         )
+
+        validate_cross_fields(config)
+        return config
 
     @staticmethod
     def _load_test_case(raw: dict[str, Any]) -> DeviceTestCase:
@@ -197,7 +203,7 @@ class ConfigLoader:
         return retry_on
 
     @staticmethod
-    def _load_optional_positivbe_timeout(raw: dict[str, Any], key: str) -> float | None:
+    def _load_optional_positive_timeout(raw: dict[str, Any], key: str) -> float | None:
         raw_value = raw.get(key)
 
         if raw_value is None:

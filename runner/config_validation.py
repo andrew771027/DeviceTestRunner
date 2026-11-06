@@ -18,17 +18,26 @@ RULE_TYPES = {
     "csv_content",
     "json_content",
 }
+# 變數名稱：首字元須為英文字母或底線，後續僅允許英文字母、數字或底線。
+# ^ 與 $ 限定整個字串，避免名稱中混入其他符號。
 NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+# 完整模板表達式，例如 ${{ variables.timeout }}；不接受前後夾帶其他文字。
+# \s* 允許內容兩側有空白，[^{}]+ 要求至少一個非大括號字元，且不允許巢狀大括號。
+# 此處僅檢查外形，不解析表達式；僅含空白的內容也能符合此正規表示式。
 TEMPLATE = re.compile(r"^\$\{\{\s*[^{}]+\s*\}\}$")
 
 
 class ConfigurationValidationError(ValueError):
+    """保存所有設定驗證錯誤，並以單一例外回報。"""
+
     def __init__(self, errors: list[str]):
+        """保留錯誤清單，並組合含逐項錯誤說明的例外訊息。"""
         self.errors = errors
         super().__init__("Invalid runner configuration:\n" + "\n".join(f"- {e}" for e in errors))
 
 
 def _mapping(value, path, errors):
+    """確認 value 為字典；否則記錄欄位路徑與錯誤，回傳空字典以繼續驗證。"""
 
     if not isinstance(value, dict):
 
@@ -39,6 +48,7 @@ def _mapping(value, path, errors):
 
 
 def _keys(value, allowed, required, path, errors):
+    """檢查字典中的未知欄位與缺少的必填欄位，將錯誤加入 errors。"""
     for k in value:
 
         if k not in allowed:
@@ -53,6 +63,7 @@ def _keys(value, allowed, required, path, errors):
 
 
 def _string(value, path, errors, *, template=True):
+    """檢查非空白字串；template=False 時也禁止出現模板起始標記。"""
     if not isinstance(value, str) or not value.strip():
 
         errors.append(f"{path}: expected non-empty string")
@@ -63,6 +74,11 @@ def _string(value, path, errors, *, template=True):
 
 
 def _number(value, path, errors, *, minimum=0, integer=False, allow_template=False):
+    """檢查有限數值及下限，將不符條件的欄位加入 errors。
+
+    integer=True 時僅接受整數，否則接受整數或浮點數；兩者皆排除布林值。
+    allow_template=True 時允許完整模板字串，略過當下的數值檢查。
+    """
     if allow_template and isinstance(value, str) and TEMPLATE.fullmatch(value):
         return
 
@@ -74,7 +90,11 @@ def _number(value, path, errors, *, minimum=0, integer=False, allow_template=Fal
 
 
 def validate_schema(raw: dict) -> None:
-    """Validate YAML shape before constructing dataclasses; collect all errors."""
+    """在建立設定 dataclass 前，驗證 YAML 載入結果的結構與欄位型別。
+
+    檢查必要欄位、未知欄位、變數、生命週期步驟、產物規則及重試與逾時設定。
+    收集所有檢查發現的錯誤後拋出 ConfigurationValidationError；通過則回傳 None。
+    """
     errors = []
 
     raw = _mapping(
@@ -411,7 +431,12 @@ def validate_schema(raw: dict) -> None:
 
 
 def validate_cross_fields(config: RunnerConfig) -> None:
-    """Validate semantic relations independent of variable expansion."""
+    """驗證 RunnerConfig 中不依賴變數展開的跨欄位關係。
+
+    檢查步驟與規則名稱是否重複、類型是否支援、after_step 引用是否有效，
+    以及檔案大小上下限和各類產物規則所需的條件。
+    收集所有檢查發現的錯誤後拋出 ConfigurationValidationError；通過則回傳 None。
+    """
     errors = []
 
     all_steps = [

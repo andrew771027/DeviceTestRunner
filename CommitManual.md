@@ -69,8 +69,11 @@ README 面向第一次接觸專案的外部使用者，必須能獨立閱讀。�
 ## 發佈前
 
 - [ ] 確認該版本的完成條件與驗收條件已滿足。
-- [ ] 確認 tag 指向預定發佈的 commit，並與版本號一致。
-- [ ] 確認 GitHub Release 已發布，內容與該版本的變更一致。
+- [ ] 依 [Release pipeline](docs/ci/ci_release.md) 核對流程，先修正其中列出的目前 workflow 阻礙。
+- [ ] 確認 tag 使用 `vMAJOR.MINOR.PATCH`，去除 `v` 後等於 `poetry version -s`，且指向的 commit 已包含在 `origin/main`。
+- [ ] 推送 tag 後，確認 release workflow 的測試、建置、wheel smoke test 與上傳步驟成功；一般 main push 不會觸發發佈。
+- [ ] 確認 `device-test-runner-<tag>` artifact 包含 wheel 與 source distribution；此 artifact 保留 30 天。
+- [ ] 確認 GitHub Release 已發布，內容與該版本的變更一致，並附有同次建置的 `.whl` 與 `.tar.gz`；僅有 tag 或 Release 頁面不足以證明套件已上傳。
 
 ## 手動文件更新 workflow
 

@@ -6,7 +6,10 @@ Device Test Runner uses a tag-driven GitHub Actions release workflow.
 
 A release represents a specific, validated Device Test Runner source revision and its distributable Python packages.
 
-The release process is separated from normal CI.
+The release process is separated from normal CI and is defined in
+[release.yml](../../.github/workflows/release.yml). The sequence below is the
+intended flow. Current blocking issues are listed under “Current Workflow
+Limitations”; a successful release has not been verified.
 
 ```text
 Pull Request
@@ -18,6 +21,8 @@ main
 Git Tag
     ↓
 Release Workflow
+    ↓
+Main ancestry / version checks / pytest
     ↓
 Build
     ↓
@@ -50,7 +55,9 @@ Package version:
 1.7.3
 ```
 
-A mismatch causes the release workflow to fail.
+The intended check removes the leading `v` and compares the result with
+`poetry version -s`. The current comparison has a typo and fails even when
+the versions match; see “Current Workflow Limitations”.
 
 ## Creating a Release
 
@@ -79,7 +86,8 @@ Push the tag:
 git push origin v1.7.3
 ```
 
-Pushing the tag triggers the release workflow.
+Pushing the tag triggers the release workflow. Resolve the current workflow
+limitations before publishing a release tag.
 
 ## Release Workflow Trigger
 
@@ -90,11 +98,17 @@ on:
       - "v*.*.*"
 ```
 
-Normal pushes to `main` do not create releases.
+Normal pushes to `main` do not create releases. There is no manual trigger.
+The tag filter is a glob, not strict semantic version validation.
 
 ## Release Validation
 
-Before building a package, the release workflow verifies:
+The single `release` job (`Build and Release`) runs on `ubuntu-latest` and
+selects Python 3.12. It checks out full history (`fetch-depth: 0`), fetches
+`origin/main`, installs Poetry using `python -m pip install Poetry` without a
+version pin, and prints the tag.
+
+Before building, the workflow intends to verify:
 
 ```text
 Tagged commit belongs to main
@@ -102,9 +116,12 @@ Tag matches package version
 Automated tests pass
 ```
 
-The tagged commit must already be part of the protected `main` branch.
+The ancestry check uses `git merge-base --is-ancestor` against `origin/main`.
+An older ancestor is allowed; the tag need not point to the branch tip. The
+workflow does not configure branch protection or query PR Quality Gate results.
 
-This preserves the relationship between the PR Quality Gate and the release process.
+Tests use `poetry run pytest`, without marker filters or coverage options.
+No release test-report upload is configured.
 
 ## Package Build
 
@@ -118,8 +135,8 @@ Expected output:
 
 ```text
 dist/
-├── device_test_runner-<version>-py3-none-any.whl
-└── device_test_runner-<version>.tar.gz
+├── devicetestrunner-<version>-py3-none-any.whl
+└── devicetestrunner-<version>.tar.gz
 ```
 
 The wheel is the built Python distribution.
@@ -128,22 +145,21 @@ The `.tar.gz` file is the source distribution.
 
 ## Package Smoke Test
 
-The built wheel is installed into a clean virtual environment.
+The workflow creates a clean virtual environment, upgrades pip, installs the
+wheel and attempts an import:
 
 ```bash
 python -m venv /tmp/dtr-release-test
-
-/tmp/dtr-release-test/bin/python \
-  -m pip install dist/*.whl
+/tmp/dtr-release-test/bin/python -m pip install --upgrade pip
+/tmp/dtr-release-test/bin/python -m pip install dist/*.whl
+/tmp/dtr-release-test/bin/python -c "import device_test_runner"
 ```
 
-This validates the built package rather than only validating the repository source tree.
-
-When a CLI entry point is available, the release workflow should additionally execute a basic command such as:
-
-```bash
-dtr --help
-```
+The configured import is `device_test_runner`, while `pyproject.toml` packages
+`runner`. This needs correction. The command also runs from the checkout;
+an import of `runner` there could resolve source files. Run validation outside
+the checkout to confirm the installed wheel is used. No CLI smoke command is
+configured.
 
 ## Package Artifact
 
@@ -158,15 +174,22 @@ device-test-runner-v1.7.3
 Contents:
 
 ```text
-device_test_runner-1.7.3-py3-none-any.whl
-device_test_runner-1.7.3.tar.gz
+devicetestrunner-1.7.3-py3-none-any.whl
+devicetestrunner-1.7.3.tar.gz
 ```
+
+The upload uses `actions/upload-artifact@v7`, selects `dist/*whl` and
+`dist/*.tar.gz`, retains files for **30 days**, and fails if no files are found.
+It has no `if: always()` override and runs only after preceding steps succeed.
 
 Workflow artifacts are temporary CI artifacts and are not treated as the primary release distribution channel.
 
 ## GitHub Release
 
-The same built package files are attached to the GitHub Release.
+The workflow intends to attach the same built package files to the GitHub
+Release using `gh`, authenticated by `GH_TOKEN: ${{ github.token }}`. Its
+current shell command has a missing line continuation; the example below
+shows the intended command.
 
 The release is created using the existing Git tag.
 
@@ -175,7 +198,8 @@ gh release create v1.7.3 \
   dist/*.whl \
   dist/*.tar.gz \
   --verify-tag \
-  --generate-notes
+  --generate-notes \
+  --title "Device Test Runner v1.7.3"
 ```
 
 The release workflow must not silently create an unexpected tag.
@@ -199,6 +223,23 @@ permissions:
 because it creates a GitHub Release.
 
 Write permission should be limited to the release workflow.
+
+## Current Workflow Limitations
+
+The checked-in workflow has these blocking issues:
+
+| Step | Current issue | Required correction |
+| --- | --- | --- |
+| Setup Python | `uses: actions /setup-python@v7` contains a space | Use `actions/setup-python@v7` |
+| Validate tag matches package version | Compares the literal `"4{TAG_VERSION}"` | Use `"${TAG_VERSION}"` |
+| Run release validation tests | Installs Poetry but not project dependencies before pytest | Install project dependencies before tests |
+| Smoke test built wheel | Imports `device_test_runner`, while the packaged module is `runner` | Import `runner` outside the checkout after installing the wheel |
+| Create Github Release | Missing trailing `\` after `gh release create "${GITHUB_REF_NAME}"` | Continue the command onto the asset and option lines as shown above |
+
+The final shell issue can leave a Release created without assets before the
+step fails. Inspect the run and its Release before retrying. These findings
+come from source inspection; no GitHub Actions run or published release was
+verified for this documentation update.
 
 ## Release Immutability
 

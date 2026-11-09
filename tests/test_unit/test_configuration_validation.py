@@ -120,8 +120,14 @@ def test_valid_schema():
 @pytest.mark.parametrize(
     "mutate, fragment",
     [
-        (lambda x: x["retry"].update(max_attempts=True), "retry.max_attempts"),
-        (lambda x: x["retry"].update(delay_seconds=-1), "retry.delay_seconds"),
+        (   
+            lambda x: x["retry"].update(max_attempts=True), 
+            "retry.max_attempts",
+        ),
+        (   
+            lambda x: x["retry"].update(delay_seconds=-1), 
+            "retry.delay_seconds",
+        ),
         (
             lambda x: x["lifecycle"]["scenario"]["steps"][0].update(timeout_second=0),
             "timeout_second",
@@ -146,11 +152,26 @@ def test_valid_schema():
             lambda x: x["artifact"]["validation"]["rules"][0].update(typo="oops"),
             ".typo",
         ),
-        (lambda x: x.update(unknown_root=123), "root.unknown_root"),
-        (lambda x: x.pop("device"), "root.device"),
-        (lambda x: x["lifecycle"]["scenario"].update(steps="not-a-list"), "steps"),
-        (lambda x: x.update(run_timeout_seconds=False), "run_timeout_seconds"),
-        (lambda x: x["variables"].update(repeat=float("inf")), "variables.repeat"),
+        (
+            lambda x: x.update(unknown_root=123), 
+            "root.unknown_root",
+        ),
+        (
+            lambda x: x.pop("device"), 
+            "root.device",
+        ),
+        (
+            lambda x: x["lifecycle"]["scenario"].update(steps="not-a-list"), 
+            "steps",
+        ),
+        (
+            lambda x: x.update(run_timeout_seconds=False), 
+            "run_timeout_seconds",
+        ),
+        (
+            lambda x: x["variables"].update(repeat=float("inf")), 
+            "variables.repeat",
+        ),
     ],
 )
 def test_invalid_schema(mutate, fragment):

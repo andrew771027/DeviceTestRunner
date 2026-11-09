@@ -224,13 +224,23 @@ because it creates a GitHub Release.
 
 Write permission should be limited to the release workflow.
 
+## Action Resolution Failure
+
+`Unable to resolve action actions /setup-python, repository not found` is
+caused by the space in `actions /setup-python`. The current workflow uses
+`actions/setup-python@v7` without that space.
+
+For this tag-triggered workflow, check the workflow file at the triggering
+tag's commit. Rerunning the failed run uses the same Git ref and commit;
+a correction on `main` alone does not update that tagged workflow. Follow
+the release immutability policy below when preparing a corrected release.
+
 ## Current Workflow Limitations
 
 The checked-in workflow has these blocking issues:
 
 | Step | Current issue | Required correction |
 | --- | --- | --- |
-| Setup Python | `uses: actions /setup-python@v7` contains a space | Use `actions/setup-python@v7` |
 | Validate tag matches package version | Compares the literal `"4{TAG_VERSION}"` | Use `"${TAG_VERSION}"` |
 | Run release validation tests | Installs Poetry but not project dependencies before pytest | Install project dependencies before tests |
 | Smoke test built wheel | Imports `device_test_runner`, while the packaged module is `runner` | Import `runner` outside the checkout after installing the wheel |

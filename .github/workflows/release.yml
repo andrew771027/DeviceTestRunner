@@ -58,6 +58,9 @@ jobs:
             exit 1
           fi
 
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
       - name: Run release validation tests
         run: |
           poetry run pytest

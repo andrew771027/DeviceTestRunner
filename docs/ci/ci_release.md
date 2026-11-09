@@ -56,8 +56,7 @@ Package version:
 ```
 
 The intended check removes the leading `v` and compares the result with
-`poetry version -s`. The current comparison has a typo and fails even when
-the versions match; see “Current Workflow Limitations”.
+`poetry version -s`. A mismatch causes the workflow to fail.
 
 ## Creating a Release
 
@@ -119,6 +118,10 @@ Automated tests pass
 The ancestry check uses `git merge-base --is-ancestor` against `origin/main`.
 An older ancestor is allowed; the tag need not point to the branch tip. The
 workflow does not configure branch protection or query PR Quality Gate results.
+
+Before testing, `poetry install --no-interaction` installs the project and its
+locked dependencies, including pytest, into the Poetry environment. Installing
+Poetry alone does not install pytest.
 
 Tests use `poetry run pytest`, without marker filters or coverage options.
 No release test-report upload is configured.
@@ -241,8 +244,6 @@ The checked-in workflow has these blocking issues:
 
 | Step | Current issue | Required correction |
 | --- | --- | --- |
-| Validate tag matches package version | Compares the literal `"4{TAG_VERSION}"` | Use `"${TAG_VERSION}"` |
-| Run release validation tests | Installs Poetry but not project dependencies before pytest | Install project dependencies before tests |
 | Smoke test built wheel | Imports `device_test_runner`, while the packaged module is `runner` | Import `runner` outside the checkout after installing the wheel |
 | Create Github Release | Missing trailing `\` after `gh release create "${GITHUB_REF_NAME}"` | Continue the command onto the asset and option lines as shown above |
 

@@ -149,20 +149,21 @@ The `.tar.gz` file is the source distribution.
 ## Package Smoke Test
 
 The workflow creates a clean virtual environment, upgrades pip, installs the
-wheel and attempts an import:
+wheel and imports its `runner` module:
 
 ```bash
 python -m venv /tmp/dtr-release-test
 /tmp/dtr-release-test/bin/python -m pip install --upgrade pip
 /tmp/dtr-release-test/bin/python -m pip install dist/*.whl
-/tmp/dtr-release-test/bin/python -c "import device_test_runner"
+cd /tmp/dtr-release-test
+/tmp/dtr-release-test/bin/python -I -c "import runner; print(runner.__file__)"
 ```
 
-The configured import is `device_test_runner`, while `pyproject.toml` packages
-`runner`. This needs correction. The command also runs from the checkout;
-an import of `runner` there could resolve source files. Run validation outside
-the checkout to confirm the installed wheel is used. No CLI smoke command is
-configured.
+The distribution is named `devicetestrunner`, while `pyproject.toml` packages
+the Python module `runner`. The import runs outside the checkout with `-I`
+(isolated mode), which excludes the working directory and `PYTHONPATH` from
+module lookup. Printing `runner.__file__` shows the installed module location.
+No CLI smoke command is configured.
 
 ## Package Artifact
 
@@ -244,7 +245,6 @@ The checked-in workflow has these blocking issues:
 
 | Step | Current issue | Required correction |
 | --- | --- | --- |
-| Smoke test built wheel | Imports `device_test_runner`, while the packaged module is `runner` | Import `runner` outside the checkout after installing the wheel |
 | Create Github Release | Missing trailing `\` after `gh release create "${GITHUB_REF_NAME}"` | Continue the command onto the asset and option lines as shown above |
 
 The final shell issue can leave a Release created without assets before the

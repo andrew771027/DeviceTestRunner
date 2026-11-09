@@ -83,8 +83,9 @@ jobs:
           /tmp/dtr-release-test/bin/python \
             -m pip install dist/*.whl
 
-          /tmp/dtr-release-test/bin/python \
-            -c "import device_test_runner"
+          cd /tmp/dtr-release-test
+          /tmp/dtr-release-test/bin/python -I \
+            -c "import runner; print(runner.__file__)"
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v7

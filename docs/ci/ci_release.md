@@ -8,8 +8,8 @@ A release represents a specific, validated Device Test Runner source revision an
 
 The release process is separated from normal CI and is defined in
 [release.yml](../../.github/workflows/release.yml). The sequence below is the
-intended flow. Current blocking issues are listed under “Current Workflow
-Limitations”; a successful release has not been verified.
+intended flow. Recovery from a partially created Release is described below; a successful
+end-to-end release has not been verified.
 
 ```text
 Pull Request
@@ -191,9 +191,9 @@ Workflow artifacts are temporary CI artifacts and are not treated as the primary
 ## GitHub Release
 
 The workflow intends to attach the same built package files to the GitHub
-Release using `gh`, authenticated by `GH_TOKEN: ${{ github.token }}`. Its
-current shell command has a missing line continuation; the example below
-shows the intended command.
+Release using `gh`, authenticated by `GH_TOKEN: ${{ github.token }}`. The
+asset paths and options belong to the same command through shell line
+continuations:
 
 The release is created using the existing Git tag.
 
@@ -239,18 +239,27 @@ tag's commit. Rerunning the failed run uses the same Git ref and commit;
 a correction on `main` alone does not update that tagged workflow. Follow
 the release immutability policy below when preparing a corrected release.
 
-## Current Workflow Limitations
+## Recovering a Partially Created Release
 
-The checked-in workflow has these blocking issues:
+A missing trailing `\` after `gh release create "${GITHUB_REF_NAME}"` causes
+Bash to execute the wheel path as a separate command, producing
+`Permission denied` (exit code 126). The supplied v1.7.3 run log shows the
+Release URL before this failure: the create command succeeded without assets.
+The current workflow includes the required continuation.
 
-| Step | Current issue | Required correction |
-| --- | --- | --- |
-| Create Github Release | Missing trailing `\` after `gh release create "${GITHUB_REF_NAME}"` | Continue the command onto the asset and option lines as shown above |
+Rerunning `gh release create` for that tag will encounter the existing Release.
+After downloading the original build's package artifact and verifying that
+its wheel and source distribution match the release, attach those files from
+the directory containing `dist/`:
 
-The final shell issue can leave a Release created without assets before the
-step fails. Inspect the run and its Release before retrying. These findings
-come from source inspection; no GitHub Actions run or published release was
-verified for this documentation update.
+```bash
+gh release upload v1.7.3 dist/*.whl dist/*.tar.gz
+```
+
+This recovery command requires an authenticated GitHub CLI in the repository.
+It does not overwrite existing assets. Preserve the original tag and build;
+verify both attachments on the Release after upload. No remote recovery was
+performed as part of this documentation update.
 
 ## Release Immutability
 

@@ -133,8 +133,17 @@ CI includes code quality checks, unit and integration testing, coverage reports,
 and retained test artifacts. Deployment and hardware-dependent test execution
 are outside the workflow's scope.
 
+## Release Workflow
+
+The separate [release workflow](../../.github/workflows/release.yml) runs on
+`v*.*.*` tag pushes and selects Python 3.12. It intends to validate ancestry,
+version and tests, build packages, smoke test the wheel, upload a 30-day
+artifact and create a GitHub Release. See the [release guide](ci_release.md)
+for details and current blocking issues.
+
 ## Related Documentation
 
+* [Release pipeline](ci_release.md)
 * [CI workflow](../../.github/workflows/ci.yml)
 * [Pull Request Quality Gate](ci_pull_request_quality_gate.md)
 * [Matrix testing](ci_matrix_testing.md)

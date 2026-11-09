@@ -78,9 +78,21 @@ The artifact may contain:
 - Device Test Runner reports
 - selected subprocess stdout and stderr
 
+## Release Package Artifacts
+
+The separate [release workflow](ci_release.md) uploads
+`device-test-runner-<tag>` (for example, `device-test-runner-v1.7.3`). It selects
+`dist/*whl` and `dist/*.tar.gz`, retains files for **30 days**, and uses
+`if-no-files-found: error`. It has no `if: always()` override and runs only
+after preceding steps succeed.
+
+GitHub Release assets are the intended permanent distribution channel.
+See the release guide for current blockers; configuration alone does not
+prove that packages were uploaded or published.
+
 ## Failure Handling
 
-Artifact upload uses:
+Normal CI test-evidence artifact uploads use:
 
 ```yaml
 if: always()

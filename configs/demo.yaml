@@ -1,0 +1,164 @@
+# Execute from DeviceTestRunner:
+#   .venv/bin/python main.py --config configs/demo.yml
+#
+# Prerequisites: macOS, compatible JDK 17+, accepted Android SDK licenses,
+# Android Command Line Tools, and SDK tools already available on PATH.
+# Gradle must already be able to locate ~/Android/Sdk through the workstation's
+# existing SDK configuration or the fixture's local.properties.
+# SDK/Gradle downloads require network access.
+#
+# Dedicated emulator host only; run sequentially. stop_emulator.sh selects the
+# first online emulator, and cleanup.sh deletes cookbook_pixel_api_36.
+# The initial stop guarantees a fresh emulator launch and emulator.log on reruns.
+# Each step invokes exactly one existing script or one native adb command.
+# bash below only invokes existing repository scripts; there is no inline code.
+# Artifact rules inspect the original producer paths; they do not copy files.
+test_case:
+  id: macos_android_cookbook_demo
+  name: macOS Android Cookbook demo
+  description: Build, install, run, activate, rotate, uninstall, stop and clean.
+device:
+  serial: emulator-5554
+  product: pixel_7
+  build: android-36-google_apis
+lifecycle:
+  global_setup:
+    steps:
+      - name: bootstrap
+        type: command
+        command: "bash /Users/poyuan/Desktop/andrew771027/android-environment/scripts/bootstrap.sh"
+        timeout_second: 60
+      - name: install_sdk
+        type: command
+        command: "bash /Users/poyuan/Desktop/andrew771027/android-environment/scripts/install_sdk.sh"
+        timeout_second: 1800
+      - name: install_build_tools
+        type: command
+        command: "bash /Users/poyuan/Desktop/andrew771027/android-environment/scripts/install_build_tools.sh"
+        timeout_second: 600
+      - name: build_apk
+        type: command
+        command: "bash /Users/poyuan/Desktop/andrew771027/android-cookbook/scripts/build-test-apk.sh"
+        timeout_second: 1200
+      - name: stop_previous_emulator
+        type: command
+        command: "bash /Users/poyuan/Desktop/andrew771027/android-environment/scripts/stop_emulator.sh"
+        timeout_second: 45
+      - name: create_avd
+        type: command
+        command: "bash /Users/poyuan/Desktop/andrew771027/android-environment/scripts/create_avd.sh"
+        timeout_second: 120
+  setup:
+    steps:
+      - name: start_emulator
+        type: command
+        command: "bash /Users/poyuan/Desktop/andrew771027/android-environment/scripts/start_emulator.sh"
+        timeout_second: 240
+      - name: wait_for_emulator
+        type: command
+        command: "bash /Users/poyuan/Desktop/andrew771027/android-environment/scripts/wait_for_emulator.sh"
+        timeout_second: 120
+      - name: sleep_30s
+        type: command
+        command: sleep 30
+        timeout_second: 60
+      - name: install_apk
+        type: command
+        command: "adb -s emulator-5554 install -r /Users/poyuan/Desktop/andrew771027/android-cookbook/tests/fixtures/test-app/cookbook-test-app.apk"
+        timeout_second: 120
+  scenario:
+    steps:
+      - name: enable_app
+        type: command
+        command: "adb -s emulator-5554 shell pm enable com.example.androidcookbook.fixture"
+        timeout_second: 60
+      - name: wake_screen
+        type: command
+        command: "adb -s emulator-5554 shell input keyevent KEYCODE_WAKEUP"
+        timeout_second: 60
+      - name: dismiss_keyguard
+        type: command
+        command: "adb -s emulator-5554 shell wm dismiss-keyguard"
+        timeout_second: 60
+      - name: disable_auto_rotation
+        type: command
+        command: "adb -s emulator-5554 shell settings put system accelerometer_rotation 0"
+        timeout_second: 60
+      - name: set_portrait
+        type: command
+        command: "adb -s emulator-5554 shell settings put system user_rotation 0"
+        timeout_second: 60
+      - name: run_app
+        type: command
+        command: "adb -s emulator-5554 shell am start -W -n com.example.androidcookbook.fixture/.MainActivity"
+        timeout_second: 60
+      - name: activate_increment_action
+        type: command
+        command: "adb -s emulator-5554 shell am start -W --activity-single-top -n com.example.androidcookbook.fixture/.MainActivity --es cookbook_action increment"
+        timeout_second: 60
+      - name: rotate_landscape_1
+        type: command
+        command: "adb -s emulator-5554 shell settings put system user_rotation 1"
+        timeout_second: 60
+      - name: rotate_landscape_2
+        type: command
+        command: "adb -s emulator-5554 shell settings put system user_rotation 2"
+        timeout_second: 60
+      - name: rotate_landscape_3
+        type: command
+        command: "adb -s emulator-5554 shell settings put system user_rotation 3"
+        timeout_second: 60
+      - name: rotate_landscape_4
+        type: command
+        command: "adb -s emulator-5554 shell settings put system user_rotation 0"
+        timeout_second: 60
+      - name: sleep_10s
+        type: command
+        command: sleep 10
+        timeout_second: 60
+  teardown:
+    steps:
+      - name: stop_app
+        type: command
+        command: "adb -s emulator-5554 shell am force-stop com.example.androidcookbook.fixture"
+        timeout_second: 60
+      - name: uninstall_apk
+        type: command
+        command: "adb -s emulator-5554 uninstall com.example.androidcookbook.fixture"
+        timeout_second: 60
+      - name: stop_emulator
+        type: command
+        command: "bash /Users/poyuan/Desktop/andrew771027/android-environment/scripts/stop_emulator.sh"
+        timeout_second: 45
+  global_teardown:
+    steps:
+      - name: ensure_emulator_stopped
+        type: command
+        command: "bash /Users/poyuan/Desktop/andrew771027/android-environment/scripts/stop_emulator.sh"
+        timeout_second: 45
+      - name: clean_avd
+        type: command
+        command: "bash /Users/poyuan/Desktop/andrew771027/android-environment/scripts/cleanup.sh"
+        timeout_second: 60
+artifact:
+  output_dir: artifacts/demo
+  validation:
+    rules:
+      - name: emulator_log_exists
+        type: exists
+        path: /Users/poyuan/Desktop/andrew771027/android-environment/artifacts/emulator.log
+        required: true
+      - name: emulator_log_extension
+        type: file_extension
+        path: /Users/poyuan/Desktop/andrew771027/android-environment/artifacts/emulator.log
+        allowed_extensions: [.log]
+        required: true
+      - name: cookbook_apk_exists
+        type: exists
+        path: /Users/poyuan/Desktop/andrew771027/android-cookbook/tests/fixtures/test-app/cookbook-test-app.apk
+        required: true
+      - name: cookbook_apk_extension
+        type: file_extension
+        path: /Users/poyuan/Desktop/andrew771027/android-cookbook/tests/fixtures/test-app/cookbook-test-app.apk
+        allowed_extensions: [.apk]
+        required: true

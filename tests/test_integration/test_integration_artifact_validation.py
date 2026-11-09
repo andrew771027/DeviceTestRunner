@@ -223,17 +223,17 @@ def test_command_runs_inside_run_directory(tmp_path: Path):
                 - name: save_working_directory
                   type: command
                   command: pwd > current_directory.txt
-                  timeout_seconds: 5
+                  timeout_second: 5
         teardown:
             steps: []
         global_teardown:
             steps: []
     artifact:
         output_dir: {output_dir}
-        validaiton:
+        validation:
             rules:
                 - name: cwd_file
-                  type: existsa
+                  type: exists
                   path: current_directory.txt
 """,
         encoding="utf-8",
@@ -366,7 +366,7 @@ def test_csv_and_json_content_validation(tmp_path: Path):
         (Path(result.artifact_dir) / "result.json").read_text(encoding="utf-8")
     )
 
-    assert saved_report["metadata"]["runner_version"] == "1.7.2"
+    assert saved_report["metadata"]["runner_version"] == "1.7.3"
     assert saved_report["summary"]["status"] == "PASSED"
 
 

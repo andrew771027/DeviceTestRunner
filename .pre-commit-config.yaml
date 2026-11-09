@@ -39,4 +39,4 @@ repos:
         exclude: migrations/
         args:
           - --max-line-length=100
-          - --ignore=E131,E203
+          - --ignore=E131,E203,W503

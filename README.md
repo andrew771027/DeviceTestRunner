@@ -6,7 +6,7 @@
 
 Device Test Runner 使用 YAML 定義裝置測試流程，執行既有的 Bash、Python、ADB 等命令，並保存每次執行的輸出與 JSON 報告。它負責安排測試步驟、驗證輸出檔案，以及依設定重試失敗步驟；裝置操作仍由你的腳本處理。
 
-目前版本為 **v1.7.2**。支援五階段測試流程、整次執行、清理範圍與步驟逾時、選擇性重試、輸出檔案驗證、程序群組清理、Ctrl+C 取消、靜態變數替換與 host 環境變數引用與裝置 runtime context。
+目前版本為 **v1.7.3**。支援五階段測試流程、整次執行、清理範圍與步驟逾時、選擇性重試、輸出檔案驗證、程序群組清理、Ctrl+C 取消、靜態變數替換與 host 環境變數引用與裝置 runtime context。
 
 ## 解決的痛點
 
@@ -21,7 +21,7 @@ Device Test Runner 使用 YAML 定義裝置測試流程，執行既有的 Bash�
 ```text
 YAML Configuration
         ↓
-Config Loader
+Config Loader (schema → dataclasses → cross-field validation)
         ↓
 RunnerConfig
         ↓
@@ -48,7 +48,7 @@ DeviceTestRunner
 | `tests/` | 專案自動化測試 |
 | `docs/` | 架構、測試、驗收與版本文件 |
 
-詳細介面與執行流程見 [v1.7.2 架構](docs/architecture/architecture_v1.7.2.md)。
+詳細介面與執行流程見 [v1.7.3 架構](docs/architecture/architecture_v1.7.3.md)。
 
 ## 安裝
 
@@ -100,11 +100,15 @@ export ANDROID_SERIAL=emulator-5566
 poetry run python main.py --config configs/advance_sample.yaml
 ```
 
-`variables` 可在 step command、timeout_second 與 artifact validation path 中以 `${{ vars.NAME }}` 引用；`${{ run.dir }}` 提供當次絕對路徑。完整引用保留型別，step timeout 接受有限正整數或小數。語法與限制見 [靜態變數指南](docs/variables/static_variable_substitution.md)。
+`variables` 可在 step command、timeout_second 與 artifact validation path 中以 `${{ vars.NAME }}` 引用；`${{ run.dir }}` 提供當次絕對路徑。完整引用保留型別，YAML step timeout literal 接受正整數；完整模板解析後接受有限正整數或小數。語法與限制見 [靜態變數指南](docs/variables/static_variable_substitution.md)。
 
 `device.serial`、step command 與 artifact path 可引用 `${{ env.NAME }}`。先在啟動 runner 的 shell 設定變數，例如 `export DEVICE_SERIAL=demo-001`。環境值以字串解析，每次 run 使用固定快照；缺少 serial 引用的變數時不建立 run directory。完整操作見 [環境變數指南](docs/variables/environment_variable.md)。
 
 `${{ device.serial }}`、`${{ device.product }}` 與 `${{ device.build }}` 可在命令與驗證路徑引用當次裝置資訊。三個 device 欄位都必須是非空且不含未解析模板的字串；product／build 使用 literal 值。操作與限制見 [Runtime Context 指南](docs/variables/runtime_context.md)。
+
+設定載入時會拒絕未知欄位、不合法型別、重複 step／rule 名稱與不存在的 after_step。省略 lifecycle 階段時使用空 steps。完整規則見 [設定驗證指南](docs/variables/configuration_validation.md)。
+
+`configs/demo.yaml` 是特定 macOS Android 工作站範例，使用外部 android-environment／android-cookbook 絕對路徑；需替換路徑並準備 JDK、SDK、ADB 與專用 emulator host。`poetry run make demo` 會建置 APK、操作 emulator，最後停止並刪除指定 AVD；不屬於無裝置入門範例。
 
 ## 執行專案測試
 
@@ -138,7 +142,7 @@ poetry run pytest -m cancelled
 poetry run pytest -m artifact
 ```
 
-測試工具與撰寫方式見 [測試指南](docs/test_guide.md)；覆蓋範圍與驗證紀錄見 [測試矩陣](docs/test_matrix/test_matrix_v1.7.2.md) 與 [完成條件](docs/definition_of_done/definition_of_done_v1.7.2.md)。
+測試工具與撰寫方式見 [測試指南](docs/test_guide.md)；覆蓋範圍與驗證紀錄見 [測試矩陣](docs/test_matrix/test_matrix_v1.7.3.md) 與 [完成條件](docs/definition_of_done/definition_of_done_v1.7.3.md)。
 
 ## 持續整合
 
@@ -168,15 +172,16 @@ poetry run pytest
 | [使用手冊](docs/user_manual.md) | 操作步驟、設定欄位、範例與結果判讀 |
 | [靜態變數指南](docs/variables/static_variable_substitution.md) | 引用語法、解析順序、整合與錯誤行為 |
 | [環境變數指南](docs/variables/environment_variable.md) | Host 變數、快照、失敗時機與欄位限制 |
+| [設定驗證](docs/variables/configuration_validation.md) | 結構、跨欄位規則、錯誤與 API 邊界 |
 | [Runtime Context](docs/variables/runtime_context.md) | 裝置引用、綁定順序與相容性限制 |
 | [Roadmap](docs/roadmap.md) | 後續功能與版本規劃 |
 | [Process Lifecycle](docs/process_lifecycle.md) | 程序清理行為與限制 |
 | [Cancellation-Aware Cleanup](docs/cancellation_aware_cleanup.md) | v1.6.3 cleanup scope、逾時、partial artifacts 與報告優先順序 |
 | [提交檢查清單](CommitManual.md) | 提交、發佈與文件維護流程 |
-| [架構 v1.7.2](docs/architecture/architecture_v1.7.2.md) | 元件、取消路由、報告欄位與相容性 |
+| [架構 v1.7.3](docs/architecture/architecture_v1.7.3.md) | 元件、取消路由、報告欄位與相容性 |
 | [測試指南](docs/test_guide.md) | Pytest 工具、fixture、Mock 與各版用法 |
-| [測試矩陣 v1.7.2](docs/test_matrix/test_matrix_v1.7.2.md) | 功能對應的測試與覆蓋限制 |
-| [驗收條件 v1.7.2](docs/acceptance_criteria/acceptance_criteria_v1.7.2.md) | 可觀察的預期行為 |
-| [完成條件 v1.7.2](docs/definition_of_done/definition_of_done_v1.7.2.md) | 驗證紀錄與待完成的發佈項目 |
+| [測試矩陣 v1.7.3](docs/test_matrix/test_matrix_v1.7.3.md) | 功能對應的測試與覆蓋限制 |
+| [驗收條件 v1.7.3](docs/acceptance_criteria/acceptance_criteria_v1.7.3.md) | 可觀察的預期行為 |
+| [完成條件 v1.7.3](docs/definition_of_done/definition_of_done_v1.7.3.md) | 驗證紀錄與待完成的發佈項目 |
 
 `docs/` 內的舊版文件保留當時的設計與介面，使用時請確認版本。

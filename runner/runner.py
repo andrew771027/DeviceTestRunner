@@ -32,7 +32,7 @@ from runner.variables import StaticVariableResolver
 
 
 class DeviceTestRunner:
-    VERSION = "1.7.2"
+    VERSION = "1.7.3"
 
     def __init__(
         self,

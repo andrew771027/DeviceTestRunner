@@ -1,4 +1,4 @@
-name: Deive Test Runner Release
+name: Device Test Runner Release
 
 on:
   push:
@@ -52,7 +52,7 @@ jobs:
           echo "Tag version:      ${TAG_VERSION}"
           echo "Package version:  ${PACKAGE_VERSION}"
 
-          if [[ "4{TAG_VERSION}" != "${PACKAGE_VERSION}" ]]; then
+          if [[ "${TAG_VERSION}" != "${PACKAGE_VERSION}" ]]; then
 
             echo "Tag and package version do not match."
             exit 1

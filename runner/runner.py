@@ -33,7 +33,7 @@ from runner.manifest import build_manifest, save_manifest
 
 
 class DeviceTestRunner:
-    VERSION = "1.7.3"
+    VERSION = "1.7.4"
 
     def __init__(
         self,

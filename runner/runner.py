@@ -10,6 +10,7 @@ from runner.cancellation import CancellationReason, CancellationToken
 from runner.cleanup import CleanupScope
 from runner.executor import SubprocessExecutor
 from runner.failure import FailureClassifier
+from runner.manifest import build_manifest, save_manifest
 from runner.models import (
     ArtifactValidationResult,
     ArtifactValidationRule,
@@ -29,7 +30,6 @@ from runner.retry import RetryPolicy
 from runner.run_status import calculate_run_status
 from runner.run_timeout import RunTimeoutWatchdog
 from runner.variables import StaticVariableResolver
-from runner.manifest import build_manifest, save_manifest
 
 
 class DeviceTestRunner:
@@ -60,6 +60,8 @@ class DeviceTestRunner:
 
         if cancellation_token is None:
             cancellation_token = CancellationToken()
+
+        original_config = config
 
         # Resolve device identity before creating artifacts or starting a process.
         # One resolver snapshot is reused throughout the run.
@@ -219,6 +221,12 @@ class DeviceTestRunner:
             result=run_result,
             output_dir=str(run_dir),
         )
+
+        # Final status is updated only after result.json has been saved.
+        manifest["status"] = "COMPLETED"
+        manifest["result_status"] = str(run_result.summary.status)
+        manifest["finished_at"] = finished_at.isoformat()
+        save_manifest(manifest, run_dir)
 
         return run_result
 

@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.7.4]
+
+Scope: Execution Manifest. Source `0b72805`, draft `f6b05dd`, tests `4b7fea4` and current working tree; release publication unverified.
+
+### Added
+
+- Automatic schema-versioned execution_manifest.json before subprocess execution, with resolved configuration, platform metadata and redacted canonical configuration SHA-256 fingerprints.
+- Atomic replacement using a same-directory temporary file, file fsync and os.replace. After result.json is saved, status becomes COMPLETED with result_status and finished_at.
+- Manifest tests and version architecture, matrix, acceptance and completion records.
+
+### Working-tree corrections and limits
+
+- Existing local corrections preserve original_config, hash canonical bytes correctly, finalize manifest after reporter saving and repair draft test assertions and environment setup.
+- Masking only considers referenced environment values; the current string loop returns after its first candidate. Multiple secrets, literal secrets and other outputs are not fully protected.
+- Unexpected failures may leave PREPARED; fingerprints do not capture raw YAML, external tools or device state. See [verification](docs/definition_of_done/definition_of_done_v1.7.4.md).
+
 ## [1.7.3]
 
 Scope: configuration validation. Source draft `f56a44b`, test draft `ed6cf39`, guide draft `66b37ff` and current working tree; release publication unverified.

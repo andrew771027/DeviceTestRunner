@@ -1,6 +1,6 @@
 # Device Test Runner Roadmap
 
-目前已實作 v1.7.3 Configuration Validation，包含結構、數值與跨欄位驗證，並允許省略 lifecycle 階段。套件與 runtime 版本為 1.7.3；[完成條件](definition_of_done/definition_of_done_v1.7.3.md) 記錄驗證及限制。發佈未驗證。
+目前已實作 v1.7.4 Execution Manifest，套件與 runtime 版本為 1.7.4；見 [完成條件](definition_of_done/definition_of_done_v1.7.4.md)。發佈未驗證。
 
 本文件保留各版本的功能規劃。`Completed` 表示該節記錄的功能已完成；`Planned` 與 `Future` 表示尚未實作。實際發佈條件與驗證結果請見各版本的完成條件文件。
 
@@ -530,7 +530,7 @@ Implemented；本機驗證與未完成項目見 [完成條件](definition_of_don
 
 讓 YAML 可重用靜態參數、設定 command environment，並引用 runner 產生的執行資訊，減少 scripts 與 configuration 中重複的路徑及參數。
 
-安排在 v1.6.3 之後、v1.8 Recorder Lifecycle 之前：先穩定 attempt 與 cleanup 的生命週期，再定義 context 的有效範圍；後續 recorder、hooks 與 job model 可共用這套設定能力。
+安排在 v1.6.3 之後、v1.9 Recorder Lifecycle 之前：先穩定 attempt 與 cleanup 的生命週期，再定義 context 的有效範圍；後續 recorder、hooks 與 job model 可共用這套設定能力。
 
 #### 功能範圍
 
@@ -651,7 +651,148 @@ Planned
 
 Implemented：ConfigLoader 依序驗證 schema、建立 dataclass、驗證跨欄位關係。未知欄位、不合法型別、重複名稱與無效 artifact 約束在執行前失敗。省略階段載入空 steps。見 [設定驗證](variables/configuration_validation.md) 與 [測試矩陣](test_matrix/test_matrix_v1.7.3.md)。JSON Schema 匯出、完整 Python API 驗證及 resolved-config 驗證仍待規劃。
 
-### v1.8 — Recorder Lifecycle
+
+#### v1.7.4 — Execution Manifest
+
+Implemented：命令執行前保存設定快照、canonical JSON SHA-256、平台資訊與 PREPARED 狀態；結果保存後更新為 COMPLETED。見 [Manifest 契約](variables/executioin_manifest.md) 與 [測試矩陣](test_matrix/test_matrix_v1.7.4.md)。
+
+### v1.7.5 — Execution Reliability and Safe Finalization
+
+#### 目標與範圍
+
+修正 v1.7.4 manifest 的遮罩與失敗處理缺口，建立可供後續 CLI、provenance 與重現執行沿用的收尾保證。
+
+* [ ] 修正多環境值遮罩迴圈的 early return，加入多候選值、重複值與重疊值的回歸測試。
+* [ ] 補齊 manifest／result 寫入失敗與狀態順序測試：命令執行前完成 PREPARED 保存，結果成功保存後才可標記 COMPLETED。
+* [ ] 實作 exception-safe finalization，涵蓋執行例外、取消、逾時與收尾寫入失敗；保留原始失敗原因與收尾錯誤，必要 cleanup 仍會嘗試執行。
+
+#### 驗收與依賴
+
+以失敗注入驗證初始 manifest 寫入失敗時不啟動命令、結果寫入失敗時不回報成功，以及各種中斷路徑的 cleanup 與狀態順序。沿用 v1.6.3 cleanup 基礎，並為 v1.8 CLI 的 exit code／報告行為建立可整合驗證的契約。
+
+已確認會造成 secret 洩漏、必要結果遺失或成功狀態誤報的缺陷列為發佈阻擋項，須在 v1.7.4 或任何後續版本發佈前先行修正並通過回歸測試；必要修正應提前納入待發佈版本，不等待 v1.7.5。
+
+#### 狀態
+
+Planned。現有證據見 [v1.7.4 完成條件](definition_of_done/definition_of_done_v1.7.4.md) 與 [測試矩陣](test_matrix/test_matrix_v1.7.4.md)。
+
+### v1.7.6 — Semantic Fingerprint
+
+#### 目標與範圍
+
+* [ ] 定義與 run directory 無關的 semantic fingerprint，保留既有設定快照 hash 的用途與相容性。
+* [ ] 明確定義 canonicalization、納入欄位與排除的 runtime 欄位；保留影響執行語意的路徑與參數差異。
+* [ ] 在 manifest 記錄 fingerprint 與演算法／契約版本，供後續比較與重現檢查使用。
+
+#### 驗收與依賴
+
+依賴 v1.7.5 的可靠保存。相同語意設定在不同 run directory 得到相同 fingerprint；影響執行語意的設定變動會改變該值。測試須同時涵蓋 runtime 路徑排除與有效輸入差異，不能單純移除所有路徑欄位。
+
+#### 狀態
+
+Planned。
+
+### v1.7.7 — Execution Provenance
+
+#### 目標與範圍
+
+* [ ] 保存 Git commit 與 working-tree dirty 狀態、腳本與 APK 的內容雜湊，以及 Runner／相關工具版本。
+* [ ] 定義需追蹤的輸入與工具如何宣告、蒐集時機，以及未提供、不適用、無法取得時的表示方式。
+* [ ] 將設定 fingerprint 與實際輸入版本共同記錄，明確區分設定相同與執行依賴相同。
+
+#### 驗收與依賴
+
+依賴 v1.7.6 的設定身分契約。驗證腳本／APK 內容變更、Git dirty 狀態、工具版本差異，以及非 Git 環境和版本資訊缺失時的報告；蒐集程序須有時間上限，且不得額外暴露敏感值。
+
+#### 狀態
+
+Planned。
+
+### v1.7.8 — Secret Management
+
+#### 目標與範圍
+
+* [ ] 定義 secret 宣告、來源引用與 subprocess 注入方式，以及缺值時的失敗行為。
+* [ ] 定義設定快照、manifest、診斷訊息與 stdout／stderr 的遮罩政策，避免保存 secret 原值。
+* [ ] 定義 artifacts 的處理邊界、保存與存取責任，以及外部 secret provider 的擴充介面。
+* [ ] 定義 secret 變更對 fingerprint 與重現檢查的影響，避免將可猜測 secret 的雜湊當作公開識別值。
+
+#### 驗收與依賴
+
+依賴 v1.7.5 遮罩修正，並整合 v1.7.6～v1.7.7 的身分與來源契約。以可辨識的測試 secret 驗證正常、失敗、取消與診斷路徑；subprocess 收到原值，受管理輸出遵循遮罩政策。對外部工具自行寫入的 artifacts 明確記錄限制與處理責任。外部 secret 服務的個別 adapter 依實際需求安排。
+
+#### 狀態
+
+Planned。現有 environment 引用與 manifest 遮罩不代表完整 secret 管理已完成。
+
+### v1.7.9 — Reproducible Execution
+
+#### 目標與範圍
+
+* [ ] 定義可供重新執行的設定、腳本／APK、工具版本與來源資訊契約，以及必要輸入的保存或取得方式。
+* [ ] 先提供 Python API 的重現入口，v1.8 再提供已安裝 CLI 入口；執行前檢查輸入雜湊、工具相容性與必要依賴，缺失或不相容時提供診斷。
+* [ ] Secret 重新由授權來源注入，不從歷史產物還原明文；重新執行建立新的 run，並記錄原始 run 的關聯。
+* [ ] 建立受控範例與整合測試，記錄裝置狀態、外部服務及環境差異造成的重現限制。
+
+#### 驗收與依賴
+
+依賴 v1.7.5～v1.7.8；核心重現 API 可獨立驗收，CLI 整合在 v1.8 驗收。於不同 run directory 依保存資訊重新執行無裝置範例，確認設定身分與輸入版本可比對；缺少輸入、版本不符或 secret 不可取得時，不啟動測試命令。裝置範例另行記錄硬體驗證結果。
+
+#### 狀態
+
+Planned。重現執行的驗收以輸入與流程可重建為範圍，量測結果的一致性須依裝置與測試領域另訂容許條件。
+
+### v1.7.x 發佈驗證與里程碑順序
+
+預定版本順序為 v1.7.5 可靠性 → v1.7.6 fingerprint → v1.7.7 provenance → v1.7.8 secret 管理 → v1.7.9 重現執行，再由 v1.8 提供獨立的安裝與 CLI 介面。可靠性中的發佈阻擋修正須優先處理；各版本可獨立驗收，v1.9 Recorder Lifecycle 可在可靠性基礎穩定後平行規劃，無須等待全部重現能力完成。
+
+以下檢查適用於各待發佈版本，逐版記錄證據：
+
+* [ ] 乾淨安裝、必要 CI／lint／coverage 與支援平台驗證。
+* [ ] 該版範例與整合測試；涉及 Android／裝置的能力另附外部 demo／硬體結果。
+* [ ] 更新該版完成條件、測試矩陣與 CHANGELOG，確認預定 tag、GitHub Release 及 issue／milestone 狀態。
+
+本機測試通過不等同完成發佈，以上版本均未宣告發佈驗證完成。
+
+### v1.8 — Installable CLI
+
+#### 目標
+
+在 v1.7.x 設定、安全性與可追溯性基礎之後、v1.9 Recorder Lifecycle 之前，提供安裝套件後即可使用的 `device-test-runner` 指令，讓使用者與 CI 不必依賴 repository 根目錄的 `main.py`。
+
+CLI 橫跨套件安裝、使用者介面、exit code 與發佈驗證，因此安排為獨立 minor 里程碑。依賴 v1.7.5 的可靠性契約；run／validate 可先行開發，重現入口依 v1.7.9 API 整合。
+
+#### 功能範圍
+
+* 將 CLI 放入 `runner` 套件，透過 package script 註冊 `device-test-runner` entry point。
+* 提供 `run --config <path>`，沿用 lifecycle、取消、cleanup、manifest 與報告行為。
+* 提供 `validate --config <path>`，執行設定載入、schema 與跨欄位驗證，不執行裝置命令；需要 run directory 的 runtime 解析留到 run 階段。
+* 整合 v1.7.9 的重現 API，定義 CLI 參數、原始 run 關聯與依賴檢查錯誤行為。
+* 提供 `--help` 與 `--version`，版本與已安裝套件一致。
+* 定義穩定 exit code：成功為 0，測試失敗、逾時與設定錯誤為非 0，取消為 130；修正目前 TIMED_OUT 回傳 0 的行為。
+* 定義外部設定、腳本與工作目錄的路徑解析，移除 CLI 對 source checkout 的依賴，保留既有 `main.py --config` 的相容入口。
+
+#### 預期用法
+
+以下為規劃介面，尚未實作：
+
+```bash
+device-test-runner --version
+device-test-runner validate --config configs/hello.yaml
+device-test-runner run --config configs/hello.yaml
+```
+
+#### 驗收重點
+
+* 在乾淨虛擬環境安裝 wheel 後，於 checkout 以外的目錄驗證 help、version、validate 與無裝置 run。
+* 覆蓋設定錯誤、PASSED、FAILED、TIMED_OUT 與真實 SIGINT 的 exit code，確認受控收尾保留報告。
+* Release workflow 增加已安裝 CLI 的 smoke test，README 更新 pip 安裝後的快速開始。
+
+#### 狀態
+
+Planned。目前只有 source checkout 的 `python main.py --config ...` 入口；report、batch、device 與 keyword 子命令依後續功能進度擴充。
+
+### v1.9 — Recorder Lifecycle
 
 #### 目標
 
@@ -700,7 +841,7 @@ collect recorder artifacts
 
 Planned
 
-### v1.9 — Hook and Teardown Guarantees
+### v1.10 — Hook and Teardown Guarantees
 
 v1.6.3 負責 cancellation-aware cleanup 的基礎 scope、timeout 與 partial policy；本版本在其上擴充可重用 hooks、recorder 整合與多重錯誤呈現，避免重複實作相同的取消清理機制。
 
@@ -750,7 +891,7 @@ cleanup_errors:
 
 Planned
 
-### v1.10 — Execution Summary
+### v1.11 — Execution Summary
 
 #### 目標
 
@@ -807,7 +948,7 @@ First Failure:
 
 Planned
 
-### v1.11 — Job Definition and Job Instance
+### v1.12 — Job Definition and Job Instance
 
 #### 目標
 
@@ -839,7 +980,7 @@ Definition 本身沒有執行狀態。同一 Definition 可產生多個 Instance
 
 Planned
 
-### v1.12 — Batch Runner and Matrix Expansion
+### v1.13 — Batch Runner and Matrix Expansion
 
 #### 目標
 
@@ -891,7 +1032,7 @@ job:
 3. 接著加入 exclude（移除匹配組合）與 include（加入完整且通過驗證的參數組合）。初期 include 不做隱含合併，並明確決定重複組合的處理方式。
 4. 定義 batch cancellation 與 fail-fast：預設一個 Instance 失敗仍執行其他工作；選擇 fail-fast 時先停止啟動待執行工作，保留各 Instance 結果。
 
-Matrix 只決定「有哪些工作」，不代表同時執行。並行度由 v1.13～v1.15 的 executor、limit 與 resource ownership 控制。
+Matrix 只決定「有哪些工作」，不代表同時執行。並行度由 v1.14～v1.16 的 executor、limit 與 resource ownership 控制。
 
 #### 驗收條件
 
@@ -903,19 +1044,19 @@ Matrix 只決定「有哪些工作」，不代表同時執行。並行度由 v1.
 
 Planned
 
-### v1.13 — Multi-Process Execution
+### v1.14 — Multi-Process Execution
 
 #### 目標與範圍
 
 在已驗證的 Instance／batch 契約上，讓獨立工作可由不同本機程序執行。先驗證兩個不使用裝置或使用不同資源的 Instances，隔離輸出、結果回傳與取消 token。正常 batch 預設仍為逐一執行，直到 concurrency limit 與 device ownership 完成。
 
-驗收需確認不同程序的 artifacts 不互相覆蓋，子工作失敗可被 batch 收集，取消可到達正確 Instance。多程序不允許略過裝置互斥；同裝置並行須等 v1.15 的資源管理。
+驗收需確認不同程序的 artifacts 不互相覆蓋，子工作失敗可被 batch 收集，取消可到達正確 Instance。多程序不允許略過裝置互斥；同裝置並行須等 v1.16 的資源管理。
 
 #### 狀態
 
 Planned
 
-### v1.14 — Concurrency Limit
+### v1.15 — Concurrency Limit
 
 #### 目標與範圍
 
@@ -929,7 +1070,7 @@ Concurrency limit 只限制數量，不保證兩個工作不使用同一裝置�
 
 Planned
 
-### v1.15 — Resource / Device Lock
+### v1.16 — Resource / Device Lock
 
 #### 目標與範圍
 
@@ -937,17 +1078,17 @@ Planned
 
 驗收需確認同裝置工作依序執行、不同裝置可在 concurrency limit 內並行。取消或失敗後須在 cleanup 與程序收尾完成後才釋放資源；程序狀態不明時不直接將裝置標記為可用。
 
-這些能力完成後，v1.16～v1.19 依序補上單機監控、歷史查詢與安全復原；v2.x Controller／Worker 再沿用 Job Definition、Job Instance、Batch Summary、資源及監控契約，增加 transport 與 scheduler。
+這些能力完成後，v1.17～v1.20 依序補上單機監控、歷史查詢與安全復原；v2.x Controller／Worker 再沿用 Job Definition、Job Instance、Batch Summary、資源及監控契約，增加 transport 與 scheduler。
 
 #### 狀態
 
 Planned
 
-### v1.16 — Monitoring + Failure Alert
+### v1.17 — Monitoring + Failure Alert
 
 #### 目標
 
-先讓實驗狀態透明：在單機執行期間持續呈現工作進度與各元件健康狀態，異常時提供可追蹤的告警。沿用 v1.8 recorder lifecycle、v1.11 Job Instance 與 v1.12 batch 的識別及進度資訊。
+先讓實驗狀態透明：在單機執行期間持續呈現工作進度與各元件健康狀態，異常時提供可追蹤的告警。沿用 v1.9 recorder lifecycle、v1.12 Job Instance 與 v1.13 batch 的識別及進度資訊。
 
 #### 功能範圍
 
@@ -990,7 +1131,7 @@ Last heartbeat: 5s ago
 
 Planned
 
-### v1.17 — Execution History
+### v1.18 — Execution History
 
 #### 目標
 
@@ -1001,7 +1142,7 @@ Planned
 v1.2 與 v1.5.x 已保存 run artifacts、每次 attempt 的 stdout／stderr、failure type 與結果；目前 `result.json` 也包含 metadata、summary 與 cleanup_summary。本版沿用這些資料，不重做 attempt history 或報告產生。
 
 * 建立持久化本機 history 索引，關聯 Job Definition／Instance、run、device、workstation、iteration 與 artifacts 路徑。
-* 保存 v1.16 的狀態轉換、告警及其恢復事件，形成有時間戳記的 execution timeline。
+* 保存 v1.17 的狀態轉換、告警及其恢復事件，形成有時間戳記的 execution timeline。
 * 依 job、device、時間範圍、最終狀態及 failure type 查詢；可定位失敗 stage／step／attempt 並開啟對應 log 與 artifact。
 * 保留設定快照與來源關聯；區分 step retry、實驗 iteration 與整個 job 重新執行。
 * 定義索引重建、保留期限與中斷紀錄處理；無法確認結果的工作標記 UNKNOWN／待確認，不能直接當作失敗或成功。
@@ -1015,7 +1156,7 @@ v1.2 與 v1.5.x 已保存 run artifacts、每次 attempt 的 stdout／stderr、f
 
 Planned
 
-### v1.18 — Policy-Based Recovery
+### v1.19 — Policy-Based Recovery
 
 #### 目標
 
@@ -1026,7 +1167,7 @@ Planned
 * 沿用既有 FailureType，依 scenario、failure type、目前 stage、資源 ownership 與健康觀測判斷是否允許 recovery；預設拒絕，僅開放明確 allowlist。
 * Recovery action 由 domain adapter／script 提供，例如重新探測連線或恢復已停止的 recorder；每項動作須定義前置條件、冪等性、時間預算、次數上限與完成後驗證。
 * 執行前確認受管理程序已收尾且資源仍由該 job 持有；狀態 UNKNOWN、ownership 不明、取消中或無法確認安全條件時，保留告警並交由人工處理。
-* Recovery 沿用 cancellation／cleanup 契約，不清除原始失敗證據、不覆蓋主要失敗原因；動作、決策理由與驗證結果寫入 v1.17 history。
+* Recovery 沿用 cancellation／cleanup 契約，不清除原始失敗證據、不覆蓋主要失敗原因；動作、決策理由與驗證結果寫入 v1.18 history。
 * 明確區分 recovery 與 retry：恢復連線或 recorder 健康不代表原本的量測資料有效，也不自動重跑 scenario 或將失敗改成成功。
 
 #### 驗收條件
@@ -1038,7 +1179,7 @@ Planned
 
 Planned
 
-### v1.19 — Validated Scenario Auto Retry
+### v1.20 — Validated Scenario Auto Retry
 
 #### 目標
 
@@ -1203,7 +1344,7 @@ Controller → Scheduler → Worker Agent → Device
 
 ##### v2.6.0 — 集中 Artifacts 與 Execution History
 
-沿用 v1.17 的本機 history 與事件契約，本版擴充跨 worker 的集中儲存及查詢。
+沿用 v1.18 的本機 history 與事件契約，本版擴充跨 worker 的集中儲存及查詢。
 
 **範圍：** 在 v2.1 已可取得報告與檔案的基礎上，加入集中 report storage、artifact upload 狀態、上傳重試、execution history 與查詢索引。以 job ID 關聯 run、worker、device 與 artifacts。
 
@@ -1303,7 +1444,9 @@ Command / Python Function / Remote Action
 
 以下方向暫時不屬於近期核心版本，但可作為後續擴展。
 
-### CLI
+### CLI Extensions
+
+基礎安裝與 run／validate 入口安排於 [v1.8](#v18--installable-cli)。以下為依賴後續能力的擴充規劃，尚未實作。
 
 * run scenario
 * validate config
@@ -1316,8 +1459,8 @@ Command / Python Function / Remote Action
 Example:
 
 ```bash
-device-test-runner run configs/power_idle.yaml
-device-test-runner validate configs/power_idle.yaml
+device-test-runner run --config configs/power_idle.yaml
+device-test-runner validate --config configs/power_idle.yaml
 device-test-runner keywords list
 device-test-runner report show artifacts/run-001/report.json
 ```
@@ -1501,17 +1644,17 @@ Done
 
 ## 開發優先順序
 
-目前已實作 v1.7.3 設定驗證、裝置 context 與 host environment 引用；例外收尾、平台驗證與發佈仍待完成。接下來的開發優先順序：
+目前已實作 v1.7.4 Execution Manifest、v1.7.3 設定驗證、裝置 context 與 host environment 引用；例外收尾、平台驗證與發佈仍待完成。接下來的開發優先順序：
 
 ```text
 1. 程序清理的平台驗證與發佈確認
 2. v1.6.2 CLI timeout exit code、平台驗證與發佈
 3. v1.6.3 cleanup 邊界測試與例外收尾
-4. v1.7.x YAML Variables, Environment and Runtime Context
-5. v1.8 Recorder Lifecycle
-6. v1.9 Hook and Teardown Guarantees
-7. v1.10 Execution Summary
-8. v1.11～v1.15 Job Definition／Instance、batch／matrix、multi-process、concurrency 與 device lock
+4. 優先修正 v1.7.x 發佈阻擋缺陷；依序推進 v1.7.5 可靠性、v1.7.6 fingerprint、v1.7.7 provenance、v1.7.8 secret 管理與 v1.7.9 重現執行；接續 v1.8 Installable CLI；runtime context 依既有範圍持續補齊
+5. v1.9 Recorder Lifecycle
+6. v1.10 Hook and Teardown Guarantees
+7. v1.11 Execution Summary
+8. v1.12～v1.16 Job Definition／Instance、batch／matrix、multi-process、concurrency 與 device lock
 9. 單機 execution model 穩定後進入 v2.0 Controller／Worker
 ```
 

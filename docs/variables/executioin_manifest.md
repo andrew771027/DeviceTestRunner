@@ -71,7 +71,7 @@ artifact:
 }
 ```
 
-The actual output includes full resolved config, platform details, timestamps, and run directory. The JSON excerpt is intentionally abbreviated.
+Only device, lifecycle and artifact.validation are resolved by the runner; other fields retain their configured values. The actual output includes the full configuration snapshot, platform details, timestamps, and run directory. The JSON excerpt is intentionally abbreviated.
 
 ## Fingerprint semantics
 
@@ -83,7 +83,7 @@ The actual output includes full resolved config, platform details, timestamps, a
 
 ## Secret handling
 
-- Only environment values referenced by `${{ env.NAME }}` in the original config are considered for masking. Nonempty referenced values are replaced with `[REDACTED:env.NAME]` in the manifest.
+- Only environment values referenced by `${{ env.NAME }}` in the original config are considered for masking. Candidates are sorted by decreasing value length, but the current `_redact` string branch returns inside the loop after the first candidate, even when it does not match. Only that candidate can be replaced with `[REDACTED:env.NAME]`; multiple referenced values are not fully masked.
 - This is **not a secure secrets implementation**. Literal secrets, transformed secrets, other logs, command arguments, and `result.json` may still expose sensitive values.
 - Do not put credentials in YAML commands or artifacts. Use an appropriate secret delivery mechanism in a later release.
 - The manifest may contain device identifiers and local paths; apply suitable access controls and retention rules.
@@ -93,7 +93,7 @@ The actual output includes full resolved config, platform details, timestamps, a
 - Variable resolution errors before manifest creation prevent manifest creation.
 - If the process crashes after writing the `PREPARED` manifest, it can remain `PREPARED` (rather than `FAILED`).
 - A normal cancellation or timeout that returns a `RunResult` produces `COMPLETED` with its actual result status.
-- If reporter saving fails, the manifest remains `PREPARED`.
+- If reporter saving fails, the manifest remains `PREPARED`. If final manifest saving fails, the exception propagates even though result.json may exist.
 - `os.replace()` provides atomic file replacement on the same filesystem, not an absolute guarantee against power-loss data loss; directory fsync is not implemented.
 - This version does not record Git commit, source script hashes, APK hashes, Android build fingerprint, or package-lock information.
 
@@ -114,3 +114,5 @@ The new tests verify end-to-end manifest creation, redaction, stable hashes, has
 - Manifest failure finalization in an outer `finally`
 - Full secret redaction across reporter/logging/arguments
 - Re-run command generation after artifact and dependency verification
+
+See the [field reference](../user_manual.md#檢查-execution-manifest), [test matrix](../test_matrix/test_matrix_v1.7.4.md) and [local verification](../definition_of_done/definition_of_done_v1.7.4.md).

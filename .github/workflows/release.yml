@@ -100,7 +100,7 @@ jobs:
     name: Create GitHub Release
     
     needs:
-      - build:
+      - build
     
     runs-on: ubuntu-latest
     

@@ -29,6 +29,7 @@ from runner.retry import RetryPolicy
 from runner.run_status import calculate_run_status
 from runner.run_timeout import RunTimeoutWatchdog
 from runner.variables import StaticVariableResolver
+from runner.manifest import build_manifest, save_manifest
 
 
 class DeviceTestRunner:
@@ -101,6 +102,17 @@ class DeviceTestRunner:
                 ),
             ),
         )
+
+        # Snapshot fully resolved settings before starting subprocesses.
+        manifest = build_manifest(
+            original_config=original_config,
+            resolved_config=config,
+            environment=resolver.environ,
+            run_dir=run_dir,
+            runner_version=self.VERSION,
+        )
+
+        save_manifest(manifest, run_dir)
 
         step_results: List[StepResult] = []
 

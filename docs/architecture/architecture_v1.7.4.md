@@ -78,7 +78,7 @@ sequenceDiagram
         Manifest-->>Runner: manifest path
         Runner-->>Caller: RunResult
     else reporter raises
-        Reporter-->>Caller: exception; PREPARED remains
+        Reporter-->>Caller: exception, manifest remains PREPARED
     end
 ```
 

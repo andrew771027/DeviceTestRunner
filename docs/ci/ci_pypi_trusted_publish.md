@@ -205,7 +205,7 @@ For example:
 
 ```bash
 /tmp/dtr-release-test/bin/python \
-  -c "import device_test_runner"
+  -c "import runner"
 ```
 
 This validates the packaged distribution rather than only the source repository.

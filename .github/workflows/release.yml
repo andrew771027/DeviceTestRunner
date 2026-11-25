@@ -98,22 +98,22 @@ jobs:
           retention-days: 30
   github-release:
     name: Create GitHub Release
-    
+
     needs:
       - build
-    
+
     runs-on: ubuntu-latest
-    
+
     permissions:
       contents: write
-    
+
     steps:
       - name: Download package distributions
         uses: actions/download-artifact@v7
         with:
           name: python-package-distributions
           path: dist/
-    
+
       - name: Create Github Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -129,16 +129,16 @@ jobs:
     name: Publish Package to testPyPI
     needs:
       - build
-    
+
     runs-on: ubuntu-lastest
 
     environment:
       name: testpypi
       url: https://test.pypi.org/p/devicetestrunner
-    
+
     permissions:
       id-token: write
-    
+
     steps:
       - name: Download package distributions
         uses: actions/download-artifact@v7
@@ -155,16 +155,16 @@ jobs:
     name: Publish Package to PyPI
     needs:
       - build
-    
+
     runs-on: ubuntu-latest
 
     environment:
       name: pypi
       url: https://pypi.org/p/devicetestrunner
-    
+
     permissions:
       id-token: write
-    
+
     steps:
       - name: Download package distributions
         uses: actions/download-artifact@v7

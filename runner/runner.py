@@ -10,6 +10,7 @@ from runner.cancellation import CancellationReason, CancellationToken
 from runner.cleanup import CleanupScope
 from runner.executor import SubprocessExecutor
 from runner.failure import FailureClassifier
+from runner.manifest import build_manifest, save_manifest
 from runner.models import (
     ArtifactValidationResult,
     ArtifactValidationRule,
@@ -32,7 +33,7 @@ from runner.variables import StaticVariableResolver
 
 
 class DeviceTestRunner:
-    VERSION = "1.7.3"
+    VERSION = "1.7.4"
 
     def __init__(
         self,
@@ -59,6 +60,8 @@ class DeviceTestRunner:
 
         if cancellation_token is None:
             cancellation_token = CancellationToken()
+
+        original_config = config
 
         # Resolve device identity before creating artifacts or starting a process.
         # One resolver snapshot is reused throughout the run.
@@ -101,6 +104,17 @@ class DeviceTestRunner:
                 ),
             ),
         )
+
+        # Snapshot fully resolved settings before starting subprocesses.
+        manifest = build_manifest(
+            original_config=original_config,
+            resolved_config=config,
+            environment=resolver.environ,
+            run_dir=run_dir,
+            runner_version=self.VERSION,
+        )
+
+        save_manifest(manifest, run_dir)
 
         step_results: List[StepResult] = []
 
@@ -207,6 +221,12 @@ class DeviceTestRunner:
             result=run_result,
             output_dir=str(run_dir),
         )
+
+        # Final status is updated only after result.json has been saved.
+        manifest["status"] = "COMPLETED"
+        manifest["result_status"] = str(run_result.summary.status)
+        manifest["finished_at"] = finished_at.isoformat()
+        save_manifest(manifest, run_dir)
 
         return run_result
 

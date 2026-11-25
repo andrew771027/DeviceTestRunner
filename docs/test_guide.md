@@ -17,6 +17,8 @@ v1.6.3 的 token 身分比較、Bash fixture 與 AST 檢查見 [對應案例](#v
 
 v1.7.2 的一次綁定、負向例外與真實 subprocess 案例見 [對應案例](#v1-7-2)。
 
+v1.7.4 的 canonical JSON 雜湊 oracle、落盤快照與成功覆寫案例見 [對應案例](#v1-7-4)。
+
 ## 工具與用法
 
 下表提供閱讀入口，不表示每一版都使用全部工具。版本細節見後面的案例；教學範例不算新增測試。
@@ -32,6 +34,7 @@ v1.7.2 的一次綁定、負向例外與真實 subprocess 案例見 [對應案�
 | `capsys`、`readouterr()` | 內建 fixture 與方法 | 擷取 console 的 stdout／stderr | [v1.3.5](#v1-3-5) |
 | `pytest.raises()` | 例外檢查工具 | 驗證操作拋出指定例外 | [v1.2.0](#v1-2-0)；[v1.6.1](#v1-6-1) 的 KeyboardInterrupt |
 | `shlex.quote()`、`repr()` | 標準函式庫／內建函式 | 分別處理 shell 參數與 Python 字串常值 | [v1.6.2 命令引用](#v1-6-2-command-quoting) |
+| `hashlib.sha256()`、明確 JSON bytes | 標準函式庫與測試 oracle | 獨立計算預期 canonical digest | [v1.7.4](#v1-7-4) |
 | 模擬時鐘 | 測試技巧 | 由測試推進時間，不必真的等待 | [v1.6.0](#v1-6-0) |
 | `pytest.approx()` | 比較工具 | 容許浮點數計算的小誤差 | [v1.6.0](#v1-6-0) |
 | `@pytest.mark.retry` 等 | 自訂 marker | 將測試分類，方便選擇執行 | [v1.5.0](#v1-5-0) |
@@ -129,6 +132,7 @@ python -m pytest -k timeout -v
 | 版本 | 閱讀重點 | 測試覆蓋與證據 |
 | --- | --- | --- |
 | [v1.7.3](#v1-7-3) | Schema mutations, Cartesian parameterization, error aggregation and loader integration | [Test matrix](test_matrix/test_matrix_v1.7.3.md) |
+| [v1.7.4](#v1-7-4) | Canonical digest oracle, real subprocess snapshot checks and atomic overwrite | [Test matrix](test_matrix/test_matrix_v1.7.4.md) |
 | [v1.7.2](#v1-7-2) | 一次綁定、parametrize 無效 serial、monkeypatch 快照與 subprocess context | [Test matrix](test_matrix/test_matrix_v1.7.2.md) |
 | [v1.7.1](#v1-7-1) | monkeypatch host 隔離、明確 environ mapping、快照斷言、執行前失敗與 JSON metadata | [Test matrix](test_matrix/test_matrix_v1.7.1.md) |
 | [v1.7.0](#v1-7-0) | Scalar 型別斷言、參數化、真實 YAML／subprocess／CSV／JSON、不可變 config | [Test matrix](test_matrix/test_matrix_v1.7.0.md) |
@@ -626,3 +630,25 @@ poetry run pytest -q
 ```
 
 本次文件工作只補測試描述，不改斷言。既有工作目錄已修正 fixture 拼字、helper 名稱與預期錯誤訊息；這些是測試設定修正，不能擴大解讀為新增產品能力或 Android demo 已通過。
+
+
+<a id="v1-7-4"></a>
+
+## v1.7.4 — Execution Manifest
+
+來源：0b72805、f6b05dd、4b7fea4 與目前工作目錄；需求與限制見 [矩陣](test_matrix/test_matrix_v1.7.4.md)。
+
+- `tmp_path` 隔離 YAML、run directory 與 manifest；`write_yaml` 是此測試模組的 helper，不是 pytest fixture。
+- `shlex.quote(sys.executable)` 與 `-c` 腳本啟動目前 Python，透過 RUN_ARTIFACT_DIR 寫 CSV；這是實際 subprocess，並非 executor mock。
+- `monkeypatch.setenv` 設定單一 serial，並以 `dataclasses.replace` 把 env 模板放入 config。只設定環境卻沒有引用，無法驗證 referenced-value masking。
+- 同設定兩次建構與修改 repeat 後比較雜湊，分別驗證穩定性與變更敏感性；timestamps 不納入設定雜湊。
+- `test_manifest_hashes_canonical_utf8_config` 用區域 dataclass、Unicode 與 Path，再以明確預期 JSON bytes 獨立計算 SHA-256。此 oracle 驗證 canonical 表示，而非只檢查長度。
+- 連續呼叫 `save_manifest`、`json.loads` 讀回及 `glob` 檢查暫存檔，只驗證成功覆寫；不表示已測試崩潰或磁碟失敗。
+- `pytest.raises(TypeError)` 驗證非 dataclass 輸入。七個測試使用具體 Given／When／Then 描述；本次文件更新不改變測試行為。
+
+```bash
+poetry run pytest -q tests/test_unit/test_execution_manifest.py
+poetry run pytest -q
+```
+
+以上是操作命令；本次實際結果記於 [完成條件](definition_of_done/definition_of_done_v1.7.4.md)。目前沒有 tests/test_unit/test_manifest_hashing.py；canonical hashing 案例位於 test_execution_manifest.py。

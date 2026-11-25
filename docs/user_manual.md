@@ -1,6 +1,6 @@
 # Device Test Runner 使用手冊
 
-適用版本：v1.7.3。本手冊說明如何設定、執行與判讀測試。安裝步驟見 [README](../README.md#安裝)。
+適用版本：v1.7.4。本手冊說明如何設定、執行與判讀測試。安裝步驟見 [README](../README.md#安裝)。
 
 先完成第一個流程，再依需要查閱設定參考。本文的「必填／選填」以 YAML 經 ConfigLoader 載入的行為為準；Python API 的差異另行說明。
 
@@ -10,6 +10,7 @@
 - [使用靜態變數](#使用靜態變數)
 - [路徑與環境變數](#路徑與環境變數)
 - [CLI 與結果判讀](#cli-與結果判讀)
+- [檢查 Execution Manifest](#檢查-execution-manifest)
 - [透過 Python API 取消](#透過-python-api-取消)
 
 
@@ -567,6 +568,7 @@ artifacts/
     │       ├── attempt_1.stderr.log
     │       ├── attempt_2.stdout.log
     │       └── attempt_2.stderr.log
+    ├── execution_manifest.json
     └── result.csv
 ```
 
@@ -601,7 +603,7 @@ artifacts/
     "device_serial": "demo",
     "device_product": "demo",
     "device_build": "demo",
-    "runner_version": "1.7.3",
+    "runner_version": "1.7.4",
     "started_at": "2026-09-12T00:00:00+00:00",
     "finished_at": "2026-09-12T00:00:01+00:00",
     "cancel_requested": false,
@@ -663,3 +665,30 @@ artifacts/
 ```
 
 結果消費端應以 `summary.status` 判斷 run；Python API 的 `RunResult.passed` 只於 status 為 `PASSED` 時回傳 true。單次 attempt 請讀取 `success`、`failure_type`、`timed_out` 與 `cancelled`。
+
+
+## 檢查 Execution Manifest
+
+每次 run 在解析裝置、lifecycle 與 artifact validation 後，第一個 subprocess 啟動前，自動將 `execution_manifest.json` 寫入 run directory。不需額外 YAML 或 CLI 設定；沒有關閉開關。既有 `result.json` schema 與 `RunResult` 不增加 manifest 路徑欄位，兩者以所在目錄關聯。
+
+| 輸出欄位 | 型別／出現時機 | 意義 |
+| --- | --- | --- |
+| `schema_version` | integer，固定 1 | Manifest 格式版本 |
+| `runner_version` | string | Runner 版本，1.7.4 |
+| `created_at` | string | 建立快照的 UTC ISO timestamp |
+| `python_version` | string | 執行中的 Python 版本 |
+| `platform.system`, `platform.machine` | string | 主機平台與架構 |
+| `run_dir` | string | 絕對 run directory |
+| `source_config_sha256` | string，64 位十六進位 | 遮罩後原始 dataclass 設定的 canonical JSON SHA-256，不是 YAML 原始檔雜湊 |
+| `resolved_config_sha256` | string，64 位十六進位 | 遮罩後解析設定的 canonical JSON SHA-256 |
+| `resolved_config` | object | 整份 RunnerConfig 快照；device、lifecycle 與 artifact.validation 使用解析後值，其他欄位保留設定值 |
+| `status` | string | 首次寫入為 `PREPARED`；reporter 保存成功後為 `COMPLETED` |
+| `result_status` | string，完成時加入 | 同 `result.json` 的 `summary.status` |
+| `finished_at` | string，完成時加入 | 同報告 metadata 的 UTC 結束時間 |
+| `notes` | list[string] | 指紋與敏感資訊限制 |
+
+`COMPLETED` 不代表測試通過；正常回傳的失敗、取消或逾時也會完成 manifest。解析失敗時不產生 manifest；run directory 可能已建立。異常、程序中斷或 reporter 失敗可能留下 `PREPARED`。最後一次 manifest 寫入失敗會向呼叫端拋出例外，此時 result.json 可能已存在。
+
+雜湊使用排序鍵、無多餘空白、UTF-8（不轉義 Unicode）的 JSON；不能序列化的值以 `str` 表示。原始設定本身不存入 manifest，僅保留其雜湊。解析後路徑若含 run.dir，不同 run 的 resolved hash 可不同。相同雜湊不保證裝置狀態、外部腳本或工具版本相同。
+
+遮罩只考慮原始設定中 `${{ env.NAME }}` 引用的非空環境值。目前每個字串只處理依值長度排序的第一個候選值，因此多環境變數不保證全部遮罩。literal、轉換後的值、result.json 與 stdout／stderr 亦不保證遮罩。完整契約與限制見 [Execution Manifest](variables/executioin_manifest.md)。

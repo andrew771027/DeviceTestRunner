@@ -6,7 +6,7 @@
 
 Device Test Runner 使用 YAML 定義裝置測試流程，執行既有的 Bash、Python、ADB 等命令，並保存每次執行的輸出與 JSON 報告。它負責安排測試步驟、驗證輸出檔案，以及依設定重試失敗步驟；裝置操作仍由你的腳本處理。
 
-目前版本為 **v1.7.3**。支援五階段測試流程、整次執行、清理範圍與步驟逾時、選擇性重試、輸出檔案驗證、程序群組清理、Ctrl+C 取消、靜態變數替換與 host 環境變數引用與裝置 runtime context。
+目前版本為 **v1.7.4**。支援五階段測試流程、整次執行、清理範圍與步驟逾時、選擇性重試、輸出檔案驗證、程序群組清理、Ctrl+C 取消、靜態變數替換與 host 環境變數引用與裝置 runtime context。
 
 ## 解決的痛點
 
@@ -27,6 +27,7 @@ RunnerConfig
         ↓
 DeviceTestRunner
         ├── StaticVariableResolver (先解析裝置，再解析命令與路徑)
+        ├── Execution Manifest (命令執行前保存設定快照)
         ├── Lifecycle Orchestration
         ├── CleanupScope / scope watchdogs
         ├── CancellationToken
@@ -36,7 +37,7 @@ DeviceTestRunner
         ├── ArtifactValidator
         └── JsonReporter
                 ↓
-       result.json / per-attempt logs / validation results
+       execution_manifest.json / result.json / per-attempt logs / validation results
 ```
 
 | 路徑 | 用途 |
@@ -48,11 +49,41 @@ DeviceTestRunner
 | `tests/` | 專案自動化測試 |
 | `docs/` | 架構、測試、驗收與版本文件 |
 
-詳細介面與執行流程見 [v1.7.3 架構](docs/architecture/architecture_v1.7.3.md)。
+詳細介面與執行流程見 [v1.7.4 架構](docs/architecture/architecture_v1.7.4.md)。
 
 ## 安裝
 
-需要 Python 3.10+ 與 Poetry 2.x。程序群組清理使用 POSIX signal API；目前本機驗證為 macOS，沒有 Windows 支援驗證。在專案目錄執行：
+需要 Python 3.10+。程序群組清理使用 POSIX signal API；目前本機驗證為 macOS，沒有 Windows 支援驗證。
+
+### CI v0.8：從 GitHub Release 安裝
+
+Release 成功後，從 [GitHub Releases](https://github.com/andrew771027/DeviceTestRunner/releases) 的對應版本下載 `.whl`。在下載目錄建立虛擬環境並安裝，以下 `1.7.4` 請替換為實際已發佈的套件版本：
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install ./devicetestrunner-1.7.4-py3-none-any.whl
+python -I -c "import runner; print(runner.__file__)"
+```
+
+GitHub Release 附件是安裝來源；Actions artifact 是暫存建置產物。流程見 [Release Pipeline](docs/ci/ci_release.md)。
+
+### CI v0.9：從 PyPI 安裝
+
+對應版本成功發佈到 PyPI 後，在已啟用的虛擬環境使用 pip 安裝，不需 clone 專案或安裝 Poetry：
+
+```bash
+python -m pip install "devicetestrunner==1.7.4"
+python -I -c "import runner; print(runner.__file__)"
+```
+
+請將 `1.7.4` 替換為實際已發佈的套件版本。CI v0.8／v0.9 是發佈流程階段，與套件版本分開；上述方式以對應發佈成功為前提，目前尚未確認端到端發佈成功。PyPI 流程見 [Trusted Publishing](docs/ci/ci_pypi_trusted_publish.md)。
+
+目前 wheel 只包含 `runner` Python 套件，未包含根目錄的 `main.py`、`configs/` 與 `scripts/`，也尚未註冊 `device-test-runner` CLI。安裝後可透過 Python API 使用；下方快速開始仍須使用原始碼 checkout。正式 CLI 規劃見 [Roadmap v1.7.5](docs/roadmap.md#v175--installable-cli)。
+
+### 從原始碼安裝與開發
+
+需要 Poetry 2.x。在專案目錄執行：
 
 ```bash
 git clone https://github.com/andrew771027/DeviceTestRunner.git
@@ -110,6 +141,8 @@ poetry run python main.py --config configs/advance_sample.yaml
 
 `configs/demo.yaml` 是特定 macOS Android 工作站範例，使用外部 android-environment／android-cookbook 絕對路徑；需替換路徑並準備 JDK、SDK、ADB 與專用 emulator host。`poetry run make demo` 會建置 APK、操作 emulator，最後停止並刪除指定 AVD；不屬於無裝置入門範例。
 
+每次執行會在 run directory 保存 `execution_manifest.json`，記錄解析後設定、設定雜湊與執行狀態。`COMPLETED` 代表結果已保存，測試是否成功仍須讀取 `result_status` 或 `result.json`。遮罩與指紋限制見 [Execution Manifest](docs/variables/executioin_manifest.md)。
+
 ## 執行專案測試
 
 執行所有測試：
@@ -142,7 +175,7 @@ poetry run pytest -m cancelled
 poetry run pytest -m artifact
 ```
 
-測試工具與撰寫方式見 [測試指南](docs/test_guide.md)；覆蓋範圍與驗證紀錄見 [測試矩陣](docs/test_matrix/test_matrix_v1.7.3.md) 與 [完成條件](docs/definition_of_done/definition_of_done_v1.7.3.md)。
+測試工具與撰寫方式見 [測試指南](docs/test_guide.md)；覆蓋範圍與驗證紀錄見 [測試矩陣](docs/test_matrix/test_matrix_v1.7.4.md) 與 [完成條件](docs/definition_of_done/definition_of_done_v1.7.4.md)。
 
 ## 持續整合
 
@@ -178,10 +211,10 @@ poetry run pytest
 | [Process Lifecycle](docs/process_lifecycle.md) | 程序清理行為與限制 |
 | [Cancellation-Aware Cleanup](docs/cancellation_aware_cleanup.md) | v1.6.3 cleanup scope、逾時、partial artifacts 與報告優先順序 |
 | [提交檢查清單](CommitManual.md) | 提交、發佈與文件維護流程 |
-| [架構 v1.7.3](docs/architecture/architecture_v1.7.3.md) | 元件、取消路由、報告欄位與相容性 |
+| [架構 v1.7.4](docs/architecture/architecture_v1.7.4.md) | 元件、取消路由、報告欄位與相容性 |
 | [測試指南](docs/test_guide.md) | Pytest 工具、fixture、Mock 與各版用法 |
-| [測試矩陣 v1.7.3](docs/test_matrix/test_matrix_v1.7.3.md) | 功能對應的測試與覆蓋限制 |
-| [驗收條件 v1.7.3](docs/acceptance_criteria/acceptance_criteria_v1.7.3.md) | 可觀察的預期行為 |
-| [完成條件 v1.7.3](docs/definition_of_done/definition_of_done_v1.7.3.md) | 驗證紀錄與待完成的發佈項目 |
+| [測試矩陣 v1.7.4](docs/test_matrix/test_matrix_v1.7.4.md) | 功能對應的測試與覆蓋限制 |
+| [驗收條件 v1.7.4](docs/acceptance_criteria/acceptance_criteria_v1.7.4.md) | 可觀察的預期行為 |
+| [完成條件 v1.7.4](docs/definition_of_done/definition_of_done_v1.7.4.md) | 驗證紀錄與待完成的發佈項目 |
 
 `docs/` 內的舊版文件保留當時的設計與介面，使用時請確認版本。

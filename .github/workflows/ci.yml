@@ -31,7 +31,7 @@ jobs:
               run: poetry install --no-interaction
 
             - name: Run pre-commit
-              run: poetry run pre-commit run --all-files
+              run: poetry run pre-commit run --all-files --show-diff-on-failure
     unit-tests:
         name: Unit Tests
         runs-on: ubuntu-latest

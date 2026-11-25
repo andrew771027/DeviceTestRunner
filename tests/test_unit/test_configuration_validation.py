@@ -120,12 +120,12 @@ def test_valid_schema():
 @pytest.mark.parametrize(
     "mutate, fragment",
     [
-        (   
-            lambda x: x["retry"].update(max_attempts=True), 
+        (
+            lambda x: x["retry"].update(max_attempts=True),
             "retry.max_attempts",
         ),
-        (   
-            lambda x: x["retry"].update(delay_seconds=-1), 
+        (
+            lambda x: x["retry"].update(delay_seconds=-1),
             "retry.delay_seconds",
         ),
         (
@@ -153,23 +153,23 @@ def test_valid_schema():
             ".typo",
         ),
         (
-            lambda x: x.update(unknown_root=123), 
+            lambda x: x.update(unknown_root=123),
             "root.unknown_root",
         ),
         (
-            lambda x: x.pop("device"), 
+            lambda x: x.pop("device"),
             "root.device",
         ),
         (
-            lambda x: x["lifecycle"]["scenario"].update(steps="not-a-list"), 
+            lambda x: x["lifecycle"]["scenario"].update(steps="not-a-list"),
             "steps",
         ),
         (
-            lambda x: x.update(run_timeout_seconds=False), 
+            lambda x: x.update(run_timeout_seconds=False),
             "run_timeout_seconds",
         ),
         (
-            lambda x: x["variables"].update(repeat=float("inf")), 
+            lambda x: x["variables"].update(repeat=float("inf")),
             "variables.repeat",
         ),
     ],

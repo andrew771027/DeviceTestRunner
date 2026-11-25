@@ -111,12 +111,13 @@ jobs:
       - name: Download package distributions
         uses: actions/download-artifact@v7
         with:
-          name: python-package-distributions
+          name: device-test-runner-${{ github.ref_name }}
           path: dist/
 
       - name: Create Github Release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           gh release create "${GITHUB_REF_NAME}" \
           dist/*.whl \
@@ -130,7 +131,7 @@ jobs:
     needs:
       - build
 
-    runs-on: ubuntu-lastest
+    runs-on: ubuntu-latest
 
     environment:
       name: testpypi
@@ -143,7 +144,7 @@ jobs:
       - name: Download package distributions
         uses: actions/download-artifact@v7
         with:
-          name: python-package-distributions
+          name: device-test-runner-${{ github.ref_name }}
           path: dist/
 
       - name: Publish package to TestPyPI
@@ -169,7 +170,7 @@ jobs:
       - name: Download package distributions
         uses: actions/download-artifact@v7
         with:
-          name: python-package-distributions
+          name: device-test-runner-${{ github.ref_name }}
           path: dist/
 
       - name: Publish package to PyPI
